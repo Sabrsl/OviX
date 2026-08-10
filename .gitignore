@@ -1,0 +1,167 @@
+# =====================================================
+# Gitignore for Wikipedia Maintenance Bot
+# =====================================================
+
+# -----------------------------------------------------
+# Environment / Secrets
+# -----------------------------------------------------
+.env
+.env.local
+.env.*.local
+credentials/
+*.credentials
+secrets/
+passwords/
+*.key
+*.pem
+*.crt
+*.key
+
+# -----------------------------------------------------
+# Python
+# -----------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# -----------------------------------------------------
+# Virtual Environment
+# -----------------------------------------------------
+venv/
+env/
+ENV/
+.venv
+
+# -----------------------------------------------------
+# Pywikibot
+# -----------------------------------------------------
+user-config.py
+pywikibot/
+passwords.py
+pywikibot_config.py
+
+# -----------------------------------------------------
+# Database
+# -----------------------------------------------------
+data/*.db
+data/*.db-shm
+data/*.db-wal
+*.db
+*.sqlite
+*.sqlite3
+
+# -----------------------------------------------------
+# Logs
+# -----------------------------------------------------
+logs/
+*.log
+log/
+
+# -----------------------------------------------------
+# IDE
+# -----------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# -----------------------------------------------------
+# OS
+# -----------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# -----------------------------------------------------
+# Streamlit
+# -----------------------------------------------------
+.streamlit/
+
+# -----------------------------------------------------
+# Backup files
+# -----------------------------------------------------
+*.bak
+*.backup
+backups/
+*.old
+*.orig
+
+# -----------------------------------------------------
+# Temporary files
+# -----------------------------------------------------
+*.tmp
+*.temp
+temp/
+tmp/
+
+# -----------------------------------------------------
+# Runtime data and cache
+# -----------------------------------------------------
+data/api_cache/
+apicache/
+apicache-py3/
+data/scheduler_state.json
+data/automation_state.json
+published_articles.json
+analyzed_articles.json
+data/automation_reports/
+*.json.bak
+.cache/
+
+# -----------------------------------------------------
+# Kill switch state (runtime)
+# -----------------------------------------------------
+.kill_switch_state.json
+
+# -----------------------------------------------------
+# Test artifacts
+# -----------------------------------------------------
+test_*.py.tmp
+*.test.py
+.pytest_cache/
+
+# -----------------------------------------------------
+# Reports and documentation temporary
+# -----------------------------------------------------
+RAPPORT_*.md
+AUDIT_*.md
+report_*.md
+diff_test.txt
+idempotence_test*.txt
+output*.txt
+protected_test*.txt
+protected_zones_test.txt
+test_output.txt
+throttle.ctrl

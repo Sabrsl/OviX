@@ -1,0 +1,72 @@
+"""
+Pywikibot User Configuration
+Copy this file to user-config.py and fill in your actual configuration
+DO NOT commit user-config.py to version control
+
+Documentation: https://www.mediawiki.org/wiki/Manual:Pywikibot/user-config.py
+"""
+
+# ============================================
+# BASIC CONFIGURATION
+# ============================================
+
+# Your Wikipedia username
+usernames['wikipedia']['fr'] = 'your_username_here'
+
+# You can add multiple languages/families:
+# usernames['wikipedia']['en'] = 'your_username_en'
+# usernames['wiktionary']['fr'] = 'your_username_wiktionary'
+
+# ============================================
+# FAMILY CONFIGURATION
+# ============================================
+
+# Default family to use (usually 'wikipedia')
+mylang = 'fr'
+family = 'wikipedia'
+
+# ============================================
+# EDIT SUMMARY
+# ============================================
+
+# Default edit summary for bot edits
+# This will be used if no specific summary is provided
+default_edit_summary = 'Corrections automatiques ([[Projet:Maintenance]])'
+
+# ============================================
+# ADVANCED CONFIGURATION
+# ============================================
+
+# User agent (optional, helps identify your bot)
+# user_agent_description = 'WikipediaMaintenanceTool/1.0'
+
+# Maximum lag time (in seconds) before waiting
+# maxlag = 5
+
+# Retry configuration
+# retry_on_fail = True
+
+# ============================================
+# PATHS
+# ============================================
+
+# Base directory for pywikibot files
+# base_dir = os.path.dirname(os.path.abspath(__file__))
+
+# ============================================
+# LOGGING
+# ============================================
+
+# Log file location
+# log_file = 'logs/pywikibot.log'
+
+# Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+# log_level = 'INFO'
+
+# ============================================
+# SECURITY NOTES
+# ============================================
+# - This file contains sensitive information
+# - Never commit this file to git
+# - Keep it secure and only share with trusted individuals
+# - Your actual password should be in passwords.py (not here)

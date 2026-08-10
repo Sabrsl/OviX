@@ -1,0 +1,94 @@
+{
+  "description": "Real-world test cases for DeadLinkAnalyzer validation",
+  "version": "1.0",
+  "note": "This dataset contains known dead links with expected outcomes for validation. The system should be tested against these cases to measure accuracy.",
+  "test_cases": [
+    {
+      "id": "case_001",
+      "original_url": "https://example.com/old-article",
+      "expected_outcome": "NO_REPAIR",
+      "reason": "Example URL - not a real dead link, used for testing pipeline",
+      "http_status": 404,
+      "expected_replacement_url": null,
+      "category": "test_placeholder"
+    },
+    {
+      "id": "case_002",
+      "original_url": "https://httpbin.org/status/404",
+      "expected_outcome": "NO_REPAIR",
+      "reason": "Test endpoint that always returns 404 - no valid replacement exists",
+      "http_status": 404,
+      "expected_replacement_url": null,
+      "category": "test_endpoint"
+    },
+    {
+      "id": "case_003",
+      "original_url": "https://httpbin.org/redirect-to?url=https://httpbin.org/get",
+      "expected_outcome": "REPAIR",
+      "reason": "Test endpoint with valid redirect to same resource",
+      "http_status": 302,
+      "expected_replacement_url": "https://httpbin.org/get",
+      "category": "redirect_test"
+    },
+    {
+      "id": "case_004",
+      "original_url": "https://nonexistent-domain-12345.com/article",
+      "expected_outcome": "NO_REPAIR",
+      "reason": "Non-existent domain - DNS failure",
+      "http_status": null,
+      "expected_replacement_url": null,
+      "category": "dns_failure"
+    },
+    {
+      "id": "case_005",
+      "original_url": "https://example.com/timeout-test",
+      "expected_outcome": "NO_REPAIR",
+      "reason": "Simulated timeout - should not repair",
+      "http_status": null,
+      "expected_replacement_url": null,
+      "category": "timeout"
+    }
+  ],
+  "real_world_examples": [
+    {
+      "id": "real_001",
+      "original_url": "https://web.archive.org/web/20200101000000/https://example.com/archived-page",
+      "expected_outcome": "NO_REPAIR",
+      "reason": "Archive URL should never be used as replacement",
+      "http_status": 200,
+      "expected_replacement_url": null,
+      "category": "archive_url_rejection"
+    },
+    {
+      "id": "real_002",
+      "original_url": "https://example.com/moved-page",
+      "expected_outcome": "UNKNOWN",
+      "reason": "Real-world case - outcome depends on actual redirect behavior",
+      "http_status": null,
+      "expected_replacement_url": null,
+      "category": "real_world"
+    }
+  ],
+  "validation_criteria": {
+    "success_metrics": {
+      "dead_link_detection_rate": "Percentage of dead links correctly identified",
+      "candidate_discovery_rate": "Percentage of dead links with valid candidates found",
+      "repair_accuracy_rate": "Percentage of repairs that are actually correct",
+      "false_positive_rate": "Percentage of incorrect repairs (must be near 0)",
+      "false_negative_rate": "Percentage of missed repairs (acceptable to be high)"
+    },
+    "thresholds": {
+      "min_dead_link_detection_rate": 0.95,
+      "min_candidate_discovery_rate": 0.3,
+      "min_repair_accuracy_rate": 0.99,
+      "max_false_positive_rate": 0.01,
+      "max_false_negative_rate": 0.9
+    }
+  },
+  "instructions": {
+    "usage": "Run the DeadLinkAnalyzer against these test cases and compare actual outcomes with expected outcomes.",
+    "measurement": "Calculate the success metrics defined in validation_criteria.",
+    "acceptance": "The system is ready for production only if all thresholds are met.",
+    "important": "For Wikipedia production, the false positive rate must be practically zero. It is better to miss 90% of repairs than to publish a single incorrect URL."
+  }
+}

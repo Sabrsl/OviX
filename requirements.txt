@@ -1,0 +1,34 @@
+# Wikipedia Maintenance Tool - Dependencies
+# Python 3.12+
+
+# Wikipedia API interaction
+pywikibot>=9.0.0
+requests>=2.31.0
+
+# Web interface
+streamlit>=1.28.0
+streamlit-option-menu>=0.3.6
+
+# Database
+# sqlite3 is built-in with Python, no installation needed
+
+# Utilities
+python-dateutil>=2.8.2
+pytz>=2023.3
+
+# Diff generation
+# difflib is built-in with Python, no installation needed
+
+# Configuration
+pyyaml>=6.0.1
+python-dotenv>=1.0.0
+
+# Rate limiting
+ratelimit>=2.2.1
+
+# Testing (optional)
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Telegram bot integration (optional)
+python-telegram-bot>=20.0

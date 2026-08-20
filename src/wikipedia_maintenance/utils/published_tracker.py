@@ -29,7 +29,7 @@ class PublishedTracker:
         self.archive_file = Path(archive_file)
         self.published_articles: Dict[str, dict] = {}
         self._load_tracker()
-    
+
     def _load_tracker(self) -> None:
         """Charge les données de suivi depuis le fichier JSON."""
         if self.tracker_file.exists():
@@ -38,7 +38,7 @@ class PublishedTracker:
                     data = json.load(f)
                     self.published_articles = data.get('published_articles', {})
                 logger.info(f"Chargé {len(self.published_articles)} articles publiés depuis {self.tracker_file}")
-                
+
                 # Archivage automatique si trop d'entrées (> 5000)
                 if len(self.published_articles) > 5000:
                     self.archive_old_entries(months=12)

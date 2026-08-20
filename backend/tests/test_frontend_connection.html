@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Frontend Connection</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+        .loading {
+            background-color: #fff3cd;
+            border-color: #ffeaa7;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test de connexion Frontend → Backend</h1>
+    <p>Cette page teste la connexion à l'API backend via le proxy Vite.</p>
+    
+    <div id="results"></div>
+
+    <script>
+        const results = document.getElementById('results');
+        
+        async function testEndpoint(name, url) {
+            const testDiv = document.createElement('div');
+            testDiv.className = 'test loading';
+            testDiv.innerHTML = `<h3>${name}</h3><p>En cours...</p>`;
+            results.appendChild(testDiv);
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                testDiv.className = response.ok ? 'test success' : 'test error';
+                testDiv.innerHTML = `
+                    <h3>${name}</h3>
+                    <p><strong>Status:</strong> ${response.status}</p>
+                    <p><strong>Réponse:</strong></p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                testDiv.className = 'test error';
+                testDiv.innerHTML = `
+                    <h3>${name}</h3>
+                    <p><strong>Erreur:</strong> ${error.message}</p>
+                `;
+            }
+        }
+        
+        // Test des endpoints
+        testEndpoint('Health Check', '/api/health');
+        testEndpoint('Statistics', '/api/history/statistics');
+        testEndpoint('Analyzed History', '/api/history/analyzed');
+        testEndpoint('Published History', '/api/history/published');
+        testEndpoint('Queue', '/api/articles/queue');
+        testEndpoint('Results', '/api/articles/results');
+    </script>
+</body>
+</html>

@@ -67,21 +67,21 @@ class SecureCredentialManager:
     def get_gemini_credentials(self) -> tuple[Optional[str], Optional[str]]:
         """
         Get Gemini API credentials securely.
-        
+
         Returns:
             Tuple of (api_key, project_id) or (None, None) if not found.
         """
         api_key = os.environ.get(self.ENV_GEMINI_API_KEY)
-        project_id = os.environ.get(self.ENV_GEMINI_PROJECT_ID, "804175778135")
-        
-        if api_key:
-            logger.info("Gemini API key loaded from environment variables")
+        project_id = os.environ.get(self.ENV_GEMINI_PROJECT_ID)
+
+        if api_key and project_id:
+            logger.info("Gemini API credentials loaded from environment variables")
             return api_key, project_id
-        
+
         if self.allow_env_only:
-            logger.warning("Gemini API key not found in environment variables")
+            logger.warning("Gemini API credentials not found in environment variables")
             return None, None
-        
+
         # Fallback to encrypted storage (development only)
         logger.warning("Using fallback credential storage - NOT RECOMMENDED FOR PRODUCTION")
         return self._load_from_fallback("gemini")

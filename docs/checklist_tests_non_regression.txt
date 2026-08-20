@@ -1,0 +1,186 @@
+# CHECKLIST DE TESTS NON-RÉGRESSION AVANT MIGRATION
+
+## TEST A: Queue → Analysis Job
+**Objectif**: Vérifier qu'un article peut être ajouté à la queue et lancé en analyse
+**Étapes**:
+1. Ajouter un article à articles_to_analyze (status='pending')
+2. Lancer l'analyse via POST /api/articles/{title}/analyze
+3. Vérifier que analysis_jobs est créé avec status='pending'
+4. Vérifier que articles_to_analyze passe à status='analyzing'
+**Après migration**: Aucun changement (ne concerne pas analysis_results)
+
+## TEST B: Analysis Job → Running
+**Objectif**: Vérifier que le job passe en exécution
+**Étapes**:
+1. Observer le job dans analysis_jobs
+2. Vérifier que status passe de 'pending' à 'running'
+**Après migration**: Aucun changement (ne concerne pas analysis_results)
+
+## TEST C: Analysis Job → Completed
+**Objectif**: Vérifier que le job se termine correctement
+**Étapes**:
+1. Attendre la fin de l'analyse
+2. Vérifier que analysis_jobs.status='completed'
+3. Vérifier que analysis_results est créé
+**Après migration**: analysis_results.status doit être 'awaiting_decision' (pas 'pending')
+
+## TEST D: Analysis Result → awaiting_decision
+**Objectif**: Vérifier que le résultat est en attente de décision
+**Étapes**:
+1. Vérifier analysis_results.status='awaiting_decision'
+2. Vérifier que l'article apparaît dans AnalyzedHistory
+3. Vérifier que le polling s'arrête
+**Après migration**: CRITIQUE - doit être 'awaiting_decision'
+
+## TEST E: Ouverture Article Detail
+**Objectif**: Vérifier que l'article peut être ouvert et consulté
+**Étapes**:
+1. Ouvrir /article/detail?title={article}
+2. Vérifier que le statut s'affiche correctement
+3. Vérifier que le diff s'affiche
+4. Vérifier que les boutons d'action sont disponibles
+**Après migration**: Statut doit s'afficher comme 'En attente de décision'
+
+## TEST F: Modification manuelle
+**Objectif**: Vérifier que le contenu peut être modifié manuellement
+**Étapes**:
+1. Cliquer sur "Modifier"
+2. Modifier le contenu
+3. Sauvegarder
+**Après migration**: Aucun changement (ne dépend pas du statut)
+
+## TEST G: Ignore
+**Objectif**: Vérifier qu'un article peut être ignoré
+**Étapes**:
+1. Cliquer sur "Ignorer"
+2. Vérifier que analysis_results.status='ignored'
+3. Vérifier que l'article disparaît des listes "en attente"
+**Après migration**: Doit fonctionner avec awaiting_decision → ignored
+
+## TEST H: Manual Review
+**Objectif**: Vérifier que la review manuelle fonctionne
+**Étapes**:
+1. Ouvrir Manual Review
+2. Approuver/Rejeter une URL
+3. Vérifier manual_review_decisions.status='approved'/'rejected'
+**Après migration**: Aucun changement (table différente)
+
+## TEST I: Publication
+**Objectif**: Vérifier qu'un article peut être publié
+**Étapes**:
+1. Cliquer sur "Publier"
+2. Passer par PublicationReview
+3. Confirmer la publication
+4. Vérifier analysis_results.status='published'
+**Après migration**: Doit fonctionner avec awaiting_decision → published
+
+## TEST J: History
+**Objectif**: Vérifier que l'historique affiche correctement les statuts
+**Étapes**:
+1. Ouvrir AnalyzedHistory
+2. Vérifier que les articles s'affichent
+3. Vérifier les filtres par statut
+**Après migration**: awaiting_decision doit apparaître comme filtre et statut
+
+## TEST K: Refresh pendant analyse
+**Objectif**: Vérifier que le refresh ne casse pas l'analyse
+**Étapes**:
+1. Lancer une analyse
+2. Refresh le navigateur pendant l'analyse
+3. Vérifier que l'analyse continue
+4. Vérifier que le polling reprend
+**Après migration**: Polling doit reprendre uniquement pour analysis_jobs.running
+
+## TEST L: Restart backend pendant analyse
+**Objectif**: Vérifier que le restart backend ne casse pas l'analyse
+**Étapes**:
+1. Lancer une analyse
+2. Arrêter le backend
+3. Redémarrer le backend
+4. Vérifier que l'état est restauré depuis SQLite
+**Après migration**: SQLite doit contenir awaiting_decision, pas pending
+
+## TEST M: Réanalyse d'un article existant
+**Objectif**: Vérifier qu'un article peut être réanalysé
+**Étapes**:
+1. Prendre un article avec status='awaiting_decision'
+2. Cliquer sur "Réanalyser"
+3. Vérifier qu'un nouveau job est créé
+4. Vérifier que l'ancien résultat est conservé
+**Après migration**: Doit fonctionner avec awaiting_decision
+
+## TEST N: Polling condition
+**Objectif**: Vérifier que le polling ne s'active pas pour awaiting_decision
+**Étapes**:
+1. Ouvrir un article avec status='awaiting_decision'
+2. Observer le réseau (DevTools)
+3. Vérifier qu'il n'y a pas de polling toutes les 3 secondes
+**Après migration**: CRITIQUE - polling doit être désactivé pour awaiting_decision
+
+## TEST O: Statistics
+**Objectif**: Vérifier que les statistiques sont correctes
+**Étapes**:
+1. Ouvrir Dashboard
+2. Vérifier le compteur "En attente"
+3. Vérifier qu'il correspond au nombre d'articles awaiting_decision
+**Après migration**: Compteur doit compter awaiting_decision, pas pending
+
+## TEST P: Pagination
+**Objectif**: Vérifier que la pagination fonctionne
+**Étapes**:
+1. Ouvrir AnalyzedHistory
+2. Naviguer entre les pages
+3. Vérifier que les filtres fonctionnent avec pagination
+**Après migration**: Aucun changement (déjà implémenté)
+
+## TEST Q: Filtres
+**Objectif**: Vérifier que les filtres par statut fonctionnent
+**Étapes**:
+1. Ouvrir AnalyzedHistory
+2. Filtrer par statut
+3. Vérifier que awaiting_decision est un filtre disponible
+**Après migration**: awaiting_decision doit être dans les filtres
+
+## TEST R: Legacy fallback
+**Objectif**: Vérifier que les trackers legacy fonctionnent en fallback
+**Étapes**:
+1. Désactiver temporairement SQLite
+2. Vérifier que les données sont lues depuis les trackers
+3. Réactiver SQLite
+**Après migration**: Trackers doivent être mis à jour pour awaiting_decision
+
+## TEST S: Rollback
+**Objectif**: Vérifier que le rollback fonctionne en cas de problème
+**Étapes**:
+1. Exécuter la migration
+2. Vérifier que les données sont correctes
+3. En cas de problème, exécuter le rollback
+4. Vérifier que les données sont restaurées
+**Après migration**: Rollback doit restaurer pending
+
+## PRIORITÉ DES TESTS
+
+### CRITIQUES (doivent passer avant migration)
+- TEST C: Analysis Job → Completed (vérifie création analysis_results)
+- TEST D: Analysis Result → awaiting_decision (vérifie le nouveau statut)
+- TEST N: Polling condition (vérifie que le polling ne s'active pas)
+- TEST O: Statistics (vérifie les compteurs)
+
+### IMPORTANTS (doivent passer après migration)
+- TEST E: Ouverture Article Detail
+- TEST G: Ignore
+- TEST I: Publication
+- TEST J: History
+- TEST Q: Filtres
+
+### MOYENS (peuvent être testés plus tard)
+- TEST A: Queue → Analysis Job
+- TEST B: Analysis Job → Running
+- TEST F: Modification manuelle
+- TEST H: Manual Review
+- TEST K: Refresh pendant analyse
+- TEST L: Restart backend pendant analyse
+- TEST M: Réanalyse d'un article existant
+- TEST P: Pagination
+- TEST R: Legacy fallback
+- TEST S: Rollback

@@ -253,19 +253,19 @@ def _render_ai_mode_section(gemini_client_class):
             gemini_project_id = st.session_state.get('gemini_project_id') or os.environ.get('GEMINI_PROJECT_ID')
             gemini_model = st.session_state.get('gemini_model') or os.environ.get('GEMINI_MODEL')
             gemini_limit = st.session_state.get('gemini_limit') or os.environ.get('GEMINI_LIMIT')
-            
+
             if config_file.exists():
                 try:
                     with open(config_file, 'r', encoding='utf-8') as f:
                         config = yaml.safe_load(f)
                         if config and 'ai' in config and 'gemini' in config['ai']:
-                            gemini_project_id = gemini_project_id or config['ai']['gemini'].get('project_id', '804175778135')
+                            gemini_project_id = gemini_project_id or config['ai']['gemini'].get('project_id')
                             gemini_model = gemini_model or config['ai']['gemini'].get('model', 'gemini-flash-lite-latest')
                             gemini_limit = gemini_limit or str(config['ai']['gemini'].get('limit', 10800))
                 except:
                     pass
-            
-            gemini_project_id = gemini_project_id or '804175778135'
+
+            gemini_project_id = gemini_project_id or None
             gemini_model = gemini_model or 'gemini-flash-lite-latest'
             # Use UI-provided limit for initialization
             gemini_limit = st.session_state.lia_limit_value
@@ -436,13 +436,13 @@ def _render_automation_section(
                         with open(config_file, 'r', encoding='utf-8') as f:
                             config = yaml.safe_load(f)
                             if config and 'ai' in config and 'gemini' in config['ai']:
-                                gemini_project_id = gemini_project_id or config['ai']['gemini'].get('project_id', '804175778135')
+                                gemini_project_id = gemini_project_id or config['ai']['gemini'].get('project_id')
                                 gemini_model = gemini_model or config['ai']['gemini'].get('model', 'gemini-flash-lite-latest')
                                 gemini_limit = gemini_limit or str(config['ai']['gemini'].get('limit', 10800))
                     except:
                         pass
-                
-                gemini_project_id = gemini_project_id or '804175778135'
+
+                gemini_project_id = gemini_project_id or None
                 gemini_model = gemini_model or 'gemini-flash-lite-latest'
                 gemini_limit = int(gemini_limit or '10800')
 
@@ -519,7 +519,7 @@ def _render_automation_section(
                         include_analyzed=include_analyzed,
                         ai_provider="gemini",
                         gemini_api_key=st.session_state.get('gemini_api_key') or os.environ.get('GEMINI_API_KEY'),
-                        gemini_project_id=st.session_state.get('gemini_project_id') or os.environ.get('GEMINI_PROJECT_ID', '804175778135'),
+                        gemini_project_id=st.session_state.get('gemini_project_id') or os.environ.get('GEMINI_PROJECT_ID'),
                         gemini_model=st.session_state.get('gemini_model') or os.environ.get('GEMINI_MODEL', 'gemini-flash-lite-latest'),
                         lia_limit=automation_lia_limit,
                         telegram_bot_token=None,
@@ -934,16 +934,6 @@ def _render_settings_section():
         st.caption("Activez ou désactivez les analyseurs de problèmes")
 
         analyzer_descriptions = {
-            "LinkAnalyzer": "Liens internes redondants ([[Paris|Paris]] → [[Paris]])",
-            "WhitespaceAnalyzer": "Espaces doubles et espaces en fin de ligne",
-            "TypographyAnalyzer": "Corrections typographiques mécaniques (espaces, guillemets, unités)",
-            "TemplateAnalyzer": "Modèles obsolètes ou mal paramétrés",
-            "CategoryAnalyzer": "Catégories en double ou manquantes",
-            "HTMLAnalyzer": "Balises HTML inutiles",
-            "ReferenceAnalyzer": "Références bibliographiques et sources",
-            "StructureAnalyzer": "Structure de l'article et sections",
-            "WorksListAnalyzer": "Listes d'œuvres (filmographie, discographie)",
-            "HttpLinksAnalyzer": "Liens HTTP non sécurisés (http:// → https://)",
             "DeadLinkAnalyzer": "Liens morts et brisés (détection et réparation)"
         }
 

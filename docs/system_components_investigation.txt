@@ -1,0 +1,112 @@
+# INVESTIGATION: Composants système non disponibles
+
+## PROBLÈME IDENTIFIÉ
+
+### Health Check (/api/health)
+```json
+{
+  "status": "healthy",
+  "services": {
+    "api": "ok",
+    "throttler": "ok",
+    "kill_switch": "ok",
+    "scheduler_state": "ok",
+    "automation_state": "ok"
+  }
+}
+```
+
+### Routes système (/api/system/status)
+```json
+{
+  "kill_switch": {
+    "enabled": false,
+    "reason": "Unavailable",
+    "trigger_source": "error"
+  },
+  "scheduler": {
+    "is_active": false,
+    "daily_published_count": 0,
+    "queue_size": 0,
+    "next_publish_time": null
+  }
+}
+```
+
+### Logs routes système
+```
+Kill switch manager not available
+Scheduler state manager not available
+```
+
+## ANALYSE
+
+### Dans backend/api/main.py
+```python
+# Ligne 95-99
+try:
+    _kill_switch_manager = get_kill_switch_manager()
+    logger.info("Kill switch manager initialized")
+except Exception as e:
+    logger.error(f"Could not initialize kill switch manager: {e}", exc_info=True)
+    _kill_switch_manager = None
+
+# Dependency function (ligne 190-195)
+def get_kill_switch():
+    global _kill_switch_manager
+    if _kill_switch_manager is None:
+        logger.warning("Kill switch manager not available")
+    return _kill_switch_manager
+```
+
+### Dans backend/api/routes/system.py
+```python
+# Ligne 64-71
+def get_kill_switch():
+    try:
+        from backend.api.main import get_kill_switch
+        return get_kill_switch()
+    except Exception as e:
+        logger.warning(f"Kill switch manager not initialized: {e}")
+        return None
+```
+
+## DIAGNOSTIC
+
+Le problème est un **circular import** ou **module resolution issue**:
+
+1. `backend/api/main.py` initialise les managers globalement
+2. `backend/api/routes/system.py` essaie d'importer depuis `backend.api.main`
+3. L'import échoue (circular import ou path issue)
+4. Les routes système retournent None
+5. Le health check vérifie les variables globales directement (pas d'import)
+
+## SOLUTION PROPOSÉE
+
+### Option 1: Corriger l'import dans system.py
+Remplacer:
+```python
+from backend.api.main import get_kill_switch
+```
+Par:
+```python
+from api.main import get_kill_switch
+```
+
+### Option 2: Passer les managers comme dépendances directes
+Ne pas importer depuis main.py, mais utiliser les variables globales directement dans system.py
+
+### Option 3: Créer un module de services séparés
+Déplacer les managers dans un module séparé pour éviter les circular imports
+
+## IMPACT
+
+- **Actuel**: Routes système non fonctionnelles pour kill switch et scheduler
+- **Impact**: Automatisation complète non possible
+- **Urgence**: MOYENNE (analyse manuelle fonctionne)
+
+## ACTION RECOMMANDÉE
+
+1. Corriger l'import dans system.py (Option 1)
+2. Tester /api/system/status après correction
+3. Vérifier que kill switch et scheduler fonctionnent

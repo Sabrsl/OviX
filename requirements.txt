@@ -1,5 +1,5 @@
 # Wikipedia Maintenance Tool - Dependencies
-# Python 3.12+
+# Python 3.10+
 
 # Wikipedia API interaction
 pywikibot>=9.0.0
@@ -9,12 +9,19 @@ requests>=2.31.0
 streamlit>=1.28.0
 streamlit-option-menu>=0.3.6
 
+# API Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+
 # Database
 # sqlite3 is built-in with Python, no installation needed
 
-# Utilities
-python-dateutil>=2.8.2
-pytz>=2023.3
+# Data processing (for dashboard analytics)
+pandas>=2.0.0
+
+# HTML parsing (for URL metadata extraction)
+beautifulsoup4>=4.12.0
 
 # Diff generation
 # difflib is built-in with Python, no installation needed
@@ -22,9 +29,6 @@ pytz>=2023.3
 # Configuration
 pyyaml>=6.0.1
 python-dotenv>=1.0.0
-
-# Rate limiting
-ratelimit>=2.2.1
 
 # Testing (optional)
 pytest>=7.4.0

@@ -37,6 +37,20 @@ def _load_timeout_from_config(key: str, default: float) -> float:
     return default
 
 
+def _load_wikipedia_config_value(key: str, default: str) -> str:
+    """Load Wikipedia configuration value from config.yaml."""
+    try:
+        config_file = Path(__file__).parent.parent.parent.parent / "config" / "config.yaml"
+        if config_file.exists():
+            with open(config_file, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+                if config and 'wikipedia' in config and key in config['wikipedia']:
+                    return config['wikipedia'][key]
+    except Exception:
+        pass
+    return default
+
+
 # ----------------------------------------------------------------------
 # Exceptions
 # ----------------------------------------------------------------------
@@ -53,8 +67,8 @@ class ConfigError(Exception):
 @dataclass
 class WikipediaConfig:
     """Wikipedia connection configuration."""
-    lang: str = "fr"
-    family: str = "wikipedia"
+    lang: str = field(default_factory=lambda: _load_wikipedia_config_value('lang', 'fr'))
+    family: str = field(default_factory=lambda: _load_wikipedia_config_value('family', 'wikipedia'))
     api_url: Optional[str] = None          # override base API URL if needed
     user_agent: Optional[str] = None       # custom user agent
     timeout: float = field(default_factory=lambda: _load_timeout_from_config('wikipedia_api', 30.0))
@@ -93,12 +107,7 @@ class AnalysisConfig:
     """Analysis configuration."""
     # List of enabled analyzers (by class name)
     enabled_analyzers: List[str] = field(default_factory=lambda: [
-        "LinkAnalyzer",
-        "WhitespaceAnalyzer",
-        "TypographyAnalyzer",
-        "TemplateAnalyzer",
-        "CategoryAnalyzer",
-        "HTMLAnalyzer"
+        "DeadLinkAnalyzer"
     ])
     # Minimum severity to report (or 'all')
     min_severity: str = "all"  # Changed to "all" to show all corrections including minor ones
@@ -133,6 +142,15 @@ class DatabaseConfig:
     })
 
     def __post_init__(self):
+        # Convert relative path to absolute path
+        if not Path(self.path).is_absolute():
+            import os
+            project_root = os.environ.get('PROJECT_ROOT')
+            if project_root:
+                self.path = str(Path(project_root) / self.path)
+            else:
+                self.path = str(Path.cwd() / self.path)
+                
         if self.backup_interval_hours <= 0:
             raise ValueError("backup_interval_hours must be > 0")
         if self.max_backups < 1:
@@ -387,7 +405,7 @@ class Config:
         Variables are expected in the form:
             WMT_WIKIPEDIA_LANG=fr
             WMT_RATE_LIMITING_MIN_EDIT_DELAY=0.5
-            WMT_ANALYSIS_ENABLED_ANALYZERS='["LinkAnalyzer"]'   # JSON array
+            WMT_ANALYSIS_ENABLED_ANALYZERS='["DeadLinkAnalyzer"]'   # JSON array
             WMT_UI_THEME=dark
 
         Nested structures are supported using double underscore (not used here,

@@ -41,6 +41,7 @@ class BaseRetriever:
         try:
             from pathlib import Path
             import yaml
+            import pywikibot
             
             config_file = Path(__file__).parent.parent.parent.parent / "config" / "config.yaml"
             if config_file.exists():
@@ -57,12 +58,12 @@ class BaseRetriever:
                         # Configure pywikibot throttling
                         # Use the default min_delay for pywikibot (it doesn't support random delays)
                         pywikibot.config.put_throttle = min_delay
-                        pywikibot.config.maxlag = 5  # Wait if server lag exceeds 5 seconds
+                        pywikibot.config.maxlag = throttling_config.get('maxlag', 10)  # Wait if server lag exceeds configured seconds
                         pywikibot.config.retry_wait = min_delay
                         
                         import logging
                         logging.getLogger(__name__).info(
-                            f"Configured pywikibot throttling: put_throttle={min_delay}s, maxlag=5s, random_delay={random_delay}, range={min_delay_min}s-{min_delay_max}s"
+                            f"Configured pywikibot throttling: put_throttle={min_delay}s, maxlag={pywikibot.config.maxlag}s, random_delay={random_delay}, range={min_delay_min}s-{min_delay_max}s"
                         )
         except Exception as e:
             import logging

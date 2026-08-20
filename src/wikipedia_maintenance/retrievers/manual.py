@@ -5,6 +5,7 @@ Manual retriever for Wikipedia articles.
 from typing import List, TYPE_CHECKING
 from .base import BaseRetriever, Article
 from ..utils.published_tracker import PublishedTracker
+from ..utils.api_throttler import get_global_throttler
 
 if TYPE_CHECKING:
     import pywikibot
@@ -21,6 +22,7 @@ class ManualRetriever(BaseRetriever):
         """
         super().__init__()
         self.tracker = PublishedTracker(tracker_file)
+        self.api_throttler = get_global_throttler()
     
     def retrieve(self, titles: List[str], exclude_published: bool = True) -> List[Article]:
         """Retrieve articles from a list of titles.
@@ -42,6 +44,9 @@ class ManualRetriever(BaseRetriever):
             # Exclude recently published articles
             if exclude_published and self.tracker.is_recently_published(title):
                 continue
+            
+            # Apply throttling before each pywikibot call
+            self.api_throttler.wait_if_needed()
             
             try:
                 page = pywikibot.Page(self.site, title)

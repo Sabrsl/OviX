@@ -28,18 +28,11 @@ if TYPE_CHECKING:
 
 from wikipedia_maintenance.retrievers import CategoryRetriever, Article
 from wikipedia_maintenance.utils.analyzed_tracker import AnalyzedTracker, AnalysisStatus, AnalysisRecord, get_analyzed_tracker
-from wikipedia_maintenance.analyzers import (
-    LinkAnalyzer, WhitespaceAnalyzer, TypographyAnalyzer,
-    TemplateAnalyzer, CategoryAnalyzer, HTMLAnalyzer,
-    ReferenceAnalyzer, StructureAnalyzer, WorksListAnalyzer,
-    HttpLinksAnalyzer, DeadLinkAnalyzer
-)
+from wikipedia_maintenance.analyzers import DeadLinkAnalyzer
 from wikipedia_maintenance.utils.publisher import Publisher, Corrector
 from wikipedia_maintenance.utils.published_tracker import PublishedTracker
 from wikipedia_maintenance.utils.ui_settings import get_settings_manager
 from wikipedia_maintenance.utils.database import DatabaseManager
-from wikipedia_maintenance.utils.https_verification_cache import HttpsVerificationCache
-from wikipedia_maintenance.utils.https_verification_service import HttpsVerificationService
 from wikipedia_maintenance.utils.automation_report import get_report_generator, AutomationReport
 from wikipedia_maintenance.utils.automation_state import (
     AutomationStateManager, SessionStatus, ArticleProcessingStatus, ArticleState
@@ -78,13 +71,15 @@ class AutomationOrchestrator:
         ollama_model: str = "mistral:instruct",
         ollama_fallback: str = "llama3:instruct",
         gemini_api_key: Optional[str] = None,
-        gemini_project_id: str = "804175778135",
+        gemini_project_id: Optional[str] = None,
         gemini_model: str = "gemini-flash-lite-latest",
         lia_limit: int = 10800,
         # Optional pre-initialized components to avoid recreation
         publisher: Optional[Publisher] = None,
         published_tracker: Optional[PublishedTracker] = None,
-        analyzed_tracker: Optional[AnalyzedTracker] = None
+        analyzed_tracker: Optional[AnalyzedTracker] = None,
+        database: Optional[Any] = None,  # Database manager for SQLite integration
+        kill_switch_manager: Optional[Any] = None  # Kill switch manager for emergency stop
     ):
         """
         Initialize automation orchestrator.
@@ -107,8 +102,26 @@ class AutomationOrchestrator:
             gemini_model: Gemini model to use.
             lia_limit: Character limit for AI mode.
         """
-        self.lang = lang
-        self.family = family
+        # Use provided parameters or fallback to config
+        if lang is None or lang == '':
+            try:
+                from wikipedia_maintenance.utils.config import load_config
+                config = load_config()
+                self.lang = config.wikipedia.lang
+            except Exception:
+                self.lang = 'fr'  # Ultimate fallback
+        else:
+            self.lang = lang
+            
+        if family is None or family == '':
+            try:
+                from wikipedia_maintenance.utils.config import load_config
+                config = load_config()
+                self.family = config.wikipedia.family
+            except Exception:
+                self.family = 'wikipedia'  # Ultimate fallback
+        else:
+            self.family = family
         self.category_name = category_name
         self.max_articles = max_articles
         self.dry_run = dry_run
@@ -122,12 +135,20 @@ class AutomationOrchestrator:
         self.gemini_project_id = gemini_project_id
         self.gemini_model = gemini_model
         self.lia_limit = lia_limit
-        
+
+        # Validate Gemini credentials if AI provider is gemini
+        if self.ai_provider == "gemini" and not self.gemini_api_key:
+            logger.warning("Gemini API key not provided for AI provider 'gemini'")
+        if self.ai_provider == "gemini" and not self.gemini_project_id:
+            logger.warning("Gemini project ID not provided for AI provider 'gemini'")
+
         # Initialize components (use pre-initialized ones if provided)
         self.site: Optional[pywikibot.Site] = None
         self.publisher = publisher  # Use provided publisher or None
         self.published_tracker = published_tracker  # Use provided tracker or None
         self.analyzed_tracker = analyzed_tracker  # Use provided tracker or None
+        self.database = database  # Use provided database manager for SQLite integration
+        self.kill_switch_manager = kill_switch_manager  # Use provided kill switch manager or None
         self.report_generator = get_report_generator()
         self.scheduler: Optional[Scheduler] = None
         self.lia_client: Optional[Any] = None
@@ -141,6 +162,24 @@ class AutomationOrchestrator:
         # API throttler for rate limiting
         from wikipedia_maintenance.utils.api_throttler import get_global_throttler
         self.api_throttler = get_global_throttler()
+        
+        # Initialize analyzers once (reused across articles to avoid repeated config loading)
+        self._analyzers_cache = None
+        self._settings_manager = None
+        
+        self.category_name = category_name
+        self.max_articles = max_articles
+        self.dry_run = dry_run
+        self.lia_mode = lia_mode
+        self.include_analyzed = include_analyzed
+        self.ai_provider = ai_provider
+        self.ollama_url = ollama_url
+        self.ollama_model = ollama_model
+        self.ollama_fallback = ollama_fallback
+        self.gemini_api_key = gemini_api_key
+        self.gemini_project_id = gemini_project_id
+        self.gemini_model = gemini_model
+        self.lia_limit = lia_limit
         
         # Track statistics for reporting
         self.start_time: Optional[datetime] = None
@@ -162,7 +201,160 @@ class AutomationOrchestrator:
         self.telegram_bot_token = telegram_bot_token
         self.telegram_admin_ids = telegram_admin_ids or []
         
+        # Control flags for pause/stop
+        self._paused = False
+        self._stopped = False
+        
         logger.info(f"AutomationOrchestrator initialized (lang={lang}, category={category_name})")
+    
+    def _check_kill_switch(self) -> bool:
+        """
+        Check if kill switch is enabled and update article states to prevent stale status.
+        
+        Returns:
+            True if kill switch is enabled and automation should stop, False otherwise.
+        """
+        if self.kill_switch_manager:
+            try:
+                state = self.kill_switch_manager.get_state()
+                if state and state.enabled:
+                    logger.warning(f"Kill Switch is ENABLED - stopping automation. Reason: {state.reason}")
+                    self.state_manager.update_status(SessionStatus.INTERRUPTED)
+                    self.state_manager.record_interruption(f"Kill Switch activated: {state.reason}")
+                    
+                    # Update article states to prevent stale 'analyzing' status
+                    current_state = self.state_manager.get_state()
+                    if current_state and current_state.article_states:
+                        for article_state in current_state.article_states:
+                            if article_state.get('status') in ['analyzing', 'retrieving', 'correcting']:
+                                article_state['status'] = 'interrupted'
+                                article_state['completed_at'] = datetime.now().isoformat()
+                                article_state['error_message'] = f'Kill Switch activated: {state.reason}'
+                        self.state_manager.save_state()
+                        logger.info(f"Updated {len([s for s in current_state.article_states if s.get('status') == 'interrupted'])} article states to 'interrupted' due to kill switch")
+                    
+                    return True
+            except Exception as e:
+                logger.error(f"Error checking kill switch: {e}")
+        return False
+    
+    async def _check_control_flags(self) -> bool:
+        """
+        Check if automation should pause or stop based on control flags.
+        
+        Returns:
+            True if automation should stop, False if it should continue (or pause).
+        """
+        # Check stop flag first
+        if self._stopped:
+            logger.warning("Stop flag is set - stopping automation")
+            self.state_manager.update_status(SessionStatus.FAILED)
+            self.state_manager.record_interruption("Stop requested by user")
+            
+            # Update article states to prevent stale 'analyzing' status
+            state = self.state_manager.get_state()
+            if state and state.article_states:
+                for article_state in state.article_states:
+                    if article_state.get('status') in ['analyzing', 'retrieving', 'correcting']:
+                        article_state['status'] = 'interrupted'
+                        article_state['completed_at'] = datetime.now().isoformat()
+                        article_state['error_message'] = 'Automation stopped by user'
+                self.state_manager.save_state()
+                logger.info(f"Updated {len([s for s in state.article_states if s.get('status') == 'interrupted'])} article states to 'interrupted' due to stop request")
+            
+            return True
+        
+        # Check pause flag
+        if self._paused:
+            logger.info("Pause flag is set - pausing automation")
+            self.state_manager.update_status(SessionStatus.PAUSED)
+            self.state_manager.record_interruption("Pause requested by user")
+            # Wait until pause is lifted
+            while self._paused and not self._stopped:
+                import asyncio
+                await asyncio.sleep(1)
+            # If stopped while paused
+            if self._stopped:
+                logger.warning("Stop requested while paused - stopping automation")
+                self.state_manager.update_status(SessionStatus.FAILED)
+                self.state_manager.record_interruption("Stop requested while paused")
+                return True
+            # Resume
+            logger.info("Resuming automation")
+            self.state_manager.update_status(SessionStatus.RUNNING)
+            self.state_manager.resolve_interruption(self.state_manager.get_interruption_summary()['unresolved_count'] > 0 and 
+                                                      self.state_manager.get_state().interruptions[-1] if 
+                                                      self.state_manager.get_state() and 
+                                                      self.state_manager.get_state().interruptions else None)
+        
+        return False
+    
+    def pause(self) -> bool:
+        """
+        Pause the automation.
+        
+        Returns:
+            True if pause command was sent successfully.
+        """
+        if not self._paused:
+            self._paused = True
+            logger.info("Automation pause requested")
+            return True
+        return False
+    
+    async def resume(self) -> bool:
+        """
+        Resume the automation or session.
+        
+        P2-1 FIX: Now properly calls _resume_session() to restore interrupted sessions.
+        
+        Returns:
+            True if resume command was sent successfully.
+        """
+        # Check if there's a paused session to resume
+        state = self.state_manager.get_state()
+        if state and state.status == SessionStatus.PAUSED.value:
+            logger.info("Resuming paused session...")
+            result = await self._resume_session()
+            if result:
+                self._paused = False
+                return True
+            return False
+        
+        # Simple flag-based resume for in-progress automation
+        if self._paused:
+            self._paused = False
+            logger.info("Automation resume requested (flag-based)")
+            return True
+        
+        logger.warning("Automation is not paused, cannot resume")
+        return False
+    
+    def stop(self) -> bool:
+        """
+        Stop the automation and update article states to prevent stale status.
+        
+        Returns:
+            True if stop command was sent successfully.
+        """
+        if not self._stopped:
+            self._stopped = True
+            self._paused = False  # Clear pause flag when stopping
+            logger.info("Automation stop requested")
+            
+            # Update article states to prevent stale 'analyzing' status
+            state = self.state_manager.get_state()
+            if state and state.article_states:
+                for article_state in state.article_states:
+                    if article_state.get('status') in ['analyzing', 'retrieving', 'correcting']:
+                        article_state['status'] = 'interrupted'
+                        article_state['completed_at'] = datetime.now().isoformat()
+                        article_state['error_message'] = 'Automation stopped by user'
+                self.state_manager.save_state()
+                logger.info(f"Updated {len([s for s in state.article_states if s.get('status') == 'interrupted'])} article states to 'interrupted'")
+            
+            return True
+        return False
     
     async def startup(self) -> bool:
         """
@@ -174,6 +366,26 @@ class AutomationOrchestrator:
         logger.info("=" * 60)
         logger.info("STARTING AUTOMATION ORCHESTRATOR")
         logger.info("=" * 60)
+        
+        # P1 CRITICAL FIX: Check if automation is already running to prevent double launch
+        current_state = self.state_manager.get_state()
+        if current_state and current_state.status in ['running', 'paused']:
+            logger.warning(f"Automation already active with status: {current_state.status}, session: {current_state.session_id}")
+            logger.warning("Rejecting duplicate automation launch attempt")
+            return False
+        
+        # P1 CRITICAL FIX: Clean up stale article states from previous crashes/interruptions
+        if current_state and current_state.article_states:
+            stale_count = 0
+            for article_state in current_state.article_states:
+                if article_state.get('status') in ['analyzing', 'retrieving', 'correcting']:
+                    article_state['status'] = 'interrupted'
+                    article_state['completed_at'] = datetime.now().isoformat()
+                    article_state['error_message'] = 'Automation interrupted (crash or unexpected stop)'
+                    stale_count += 1
+            if stale_count > 0:
+                self.state_manager.save_state()
+                logger.warning(f"Cleaned up {stale_count} stale article states from previous interrupted session")
         
         # Check for resumable session
         if self.state_manager.can_resume():
@@ -211,39 +423,59 @@ class AutomationOrchestrator:
         }
         
         try:
-            # Step 1: Connect to Wikipedia
-            self.state_manager.update_step("connecting_to_wikipedia")
+            # Step 1/10: Connect to Wikipedia
+            self.state_manager.update_step("1/10 - Connecting to Wikipedia")
+            if self._check_kill_switch() or await self._check_control_flags():
+                return False
             if not await self._connect_to_wikipedia():
                 self.state_manager.update_status(SessionStatus.FAILED)
                 return False
             
-            # Step 2: Initialize scheduler (but don't start yet)
-            self.state_manager.update_step("initializing_scheduler")
+            # Step 2/10: Initialize scheduler (but don't start yet)
+            self.state_manager.update_step("2/10 - Initializing scheduler")
+            if self._check_kill_switch() or await self._check_control_flags():
+                return False
             await self._initialize_scheduler()
             
-            # Step 3: Get already analyzed but unpublished articles
-            self.state_manager.update_step("reusing_analyzed_articles")
-            existing_analyzed = await self._get_analyzed_pending_articles()
+            # Step 3/10: Get already analyzed but unpublished articles (ONLY if include_analyzed is True)
+            self.state_manager.update_step("3/10 - Reusing analyzed articles")
+            if self._check_kill_switch() or await self._check_control_flags():
+                return False
+            existing_analyzed = []
+            if self.include_analyzed:
+                existing_analyzed = await self._get_analyzed_pending_articles()
+                # Limit to max_articles to prevent overwhelming the queue
+                existing_analyzed = existing_analyzed[:self.max_articles]
+                logger.info(f"Limited existing analyzed articles to {len(existing_analyzed)} (max: {self.max_articles})")
+            else:
+                logger.info("include_analyzed is False, skipping reuse of analyzed articles")
             
-            # Step 4: Calculate how many new articles to retrieve
+            # Step 4/10: Calculate how many new articles to retrieve
             needed_articles = self.max_articles - len(existing_analyzed)
             logger.info(f"Target: {self.max_articles} articles, Already analyzed: {len(existing_analyzed)}, Need to retrieve: {needed_articles}")
             
-            # Step 5: Retrieve new articles if needed
+            # Step 5/10: Retrieve new articles if needed
             new_articles = []
             if needed_articles > 0:
-                self.state_manager.update_step("retrieving_articles")
+                self.state_manager.update_step("5/10 - Retrieving articles")
+                if self._check_kill_switch() or await self._check_control_flags():
+                    return False
                 new_articles = await self._retrieve_articles(max_articles=needed_articles)
                 if not new_articles:
                     logger.warning(f"No new articles retrieved, will use only existing analyzed articles ({len(existing_analyzed)})")
             
-            # Step 6: Analyze and correct new articles only
+            # Step 6/10: Analyze and correct new articles only
             corrected_new_articles = []
             if new_articles:
-                self.state_manager.update_step("analyzing_articles")
+                self.state_manager.update_step("6/10 - Analyzing articles")
+                if self._check_kill_switch() or await self._check_control_flags():
+                    return False
                 corrected_new_articles = await self._analyze_and_correct_articles(new_articles)
             
-            # Step 7: Combine existing analyzed and newly corrected articles
+            # Step 7/10: Combine existing analyzed and newly corrected articles
+            self.state_manager.update_step("7/10 - Combining articles")
+            if self._check_kill_switch() or await self._check_control_flags():
+                return False
             all_corrected = existing_analyzed + corrected_new_articles
             logger.info(f"Total articles ready for publication: {len(all_corrected)} (existing: {len(existing_analyzed)}, new: {len(corrected_new_articles)})")
             
@@ -252,13 +484,20 @@ class AutomationOrchestrator:
                 self.state_manager.update_status(SessionStatus.FAILED)
                 return False
             
-            # Step 8: Feed publication queue BEFORE starting scheduler
+            # Step 8/10: Feed publication queue BEFORE starting scheduler
+            self.state_manager.update_step("8/10 - Feeding publication queue")
+            if self._check_kill_switch() or await self._check_control_flags():
+                return False
             await self._feed_queue(all_corrected)
             
-            # Step 9: Start scheduler AFTER queue is fed
+            # Step 9/10: Start scheduler AFTER queue is fed
+            self.state_manager.update_step("9/10 - Starting scheduler")
+            if self._check_kill_switch() or await self._check_control_flags():
+                return False
             await self._start_scheduler()
             
-            # Step 10: Generate and save report
+            # Step 10/10: Generate and save report
+            self.state_manager.update_step("10/10 - Generating report")
             await self._generate_and_save_report()
             
             self.state_manager.update_status(SessionStatus.COMPLETED)
@@ -356,18 +595,20 @@ class AutomationOrchestrator:
     async def _connect_to_wikipedia(self) -> bool:
         """Connect to Wikipedia and initialize components."""
         logger.info("Step 1: Connecting to Wikipedia...")
-        
+
         # Check connection first
         if not self.connection_checker.is_connected():
             logger.warning("Connection check failed, waiting for connection...")
             interruption = self.state_manager.record_interruption("Network connection unavailable")
             await self.connection_checker.wait_for_connection(check_interval=10.0, max_wait=300.0)
             self.state_manager.resolve_interruption(interruption)
-        
+
         try:
             # Set PYWIKIBOT_DIR
             import os
-            os.environ['PYWIKIBOT_DIR'] = str(project_root)
+            from pathlib import Path
+            local_project_root = Path(__file__).parent.parent.parent.parent
+            os.environ['PYWIKIBOT_DIR'] = str(local_project_root)
             
             # Create pywikibot site with retry logic and rate limiting
             import pywikibot
@@ -378,24 +619,32 @@ class AutomationOrchestrator:
                 pywikibot.config.maxlag = 5  # Maximum server lag in seconds
                 
                 # Override the API request method to use our throttler
-                original_request = site._simple_request
-                def throttled_request(**kwargs):
-                    self.api_throttler.wait_if_needed()
-                    try:
-                        result = original_request(**kwargs)
-                        self.api_throttler.report_success()
-                        return result
-                    except Exception as e:
-                        if '429' in str(e) or 'Too Many Requests' in str(e):
-                            self.api_throttler.report_429()
-                        raise
+                try:
+                    original_request = site._simple_request
+                except AttributeError:
+                    # For newer pywikibot versions, we can't override internal methods
+                    # Use the site's built-in rate limiting instead
+                    logger.info("Using pywikibot built-in rate limiting")
+                    original_request = None
                 
-                site._simple_request = throttled_request
+                if original_request:
+                    def throttled_request(**kwargs):
+                        self.api_throttler.wait_if_needed()
+                        try:
+                            result = original_request(**kwargs)
+                            self.api_throttler.report_success()
+                            return result
+                        except Exception as e:
+                            if '429' in str(e) or 'Too Many Requests' in str(e):
+                                self.api_throttler.report_429()
+                            raise
+                    
+                    site._simple_request = throttled_request
+                
                 return site
             
             self.site = self.wikipedia_retry_handler.execute_with_retry(
-                create_site,
-                operation_name="Wikipedia site connection"
+                create_site
             )
             logger.info(f"Connected to {self.lang}.{self.family}")
             
@@ -426,6 +675,21 @@ class AutomationOrchestrator:
                 self.analyzed_tracker = get_analyzed_tracker()
             else:
                 logger.info("Using existing analyzed tracker instance")
+
+            # Initialize database manager if not provided (for SQLite integration)
+            if not self.database:
+                try:
+                    from wikipedia_maintenance.utils.database import DatabaseManager
+                    import os
+                    project_root = Path(__file__).parent.parent.parent.parent
+                    db_path = str(project_root / "data" / "wikipedia_maintenance.db")
+                    self.database = DatabaseManager(db_path)
+                    logger.info("Database manager initialized for automation")
+                except Exception as e:
+                    logger.warning(f"Could not initialize database manager: {e}")
+                    self.database = None
+            else:
+                logger.info("Using existing database manager instance")
             
             # Initialize AI client if in LIA mode
             if self.lia_mode:
@@ -462,6 +726,34 @@ class AutomationOrchestrator:
         except Exception as e:
             logger.error(f"Failed to connect to Wikipedia: {e}", exc_info=True)
             return False
+    
+    def _get_cached_analyzers(self):
+        """Get or create cached analyzers to avoid repeated initialization."""
+        if self._analyzers_cache is not None:
+            return self._analyzers_cache
+        
+        # Initialize settings manager once
+        if self._settings_manager is None:
+            self._settings_manager = get_settings_manager()
+        
+        settings = self._settings_manager.get_settings()
+        enabled_analyzer_names = settings.get_enabled_analyzers()
+        
+        # Map analyzer names to their classes
+        analyzer_classes = {
+            "DeadLinkAnalyzer": DeadLinkAnalyzer
+        }
+        
+        # Initialize only enabled analyzers once
+        analyzers = []
+        for analyzer_name in enabled_analyzer_names:
+            if analyzer_name in analyzer_classes:
+                logger.info(f"Initializing analyzer: {analyzer_name}")
+                analyzers.append(analyzer_classes[analyzer_name]())
+        
+        self._analyzers_cache = analyzers
+        logger.info(f"Cached {len(analyzers)} analyzers for reuse across articles")
+        return analyzers
     
     async def _get_analyzed_pending_articles(self) -> List[Dict[str, Any]]:
         """Get already analyzed but unpublished articles from AnalyzedTracker."""
@@ -561,9 +853,13 @@ class AutomationOrchestrator:
             total_filtered_length = 0
             total_filtered_duplicates = 0
             
-            # Use random offset for varied retrieval
+            # Track consecutive low-yield batches to avoid premature termination
+            consecutive_low_yield_batches = 0
+            MIN_BATCHES_BEFORE_ABORT = 5  # Allow several attempts before aborting
+            
+            # Use random offset for varied retrieval - cover entire category
             import random
-            offset = random.randint(0, 500)  # Start at random position
+            offset = random.randint(0, 10500)  # Cover full category range (11k articles)
             
             while len(all_articles) < target:
                 # Retrieve a batch of articles with offset to progress through category
@@ -675,7 +971,15 @@ class AutomationOrchestrator:
                 filtered_duplicates = len(new_articles) - (len(all_articles) - before_add)
                 total_filtered_duplicates += filtered_duplicates
                 
-                logger.info(f"Added {len(all_articles) - before_add} new articles (duplicates: {filtered_duplicates})")
+                added_count = len(all_articles) - before_add
+                logger.info(f"Added {added_count} new articles (duplicates: {filtered_duplicates})")
+                
+                # Track consecutive low-yield batches
+                if added_count == 0:
+                    consecutive_low_yield_batches += 1
+                    logger.warning(f"Low-yield batch: {consecutive_low_yield_batches}/{MIN_BATCHES_BEFORE_ABORT} consecutive batches with 0 eligible articles")
+                else:
+                    consecutive_low_yield_batches = 0  # Reset counter when we get articles
                 
                 # Update statistics
                 self.stats['articles_retrieved'] = total_retrieved
@@ -685,25 +989,22 @@ class AutomationOrchestrator:
                 self.stats['articles_excluded_duplicates'] = total_filtered_duplicates
                 
                 # Stop if we have enough articles
-                if len(all_articles) >= self.max_articles:
-                    logger.info(f"Reached target of {self.max_articles} eligible articles")
+                if len(all_articles) >= target:
+                    logger.info(f"Reached target of {target} eligible articles")
                     break
                 
-                # Early termination detection for ineffective filtering
-                # Calculate filtering efficiency
-                if total_retrieved > 0:
-                    efficiency = len(all_articles) / total_retrieved
-                    if efficiency < 0.01:  # Less than 1% efficiency
-                        logger.error(f"CRITICAL: Filtering efficiency is extremely low ({efficiency:.2%})")
-                        logger.error(f"Retrieved {total_retrieved} articles but only {len(all_articles)} are eligible")
-                        logger.error(f"Filters: published={total_filtered_published}, analyzed={total_filtered_analyzed}, length={total_filtered_length}, duplicates={total_filtered_duplicates}")
-                        if self.lia_mode and total_filtered_length > total_filtered_published + total_filtered_analyzed:
-                            logger.error(f"LENGTH FILTER is the main bottleneck: {total_filtered_length} articles filtered for being too long")
-                            logger.error(f"Recommendation: Increase character limit from {self.lia_limit} or disable LIA mode")
-                        break
+                # Abort after consecutive low-yield batches (allows exploration of multiple offsets)
+                if consecutive_low_yield_batches >= MIN_BATCHES_BEFORE_ABORT:
+                    logger.error(f"CRITICAL: {consecutive_low_yield_batches} consecutive batches with 0 eligible articles")
+                    logger.error(f"Retrieved {total_retrieved} articles but only {len(all_articles)} are eligible")
+                    logger.error(f"Filters: published={total_filtered_published}, analyzed={total_filtered_analyzed}, length={total_filtered_length}, duplicates={total_filtered_duplicates}")
+                    if self.lia_mode and total_filtered_length > total_filtered_published + total_filtered_analyzed:
+                        logger.error(f"LENGTH FILTER is the main bottleneck: {total_filtered_length} articles filtered for being too long")
+                        logger.error(f"Recommendation: Increase character limit from {self.lia_limit} or disable LIA mode")
+                    break
                 
                 # Stop if we retrieved a lot but still don't have enough (avoid infinite loop)
-                if total_retrieved > self.max_articles * 20:
+                if total_retrieved > target * 20:
                     logger.warning(f"Retrieved {total_retrieved} articles but only {len(all_articles)} are eligible, stopping")
                     logger.warning(f"Filters: published={total_filtered_published}, analyzed={total_filtered_analyzed}, length={total_filtered_length}, duplicates={total_filtered_duplicates}")
                     if self.lia_mode and total_filtered_length > total_filtered_published + total_filtered_analyzed:
@@ -712,9 +1013,9 @@ class AutomationOrchestrator:
                     break
             
             # Trim to exact count
-            final_articles = all_articles[:self.max_articles]
+            final_articles = all_articles[:target]
             
-            logger.info(f"Final article count: {len(final_articles)} (requested: {self.max_articles}, total retrieved: {total_retrieved})")
+            logger.info(f"Final article count: {len(final_articles)} (requested: {target}, total retrieved: {total_retrieved})")
             logger.info(f"Filter summary: published={total_filtered_published}, analyzed={total_filtered_analyzed}, length={total_filtered_length}, duplicates={total_filtered_duplicates}")
             
             return final_articles
@@ -884,6 +1185,14 @@ class AutomationOrchestrator:
             # Estimate changes count for LIA (simplified)
             changes_count = len(article_corrige) - len(content) if article_corrige else 0
             
+            # Calculate link statistics
+            dead_links_count = 0
+            corrected_links_count = 0
+            if all_issues:
+                dead_links_count = len([issue for issue in all_issues if issue.get('type') == 'dead_link'])
+                corrected_links_count = len([issue for issue in all_issues if issue.get('corrected')])
+            logger.info(f"LIA link statistics: {dead_links_count} dead links, {corrected_links_count} corrected")
+
             # Record analysis in tracker
             if self.analyzed_tracker:
                 self.analyzed_tracker.record_analysis(
@@ -894,8 +1203,45 @@ class AutomationOrchestrator:
                     mode='IA',
                     changes_count=max(0, changes_count),
                     summary=summary,
-                    corrected_content=article_corrige
+                    corrected_content=article_corrige,
+                    character_count=len(content) if content else 0,
+                    total_links=len(all_issues) if all_issues else 0,
+                    dead_links_count=dead_links_count,
+                    corrected_links_count=corrected_links_count
                 )
+
+            # Record analysis in database for history display
+            if self.database:
+                try:
+                    import uuid
+                    from datetime import datetime
+                    result_id = str(uuid.uuid4())
+                    job_id = f"automation_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+                    self.database.create_analysis_result(
+                        result_id=result_id,
+                        job_id=job_id,
+                        article_title=article.title,
+                        page_id=article.page_id,
+                        revision_id=article.revision_id,
+                        status='analyzed',
+                        mode='IA',
+                        changes_count=max(0, changes_count),
+                        summary=summary,
+                        original_content=content,
+                        corrected_content=article_corrige,
+                        character_count=len(content) if content else 0,
+                        total_links=len(all_issues) if all_issues else 0,
+                        dead_links_count=dead_links_count,
+                        corrected_links_count=corrected_links_count,
+                        human_verified=False,
+                        manual_review_urls=None,
+                        issues_json=None,
+                        analysis_date=datetime.now().isoformat()
+                    )
+                    logger.info(f"Analysis result saved to database for {article.title}")
+                except Exception as e:
+                    logger.error(f"Failed to save analysis result to database for {article.title}: {e}")
             
             return {
                 'title': article.title,
@@ -924,58 +1270,8 @@ class AutomationOrchestrator:
             
             content = page.get()
             
-            # Get enabled analyzers from settings
-            settings_manager = get_settings_manager()
-            settings = settings_manager.get_settings()
-            enabled_analyzer_names = settings.get_enabled_analyzers()
-            
-            # Map analyzer names to their classes
-            analyzer_classes = {
-                "LinkAnalyzer": LinkAnalyzer,
-                "WhitespaceAnalyzer": WhitespaceAnalyzer,
-                "TypographyAnalyzer": TypographyAnalyzer,
-                "TemplateAnalyzer": TemplateAnalyzer,
-                "CategoryAnalyzer": CategoryAnalyzer,
-                "HTMLAnalyzer": HTMLAnalyzer,
-                "ReferenceAnalyzer": ReferenceAnalyzer,
-                "StructureAnalyzer": StructureAnalyzer,
-                "WorksListAnalyzer": WorksListAnalyzer,
-                "HttpLinksAnalyzer": HttpLinksAnalyzer,
-                "DeadLinkAnalyzer": DeadLinkAnalyzer
-            }
-            
-            # Initialize only enabled analyzers
-            analyzers = []
-            
-            # Get UI settings for HTTPS verification
-            settings_manager = get_settings_manager()
-            settings = settings_manager.settings
-            
-            # Initialize HTTPS verification service if HttpLinksAnalyzer is enabled
-            https_service = None
-            if "HttpLinksAnalyzer" in enabled_analyzer_names:
-                # Always enable HTTPS verification when HttpLinksAnalyzer is active
-                db_manager = DatabaseManager()
-                cache = HttpsVerificationCache(db_manager)
-                https_service = HttpsVerificationService(
-                    cache,
-                    timeout=settings.https_check_timeout
-                )
-            
-            for analyzer_name in enabled_analyzer_names:
-                if analyzer_name in analyzer_classes:
-                    if analyzer_name == "HttpLinksAnalyzer":
-                        # Always enable HTTPS verification when HttpLinksAnalyzer is active
-                        analyzers.append(analyzer_classes[analyzer_name](
-                            enable_https_verification=True,  # Force enable
-                            https_verification_service=https_service,
-                            max_https_checks=settings.max_https_checks,
-                            https_check_timeout=settings.https_check_timeout
-                        ))
-                    elif analyzer_name in ["LinkAnalyzer", "WhitespaceAnalyzer", "ReferenceAnalyzer", "StructureAnalyzer", "WorksListAnalyzer"]:
-                        analyzers.append(analyzer_classes[analyzer_name](language=self.lang))
-                    else:
-                        analyzers.append(analyzer_classes[analyzer_name]())
+            # Use cached analyzers to avoid repeated initialization
+            analyzers = self._get_cached_analyzers()
             
             if not analyzers:
                 logger.warning(f"No analyzers enabled, skipping analysis of {article.title}")
@@ -1003,6 +1299,11 @@ class AutomationOrchestrator:
             
             logger.info(f"Found {len(all_issues)} issues in {article.title}")
             
+            # Extract link statistics from issues
+            dead_links_count = len([i for i in all_issues if i.issue_type == 'dead_link'])
+            corrected_links_count = len([i for i in all_issues if i.suggested_text is not None and i.extra.get('repair_status') in ['REPAIR_APPLIED', 'SAFE_REPLACEMENT']])
+            logger.info(f"Link statistics: {dead_links_count} dead links, {corrected_links_count} corrected")
+            
             if not all_issues:
                 # No issues found, record as analyzed with no changes to avoid re-analysis
                 if self.analyzed_tracker:
@@ -1010,24 +1311,25 @@ class AutomationOrchestrator:
                         title=article.title,
                         page_id=article.page_id,
                         revision_id=article.revision_id,
-                        status=AnalysisStatus.COMPLETED,  # Mark as completed since no issues
+                        status=AnalysisStatus.IGNORED,  # Mark as ignored since no issues
                         mode='regex',
                         changes_count=0,
                         summary="No issues found",
-                        corrected_content=content
+                        corrected_content=content,
+                        character_count=len(content) if content else 0
                     )
                 logger.info(f"No issues found in {article.title}, marked as analyzed")
                 return None
             
             # Apply corrections using the same robust method as frontend
-            corrector = Corrector(content, strict_position_check=False)
+            corrector = Corrector(content)
             corrected_content = corrector.apply_corrections(all_issues)
             
             # Generate summary - only count issues with suggested corrections
             correction_types = [issue.issue_type for issue in all_issues if issue.suggested_text is not None]
-            http_count = correction_types.count("http_link")
-            typo_count = len([t for t in correction_types if t != "http_link"])
-            logger.info(f"Résumé: http_link={http_count}, typo={typo_count}, total={len(correction_types)}")
+            from collections import Counter
+            type_counts = Counter(correction_types)
+            logger.info(f"Résumé: {dict(type_counts)}, total={len(correction_types)}")
             summary = self.publisher.generate_edit_summary(len(correction_types), correction_types)
             
             # Record analysis in tracker
@@ -1038,17 +1340,54 @@ class AutomationOrchestrator:
                     revision_id=article.revision_id,
                     status=AnalysisStatus.PENDING,  # Will be updated after publication
                     mode='regex',
-                    changes_count=len(all_issues),
+                    changes_count=len(correction_types),  # Only count issues with suggested corrections (same as manual)
                     summary=summary,
-                    corrected_content=corrected_content
+                    corrected_content=corrected_content,
+                    character_count=len(content) if content else 0,
+                    total_links=len(all_issues) if all_issues else 0,
+                    dead_links_count=dead_links_count,
+                    corrected_links_count=corrected_links_count
                 )
+
+            # Record analysis in database for history display
+            if self.database:
+                try:
+                    import uuid
+                    from datetime import datetime
+                    result_id = str(uuid.uuid4())
+                    job_id = f"automation_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+                    self.database.create_analysis_result(
+                        result_id=result_id,
+                        job_id=job_id,
+                        article_title=article.title,
+                        page_id=article.page_id,
+                        revision_id=article.revision_id,
+                        status='analyzed',
+                        mode='regex',
+                        changes_count=len(correction_types),
+                        summary=summary,
+                        original_content=content,
+                        corrected_content=corrected_content,
+                        character_count=len(content) if content else 0,
+                        total_links=len(all_issues),  # Total issues found
+                        dead_links_count=dead_links_count,
+                        corrected_links_count=corrected_links_count,
+                        human_verified=False,
+                        manual_review_urls=None,
+                        issues_json=None,
+                        analysis_date=datetime.now().isoformat()
+                    )
+                    logger.info(f"Analysis result saved to database for {article.title}")
+                except Exception as e:
+                    logger.error(f"Failed to save analysis result to database for {article.title}: {e}")
             
             return {
                 'title': article.title,
                 'corrected_content': corrected_content,
                 'summary': summary,
                 'original_content': content,
-                'changes_count': len(all_issues),
+                'changes_count': len(correction_types),  # Only count issues with suggested corrections (same as manual)
                 'mode': 'regex',  # Mark as regex-corrected
                 'page_id': article.page_id,
                 'revision_id': article.revision_id
@@ -1120,12 +1459,31 @@ class AutomationOrchestrator:
         logger.info("Step 3: Initializing scheduler object...")
         
         try:
-            # Delete state file to start fresh (avoid stale is_active from previous sessions)
+            # Check if scheduler is already running - if so, reuse it
             import os
             state_file = "data/scheduler_state.json"
+            scheduler_already_running = False
+            
             if os.path.exists(state_file):
-                os.remove(state_file)
-                logger.info(f"Deleted existing state file: {state_file}")
+                try:
+                    import json
+                    with open(state_file, 'r') as f:
+                        state_data = json.load(f)
+                        if state_data.get('is_active', False):
+                            scheduler_already_running = True
+                            logger.info("Scheduler is already running, will reuse existing instance")
+                except:
+                    pass
+            
+            if scheduler_already_running:
+                # Try to get existing scheduler from global state if available
+                # For now, we'll just create a new one but won't delete the state file
+                logger.info("Not deleting state file - scheduler may be running")
+            else:
+                # Only delete state file if scheduler is not running
+                if os.path.exists(state_file):
+                    os.remove(state_file)
+                    logger.info(f"Deleted existing state file: {state_file}")
             
             config = SchedulerConfig(
                 state_file="data/scheduler_state.json",
@@ -1133,10 +1491,12 @@ class AutomationOrchestrator:
                 telegram_admin_ids=self.telegram_admin_ids,
                 dry_run=self.dry_run,
                 daily_limit=100,  # Default daily limit
-                site=self.site  # Pass the site object
+                site=self.site,  # Pass the site object
+                category=self.category_name,  # Store category for manual runs
+                articles_to_process=self.max_articles  # Store max articles for manual runs
             )
             
-            self.scheduler = Scheduler(config, self.publisher, self.published_tracker, self.analyzed_tracker)
+            self.scheduler = Scheduler(config, self.publisher, self.published_tracker, self.analyzed_tracker, self.kill_switch_manager, self.database)
             logger.info(f"Scheduler object created: {self.scheduler is not None}")
             logger.info("Scheduler initialized successfully (not started yet)")
         except Exception as e:

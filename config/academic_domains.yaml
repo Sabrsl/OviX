@@ -1,0 +1,78 @@
+# Academic publishers known to block automated requests with 403
+# These domains systematically block bots regardless of User-Agent
+# due to advanced fingerprinting (TLS, headers, behavior patterns)
+academic_publisher_domains:
+  # ScienceDirect / Elsevier
+  - sciencedirect.com
+  - elsevier.com
+
+  # Wiley
+  - onlinelibrary.wiley.com
+  - wiley.com
+
+  # Taylor & Francis
+  - tandfonline.com
+  - taylorfrancis.com
+
+  # Springer Nature
+  - springer.com
+  - springerlink.com
+  - nature.com
+
+  # Cell Press
+  - cell.com
+
+  # The Lancet / NEJM / JAMA / BMJ (revues médicales majeures)
+  - thelancet.com
+  - jama.com
+  - bmj.com
+  - nejm.org
+  - ahajournals.org
+  - jacionline.org
+
+  # Oxford / Cambridge University Press
+  - academic.oup.com
+  - oxfordacademic.com
+  - cambridge.org
+
+  # SAGE
+  - sagepub.com
+
+  # DOI / PubMed / NCBI
+  - doi.org
+  - pubmed.ncbi.nlm.nih.gov
+  - ncbi.nlm.nih.gov
+
+  # PNAS
+  - pnas.org
+
+  # JSTOR / ResearchGate (archives et réseaux académiques, bloquent aussi les bots)
+  - jstor.org
+  - researchgate.net
+
+  # AAAS / Science
+  - science.org
+
+  # PLOS
+  - journals.plos.org
+  - plos.org
+
+  # Sociétés savantes et instituts
+  - royalsocietypublishing.org
+  - annualreviews.org
+  - degruyter.com
+  - karger.com
+  - brill.com
+  - worldscientific.com
+  - emerald.com
+
+  # Sciences physiques / chimie / ingénierie
+  - iop.org
+  - acs.org
+  - rsc.org
+  - ieeexplore.ieee.org
+  - dl.acm.org
+
+  # Wolters Kluwer / LWW (revues médicales)
+  - journals.lww.com
+  - wolterskluwer.com

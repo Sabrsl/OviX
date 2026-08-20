@@ -18,11 +18,12 @@ logger = logging.getLogger(__name__)
 
 class AnalysisStatus(Enum):
     """Status of article analysis."""
-    PENDING = "pending"
-    PUBLISHED = "published"
-    REJECTED = "rejected"
-    IGNORED = "ignored"
-    ERROR = "error"
+    ANALYZING = "analyzing"  # Currently being analyzed
+    PENDING = "pending"  # Analyzed, waiting for publication
+    PUBLISHED = "published"  # Published to Wikipedia
+    REJECTED = "rejected"  # Rejected
+    IGNORED = "ignored"  # Ignored
+    ERROR = "error"  # Analysis failed
 
 
 @dataclass
@@ -38,7 +39,14 @@ class AnalysisRecord:
     mode: str = "IA"  # Analysis mode (IA or regex)
     changes_count: Optional[int] = None
     summary: Optional[str] = None
+    original_content: Optional[str] = None  # Store the original content for diff
     corrected_content: Optional[str] = None  # Store the corrected content
+    character_count: Optional[int] = None  # Character count of the article
+    total_links: Optional[int] = None  # Total number of links in article
+    dead_links_count: Optional[int] = None  # Number of dead links found
+    corrected_links_count: Optional[int] = None  # Number of links corrected
+    human_verified: Optional[bool] = None  # Whether human verification was done
+    manual_review_urls: Optional[List[str]] = None  # URLs requiring manual review
 
 
 class AnalyzedTracker:
@@ -65,24 +73,24 @@ class AnalyzedTracker:
         
         # Load existing data
         self._load()
-        
+
         logger.info(f"AnalyzedTracker initialized with {len(self._records)} records")
-    
+
     def _load(self) -> None:
         """Load records from file."""
         if not self.tracker_file.exists():
             logger.info("No existing tracker file found, starting fresh")
             return
-        
+
         try:
             with open(self.tracker_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            
+
             for record_data in data:
                 record = AnalysisRecord(**record_data)
                 self._records[record.title] = record
                 self._by_revision[record.revision_id] = record.title
-            
+
             logger.info(f"Loaded {len(self._records)} analysis records from file")
         except Exception as e:
             logger.error(f"Error loading tracker file: {e}")
@@ -139,7 +147,14 @@ class AnalyzedTracker:
         mode: str = "IA",
         changes_count: Optional[int] = None,
         summary: Optional[str] = None,
-        corrected_content: Optional[str] = None
+        original_content: Optional[str] = None,
+        corrected_content: Optional[str] = None,
+        character_count: Optional[int] = None,
+        total_links: Optional[int] = None,
+        dead_links_count: Optional[int] = None,
+        corrected_links_count: Optional[int] = None,
+        human_verified: Optional[bool] = None,
+        manual_review_urls: Optional[List[str]] = None
     ) -> None:
         """
         Record an article analysis.
@@ -154,7 +169,13 @@ class AnalyzedTracker:
             mode: Analysis mode (IA or regex)
             changes_count: Number of changes made (optional)
             summary: Edit summary (optional)
+            original_content: Original wikicode content (optional)
             corrected_content: Corrected wikicode content (optional)
+            character_count: Character count of the article (optional)
+            total_links: Total number of links in article (optional)
+            dead_links_count: Number of dead links found (optional)
+            corrected_links_count: Number of links corrected (optional)
+            human_verified: Whether human verification was done (optional)
         """
         # Remove old record if exists with different revision
         if title in self._records and self._records[title].revision_id != revision_id:
@@ -171,7 +192,15 @@ class AnalyzedTracker:
             record.decision = decision if decision is not None else record.decision
             record.changes_count = changes_count if changes_count is not None else record.changes_count
             record.summary = summary if summary is not None else record.summary
+            record.original_content = original_content if original_content is not None else record.original_content
             record.corrected_content = corrected_content if corrected_content is not None else record.corrected_content
+            record.character_count = character_count if character_count is not None else record.character_count
+            record.total_links = total_links if total_links is not None else record.total_links
+            record.dead_links_count = dead_links_count if dead_links_count is not None else record.dead_links_count
+            record.corrected_links_count = corrected_links_count if corrected_links_count is not None else record.corrected_links_count
+            record.human_verified = human_verified if human_verified is not None else record.human_verified
+            record.manual_review_urls = manual_review_urls if manual_review_urls is not None else record.manual_review_urls
+            record.manual_review_urls = manual_review_urls if manual_review_urls is not None else record.manual_review_urls
             # Update other fields only if provided
             if score is not None:
                 record.score = score
@@ -187,7 +216,14 @@ class AnalyzedTracker:
             record.summary = summary if summary is not None else record.summary
             record.revision_id = revision_id  # Update revision_id
             record.page_id = page_id  # Update page_id
+            record.original_content = original_content if original_content is not None else record.original_content
             record.corrected_content = corrected_content if corrected_content is not None else record.corrected_content
+            record.character_count = character_count if character_count is not None else record.character_count
+            record.total_links = total_links if total_links is not None else record.total_links
+            record.dead_links_count = dead_links_count if dead_links_count is not None else record.dead_links_count
+            record.corrected_links_count = corrected_links_count if corrected_links_count is not None else record.corrected_links_count
+            record.human_verified = human_verified if human_verified is not None else record.human_verified
+            record.manual_review_urls = manual_review_urls if manual_review_urls is not None else record.manual_review_urls
             if score is not None:
                 record.score = score
             if mode:
@@ -206,7 +242,14 @@ class AnalyzedTracker:
                 mode=mode,
                 changes_count=changes_count,
                 summary=summary,
-                corrected_content=corrected_content
+                original_content=original_content,
+                corrected_content=corrected_content,
+                character_count=character_count,
+                total_links=total_links,
+                dead_links_count=dead_links_count,
+                corrected_links_count=corrected_links_count,
+                human_verified=human_verified,
+                manual_review_urls=manual_review_urls
             )
             logger.debug(f"Created new record for '{title}' with status: {status.value}")
         
@@ -334,6 +377,8 @@ class AnalyzedTracker:
         
         to_remove = []
         for title, record in self._records.items():
+            if not record.analysis_date:
+                continue
             record_date = datetime.fromisoformat(record.analysis_date).timestamp()
             if record_date < cutoff_date:
                 to_remove.append(title)

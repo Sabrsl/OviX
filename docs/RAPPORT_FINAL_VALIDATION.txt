@@ -1,0 +1,295 @@
+# RAPPORT FINAL DE VALIDATION OviX
+
+## 1. PAGINATION
+
+### Avant
+- `/api/articles/history` → limit=100 (fixe)
+- Frontend charge 100 articles maximum
+- Pas de pagination côté utilisateur
+- Risque: inutilisable avec 1000+ articles
+
+### Après
+- `/api/articles/history` → limit=50, offset=0 (paramètres)
+- AnalyzedHistory.tsx implémente pagination complète
+- Boutons Précédent/Suivant
+- Page size: 50 articles
+- Compatible avec filtres existants (statut, mode, date, recherche)
+
+### Pages vérifiées
+- ✅ AnalyzedHistory.tsx → Pagination implémentée
+- ✅ ArticleHistory.tsx → Utilise limit paramètre (composant réutilisable)
+- ✅ ArticlesToAnalyze.tsx → Charge 100 articles (acceptable pour queue)
+- ✅ PublicationHistory.tsx → Pagination existante (page, page_size=20)
+- ✅ Dashboard.tsx → Charge 5 articles (acceptable pour aperçu)
+- ✅ ReadyToPublish.tsx → Charge 100 articles (acceptable pour sélection)
+
+### Verdict Pagination
+🟢 **IMPLÉMENTÉ** - Pagination fonctionnelle pour l'historique principal
+
+---
+
+## 2. STATUTS - MODÈLE ACTUEL
+
+### Table: articles_to_analyze
+| Colonne | Valeurs | Signification |
+|---------|---------|---------------|
+| status | pending | Article en attente d'analyse |
+| status | analyzing | Article en cours d'analyse |
+| status | analyzed | Article analysé |
+| status | error | Erreur lors de l'analyse |
+| status | cancelled | Analyse annulée |
+
+### Table: analysis_jobs
+| Colonne | Valeurs | Signification |
+|---------|---------|---------------|
+| status | pending | Job en attente d'exécution |
+| status | running | Job en cours d'exécution |
+| status | completed | Job terminé avec succès |
+| status | failed | Job échoué |
+| status | cancelled | Job annulé |
+
+### Table: analysis_results
+| Colonne | Valeurs | Signification |
+|---------|---------|---------------|
+| status | pending | **AMBIGU** - Analyse terminée, en attente de décision utilisateur |
+| status | published | Article publié sur Wikipedia |
+| status | rejected | Article rejeté |
+| status | ignored | Article ignoré |
+| status | error | Erreur lors de l'analyse |
+
+### Table: manual_review_decisions
+| Colonne | Valeurs | Signification |
+|---------|---------|---------------|
+| status | pending | Review en attente |
+| status | approved | URL approuvée |
+| status | rejected | URL rejetée |
+
+### Table: publication_jobs
+| Colonne | Valeurs | Signification |
+|---------|---------|---------------|
+| status | pending | Publication en attente |
+| status | running | Publication en cours |
+| status | completed | Publication terminée |
+| status | failed | Publication échouée |
+
+---
+
+## 3. AMBIGUÏTÉ IDENTIFIÉE
+
+### Problème
+`analysis_results.status='pending'` signifie "analyse terminée, en attente de décision utilisateur"
+Mais 'pending' est aussi utilisé pour "en attente d'analyse" dans d'autres tables
+
+### Impact
+- Confusion sémantique dans le modèle métier
+- Difficile de distinguer "analyse terminée" vs "en attente d'analyse"
+- Risque d'erreurs dans le workflow
+
+---
+
+## 4. MODÈLE PROPOSÉ (OPTION 1 - RECOMMANDÉ)
+
+### Solution
+Renommer `analysis_results.status='pending'` → `'awaiting_decision'`
+
+### Migration SQL
+```sql
+UPDATE analysis_results SET status = 'awaiting_decision' WHERE status = 'pending';
+```
+
+### Impact Backend
+- backend/api/routes/articles.py:452 → status="awaiting_decision"
+- backend/api/routes/history.py:260 → WHERE status = 'awaiting_decision'
+- backend/stats/repository.py:43 → COUNT(analysis_results WHERE status='awaiting_decision')
+
+### Impact Frontend
+- frontend/src/api/types.ts:116 → Ajouter 'awaiting_decision'
+- frontend/src/components/ArticleHistory.tsx:52 → Ajouter 'awaiting_decision'
+- frontend/src/components/ArticleStatusCard.tsx → Ajouter cas 'awaiting_decision'
+- frontend/src/pages/AnalyzedHistory.tsx → Ajouter STATUS_META['awaiting_decision']
+
+### Avantages
+- ✅ Résout l'ambiguïté principale
+- ✅ Faible risque de régression
+- ✅ Migration simple (un UPDATE)
+- ✅ Compatible avec l'architecture existante
+- ✅ Pas besoin de modifier le schéma
+
+---
+
+## 5. SOURCE DE VÉRITÉ PAR DONNÉE
+
+| Donnée | Table SQLite | Fallback JSON | Notes |
+|--------|--------------|---------------|-------|
+| Queue | `articles_to_analyze` | - | Source unique |
+| Job execution | `analysis_jobs` | - | Source unique |
+| Analysis result | `analysis_results` | AnalyzedTracker | Fallback si DB indisponible |
+| Manual review | `manual_review_decisions` | - | Source unique |
+| Publication | `analysis_results.status='published'` | PublishedTracker | Fallback si DB indisponible |
+| Statistics | Multiple tables | - | StatsService agrège depuis SQLite |
+| History | `analysis_results` + `analysis_jobs` | Trackers | Fallback si DB indisponible |
+
+---
+
+## 6. PAGES VÉRIFIÉES
+
+### Analysis Story
+- ✅ AnalysisNew.tsx → Création d'analyses, utilise statuts jobs
+- ✅ AnalysisResults.tsx → Affichage résultats, utilise STATUS_META jobs
+- ✅ Compatible avec modèle actuel
+
+### Article Workflow
+- ✅ ArticleWorkflowPage.tsx → Wrapper simple
+- ✅ ArticleWorkflow.tsx → Intègre ArticleStatusCard + ArticleHistory
+- ✅ Compatible avec modèle actuel
+
+### History
+- ✅ AnalyzedHistory.tsx → Pagination implémentée
+- ✅ ArticleHistory.tsx → Composant réutilisable
+- ✅ PublicationHistory.tsx → Pagination existante
+- ✅ Compatible avec modèle actuel
+
+### Publication Story
+- ✅ PublicationDetail.tsx → Détail publication
+- ✅ PublicationReview.tsx → Review avant publication
+- ✅ PublicationPending.tsx → Publications en attente
+- ✅ Compatible avec modèle actuel
+
+---
+
+## 7. SOURCES LEGACY
+
+### Trackers utilisés
+- ✅ PublishedTracker → backend/api/main.py, api/routes/analysis.py, api/routes/articles.py
+- ✅ AnalyzedTracker → backend/api/main.py, api/routes/analysis.py, api/routes/articles.py
+
+### Utilisation
+- **READ**: Fallback si SQLite indisponible
+- **WRITE**: Synchronisation legacy (compatibilité)
+- **MIGRATION**: Non utilisé pour migration
+- **BACKUP**: Non utilisé comme backup
+- **LEGACY**: Oui, système legacy en cours de remplacement
+
+### Fichiers JSON
+- Aucun fichier JSON direct trouvé dans le code actuel
+- Les trackers utilisent des fichiers JSON en interne
+
+### Recommandation
+- ⚠️ NE PAS supprimer les trackers pour l'instant
+- ⚠️ Ils servent de fallback si SQLite échoue
+- ⚠️ Une fois la migration 'awaiting_decision' validée, réévaluer leur nécessité
+
+---
+
+## 8. TESTS E2E
+
+### Tests nécessitant interaction utilisateur
+⏸️ Récupération → Analyse → Publication (nécessite backend actif)
+⏸️ Re-analyse d'un article déjà analysé
+⏸️ Refresh pendant analyse
+⏸️ Restart backend pendant analyse
+
+### Tests automatisables
+✅ Pagination (0, 1, 100, >100 résultats)
+✅ Cohérence statuts entre endpoints
+✅ Fallback trackers
+
+---
+
+## 9. BUGS RESTANTS
+
+### 1. Ambiguïté statut 'pending'
+**Sévérité**: Moyenne
+**Impact**: Confusion sémantique
+**Solution**: Migration pending → awaiting_decision
+**Statut**: Solution proposée, non implémentée
+
+### 2. Pagination limitée
+**Sévérité**: Faible
+**Impact**: Historique inutilisable avec 1000+ articles
+**Solution**: Pagination implémentée
+**Statut**: ✅ RÉSOLU
+
+---
+
+## 10. VERDICT FINAL
+
+```
+🟠 READY AFTER MINOR FIXES
+```
+
+### Raisons
+
+**Points positifs**:
+- ✅ Backend cohérent avec SQLite comme source unique
+- ✅ Frontend cohérent avec statuts directs du backend
+- ✅ Pagination implémentée pour l'historique
+- ✅ Architecture par table sépare correctement les états
+- ✅ Statistics correctement implémenté (lecture seule)
+- ✅ Fallbacks documentés
+
+**Points à corriger**:
+- ⚠️ Ambiguïté du statut 'pending' dans analysis_results
+- ⚠️ Tests E2E complets non effectués (nécessitent interaction utilisateur)
+
+### Recommandations
+
+1. **Immédiat** (FAIBLE RISQUE):
+   - Exécuter la migration SQL: pending → awaiting_decision
+   - Mettre à jour les fichiers backend (3 fichiers)
+   - Mettre à jour les fichiers frontend (4 fichiers)
+   - Tester la compatibilité
+
+2. **Court terme** (MOYEN RISQUE):
+   - Effectuer les tests E2E avec un article réel
+   - Vérifier la réanalyse
+   - Vérifier le refresh pendant analyse
+   - Vérifier le restart backend
+
+3. **Moyen terme**:
+   - Réévaluer la nécessité des trackers legacy
+   - Si SQLite stable, envisager suppression des fallbacks
+
+4. **Long terme**:
+   - Si Option 1 insuffisante, envisager Option 2 (colonnes séparées)
+
+### Critère de production
+
+Le système sera **🟢 READY FOR PRODUCTION** lorsque:
+- ✅ Migration pending → awaiting_decision effectuée
+- ✅ Tests E2E réussis avec un article réel
+- ✅ Réanalyse testée
+- ✅ Refresh/restart testés
+- ✅ Pagination testée avec >100 articles
+
+---
+
+## 11. DOCUMENTATION CRÉÉE
+
+1. **audit_status.py** - Script d'audit des statuts
+2. **status_model_proposal.md** - Proposition de modèle de statuts
+3. **migration_pending_to_awaiting_decision.sql** - Script de migration
+4. **frontend_awaiting_decision_impact.md** - Impact frontend détaillé
+
+---
+
+## 12. RÉSUMÉ DES MODIFICATIONS EFFECTUÉES
+
+### Backend
+- backend/api/routes/articles.py → Ajout offset à /api/articles/history
+
+### Frontend
+- frontend/src/api/articles.api.ts → Ajout offset paramètre
+- frontend/src/pages/AnalyzedHistory.tsx → Pagination complète
+
+### Documentation
+- audit_status.py → Script d'audit
+- status_model_proposal.md → Proposition modèle
+- migration_pending_to_awaiting_decision.sql → Migration SQL
+- frontend_awaiting_decision_impact.md → Impact frontend
+
+---
+
+**Date**: 17 août 2026
+**Version**: OviX Validation Phase 1-11 Complete
+**Prochaine étape**: Migration pending → awaiting_decision + Tests E2E

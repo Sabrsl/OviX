@@ -1,0 +1,180 @@
+# DIAGNOSTIC: api.main vs backend.api.main
+
+## PROBLÈME IDENTIFIÉ
+
+### Logs au démarrage
+```
+api.main - INFO - Kill switch manager initialized
+api.main - INFO - Scheduler state manager initialized
+api.main - INFO - Automation state manager initialized
+api.main - INFO - Config initialized
+api.main - INFO - All services initialized successfully
+```
+
+### Logs lors de l'appel route
+```
+backend.api.main - WARNING - Kill switch manager not available
+```
+
+## DIAGNOSTIC
+
+### Double namespace Python
+
+Le problème est que Python traite `api.main` et `backend.api.main` comme **deux modules différents**:
+
+1. **Module d'initialisation**: `api.main`
+   - Les managers globaux sont initialisés ici
+   - `_kill_switch_manager = get_kill_switch_manager()`
+   - `_scheduler_state_manager = StateManager()`
+   - `_automation_state_manager = AutomationStateManager()`
+
+2. **Module d'import routes**: `backend.api.main`
+   - Les routes importent: `import backend.api.main as main_module`
+   - Ce module est une **instance différente**
+   - Ses variables globales sont `None` (pas initialisées)
+
+### Pourquoi cela se produit
+
+Dans `backend/api/main.py`:
+```python
+# Ligne 34-36
+current_path = Path(__file__).resolve()
+PROJECT_ROOT = current_path.parent.parent.parent
+os.environ['PROJECT_ROOT'] = str(PROJECT_ROOT.absolute())
+
+# Ligne 43-44
+sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / 'src'))
+```
+
+Le `sys.path.insert(0, str(PROJECT_ROOT))` ajoute le project root au début du path.
+
+Cela permet d'importer comme `api.main` (si le backend est lancé depuis le project root).
+
+Mais les routes utilisent `import backend.api.main as main_module`, qui charge le module via le chemin complet.
+
+### Schéma du problème
+
+```
+Démarrage backend
+    ↓
+Charge backend/api/main.py
+    ↓
+sys.path contient PROJECT_ROOT
+    ↓
+Module enregistré comme: api.main
+    ↓
+Initialise les managers globaux
+    ↓
+_kill_switch_manager = KillSwitchManager() ✅
+
+Appel route /api/system/kill-switch
+    ↓
+Route fait: import backend.api.main as main_module
+    ↓
+Python charge backend/api/main.py comme un NOUVEAU module
+    ↓
+Module enregistré comme: backend.api.main
+    ↓
+Ses variables globales sont None (pas initialisées)
+    ↓
+_kill_switch_manager = None ❌
+```
+
+## FICHIERS CONCERNÉS
+
+1. **backend/api/main.py**
+   - Initialise les managers globaux
+   - Définit les dependency functions
+
+2. **backend/api/routes/system.py**
+   - Import: `import backend.api.main as main_module`
+   - Appelle: `main_module.get_kill_switch()`
+
+3. **backend/api/routes/analysis.py**
+   - Import: `import backend.api.main as main_module`
+   - Appelle: `main_module.get_database()`
+
+4. **backend/api/routes/articles.py**
+   - Import: `import backend.api.main as main_module`
+   - Appelle: `main_module.get_published_tracker()`
+
+5. **backend/api/routes/history.py**
+   - Import: `import backend.api.main as main_module`
+   - Appelle: `main_module.get_database()`
+
+6. **backend/api/routes/manual_review.py**
+   - Import: `import backend.api.main as main_module`
+   - Appelle: `main_module.get_database()`
+
+7. **backend/api/routes/publication.py**
+   - Import: `import backend.api.main as main_module`
+   - Appelle: `main_module.get_kill_switch()`
+
+8. **backend/api/routes/settings.py**
+   - Import: `import backend.api.main as main_module`
+   - Appelle: `main_module.get_config()`
+
+## SOLUTION PROPOSÉE
+
+### Option 1: Utiliser le même import partout (RECOMMANDÉ)
+
+Remplacer tous les `import backend.api.main as main_module` par:
+
+```python
+from api.main import get_kill_switch, get_scheduler_state, get_automation_state, get_database
+```
+
+Cela garantit que toutes les routes utilisent la même instance du module que celle qui a initialisé les managers.
+
+### Option 2: Supprimer le sys.path.insert(0, str(PROJECT_ROOT))
+
+Supprimer la ligne qui ajoute PROJECT_ROOT au début du sys.path dans `backend/api/main.py`:
+
+```python
+# sys.path.insert(0, str(PROJECT_ROOT))  # ❌ Supprimer cette ligne
+```
+
+Cela force tout le monde à utiliser `backend.api.main` comme namespace unique.
+
+### Option 3: Utiliser un module singleton
+
+Créer un module séparé pour les managers globaux qui ne dépend pas du namespace:
+
+```python
+# backend/api/managers.py
+_kill_switch_manager = None
+_scheduler_state_manager = None
+# etc.
+```
+
+Et importer ce module directement dans toutes les routes.
+
+## RECOMMANDATION
+
+**Option 1** est la plus simple et la moins risquée:
+- Change uniquement les imports dans les routes
+- Ne modifie pas la structure du projet
+- Garantit l'utilisation de la même instance
+- Facile à tester et à rollback
+
+## FICHIERS À MODIFIER (Option 1)
+
+1. backend/api/routes/system.py
+2. backend/api/routes/analysis.py
+3. backend/api/routes/articles.py
+4. backend/api/routes/history.py
+5. backend/api/routes/manual_review.py
+6. backend/api/routes/publication.py
+7. backend/api/routes/settings.py
+
+## TEST DE VALIDATION
+
+Après correction, les logs doivent montrer:
+```
+api.main - INFO - Kill switch manager initialized
+...
+backend.api.routes.system - INFO - Kill switch status: {...}
+```
+
+Plus de "Kill switch manager not available".

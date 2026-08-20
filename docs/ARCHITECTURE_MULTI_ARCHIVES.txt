@@ -1,0 +1,139 @@
+# ARCHITECTURE ACTUELLE - Système d'archives
+
+## Composants existants
+
+### 1. DeadLinkAnalyzer (src/wikipedia_maintenance/analyzers/dead_links.py)
+**Workflow actuel**:
+```
+Lien mort détecté
+    ↓
+REPLACEMENT_SEARCH (ligne 476)
+    ↓
+RedirectFinder.find_redirect()
+    ↓
+Si redirect valide:
+    ContentVerifier.verify_same_resource()
+    ↓
+Si redirect rejeté ou pas trouvé:
+    ARCHIVE_FALLBACK (ligne 548)
+    ↓
+_attempt_archive_fallback() (ligne 706)
+    ↓
+ArchiveProvider.check_archive()
+```
+
+### 2. ArchiveProvider (src/wikipedia_maintenance/utils/archive_provider.py)
+**Architecture actuelle**:
+```
+BaseArchiveProvider (ABC)
+    ├── WaybackProvider
+    └── ArchiveOrgProvider
+
+ArchiveProvider (coordinateur)
+    ├── WaybackProvider()
+    ├── ArchiveOrgProvider()
+    └── check_archive() avec fallback séquentiel
+```
+
+**Méthodes clés**:
+- `check_archive(url)` - Recherche archive avec fallback
+- `get_content_snapshot(url)` - Récupère contenu
+- `verify_content_match(original, candidate)` - Vérification
+
+### 3. RedirectFinder (src/wikipedia_maintenance/utils/redirect_finder.py)
+- Trouve les redirects HTTP valides
+- Critères déterministes (domaine, chemin)
+- Rejette les redirects vers différentes ressources
+
+### 4. ContentVerifier (src/wikipedia_maintenance/utils/content_verifier.py)
+- Compare contenu entre URLs
+- Utilise ArchiveProvider pour vérification
+- Critères multiples (titre, domaine, chemin)
+
+### 5. Système de cache et throttling
+- `api_throttler` dans tous les providers
+- `_check_cache` et `_repair_cache` dans DeadLinkAnalyzer
+- Retry logic dans WaybackProvider (max_retries=2)
+
+## Workflow ARCHIVE_FALLBACK actuel
+
+Dans `_attempt_archive_fallback()` (ligne 706):
+```python
+archive_result = self.archive_provider.check_archive(url)
+if not (archive_result and archive_result.archive_url):
+    # Archive non trouvée
+    return None
+
+# Vérification finale
+archive_check = self.link_checker.check_link(archive_url)
+if archive_check.status != LinkStatus.HEALTHY:
+    # Archive non accessible
+    return None
+
+# Vérification contenu
+if self._archive_content_looks_dead(archive_url):
+    # Archive suspecte
+    return None
+```
+
+## Problème identifié
+
+**Cas Playbill**: Wayback retourne 503 → échec complet
+- Pas de fallback vers d'autres archives
+- ArchiveProvider.check_archive() essaie Wayback puis Archive.org
+- Mais si Wayback échoue avec 503, il continue quand même
+- Le problème est probablement dans la gestion des erreurs HTTP
+
+## Solution proposée
+
+### 1. Ajouter nouveaux providers
+- ArquivoProvider (Portuguese Web Archive)
+- UKWebArchiveProvider (UK Web Archive)
+- MementoProvider (TimeTravel API)
+
+### 2. Améliorer gestion des erreurs
+- Traiter 503 comme CHECK_FAILED (pas NOT_AVAILABLE)
+- Continuer vers providers suivants
+- Logs explicites pour chaque tentative
+
+### 3. Priorité intelligente
+- Analyser l'URL pour déterminer les providers pertinents
+- Ex: URL .pt → prioriser Arquivo.pt
+- Ex: URL .uk → prioriser UK Web Archive
+
+### 4. Logs structurés
+```
+ARCHIVE_SEARCH | url=...
+ARCHIVE_PROVIDER | provider=Wayback | status=CHECK_FAILED | error=503
+ARCHIVE_PROVIDER | provider=Arquivo.pt | status=AVAILABLE
+ARCHIVE_FOUND | provider=Arquivo.pt | url=...
+ARCHIVE_VERIFICATION | provider=Arquivo.pt | result=valid
+ARCHIVE_SELECTED | provider=Arquivo.pt | confidence=...
+```
+
+## Fichiers à modifier
+
+1. **src/wikipedia_maintenance/utils/archive_provider.py**
+   - Ajouter ArquivoProvider
+   - Ajouter UKWebArchiveProvider
+   - Ajouter MementoProvider
+   - Améliorer logs dans ArchiveProvider.check_archive()
+   - Améliorer gestion des erreurs HTTP
+
+2. **src/wikipedia_maintenance/analyzers/dead_links.py**
+   - Améliorer logs dans _attempt_archive_fallback()
+   - Ajouter logs pour chaque provider testé
+
+## Tests existants à vérifier
+
+À rechercher:
+- Tests unitaires pour ArchiveProvider
+- Tests d'intégration pour DeadLinkAnalyzer
+- Tests pour WaybackProvider
+
+## Contraintes
+
+- 100% gratuit (pas d'API payante)
+- Ne pas casser l'architecture existante
+- Conserver la compatibilité avec le workflow actuel
+- Respecter throttling et cache existants

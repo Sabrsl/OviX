@@ -16,6 +16,7 @@ from typing import Callable, Type, Optional, Any, List, Tuple
 from functools import wraps
 from dataclasses import dataclass
 from enum import Enum
+from urllib.error import URLError
 
 
 class RateLimitError(Exception):
@@ -189,6 +190,65 @@ class RetryHandler:
         # All retries exhausted
         logger.error(f"All {self.config.max_attempts} retry attempts exhausted")
         raise last_exception
+    
+    def execute_with_retry_on_result(
+        self,
+        func: Callable,
+        should_retry_result: Callable[[Any], bool],
+        *args,
+        **kwargs
+    ) -> Any:
+        """
+        Like execute_with_retry, but also retries based on the return value
+        (not just exceptions) — e.g. an HTTP result object with a status code
+        that should trigger a retry without raising.
+
+        Args:
+            func: Function to execute
+            should_retry_result: Predicate called on the return value; True
+                means retry (subject to max_attempts), False means accept
+                the result as final.
+            *args: Positional arguments for func
+            **kwargs: Keyword arguments for func
+
+        Returns:
+            The last result obtained (whether or not it satisfied
+            should_retry_result on the final attempt).
+
+        Raises:
+            The last exception if func raised on every attempt and none
+            were retryable.
+        """
+        last_result = None
+
+        for attempt in range(self.config.max_attempts):
+            try:
+                result = func(*args, **kwargs)
+            except Exception as e:
+                if not self.should_retry(e, attempt):
+                    logger.error(f"Exception {type(e).__name__} not configured for retry: {e}")
+                    raise
+                delay = self.calculate_delay(attempt)
+                logger.warning(
+                    f"Attempt {attempt + 1}/{self.config.max_attempts} failed with {type(e).__name__}: {e}. "
+                    f"Retrying in {delay:.2f}s..."
+                )
+                time.sleep(delay)
+                continue
+
+            last_result = result
+
+            if attempt >= self.config.max_attempts - 1 or not should_retry_result(result):
+                return result
+
+            delay = self.calculate_delay(attempt)
+            logger.warning(
+                f"Attempt {attempt + 1}/{self.config.max_attempts} returned a retryable result. "
+                f"Retrying in {delay:.2f}s..."
+            )
+            time.sleep(delay)
+
+        return last_result
 
 
 def retry_with_config(
@@ -253,6 +313,7 @@ class RetryPresets:
             retry_on_exceptions=(
                 ConnectionError,
                 TimeoutError,
+                URLError,
             ),
             retry_on_status_codes=[429, 500, 502, 503, 504]
         )
@@ -268,6 +329,7 @@ class RetryPresets:
             retry_on_exceptions=(
                 ConnectionError,
                 TimeoutError,
+                URLError,
             ),
             retry_on_status_codes=[429, 500, 503]
         )
@@ -283,6 +345,7 @@ class RetryPresets:
             retry_on_exceptions=(
                 ConnectionError,
                 TimeoutError,
+                URLError,
             ),
             retry_on_status_codes=[429, 500, 502, 503, 504]
         )

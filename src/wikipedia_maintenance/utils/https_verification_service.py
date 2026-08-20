@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 from enum import Enum
 
 from .https_verification_cache import HttpsVerificationCache, VerificationStatus
-from .api_throttler import get_global_throttler
+from .api_throttler import get_link_check_throttler
 from .retry_handler import RateLimitError
 from .retry_handler import RateLimitError
 
@@ -72,7 +72,7 @@ class HttpsVerificationService:
         self.cache = cache
         self.timeout = timeout or self.DEFAULT_TIMEOUT
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
-        self.api_throttler = get_global_throttler()
+        self.api_throttler = get_link_check_throttler()
     
     def verify_domain(self, domain: str) -> VerificationResult:
         """

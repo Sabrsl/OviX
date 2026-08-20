@@ -51,6 +51,11 @@ class ArticleState:
     retry_count: int = 0
     changes_count: Optional[int] = None
     summary: Optional[str] = None
+    # Progress tracking fields
+    progress: Optional[float] = None  # 0.0 to 100.0
+    current_step: Optional[str] = None  # Detailed current step description
+    analyzers_status: Optional[Dict[str, str]] = None  # Status per analyzer
+    elapsed_time_seconds: Optional[float] = None
 
 
 @dataclass
@@ -270,6 +275,37 @@ class AutomationStateManager:
                 if state_dict.get('title') == title:
                     return ArticleState(**state_dict)
         return None
+
+    def update_article_progress(
+        self,
+        title: str,
+        progress: float,
+        current_step: str,
+        analyzers_status: Optional[Dict[str, str]] = None
+    ) -> None:
+        """
+        Update progress for a specific article.
+
+        Args:
+            title: Article title
+            progress: Progress percentage (0.0 to 100.0)
+            current_step: Current step description
+            analyzers_status: Optional status per analyzer
+        """
+        if self._current_state:
+            for state_dict in self._current_state.article_states:
+                if state_dict.get('title') == title:
+                    state_dict['progress'] = progress
+                    state_dict['current_step'] = current_step
+                    if analyzers_status:
+                        state_dict['analyzers_status'] = analyzers_status
+                    # Calculate elapsed time
+                    if state_dict.get('started_at'):
+                        started = datetime.fromisoformat(state_dict['started_at'])
+                        elapsed = (datetime.now() - started).total_seconds()
+                        state_dict['elapsed_time_seconds'] = elapsed
+                    self._save_state()
+                    break
     
     def get_pending_articles(self) -> List[ArticleState]:
         """Get list of pending articles."""

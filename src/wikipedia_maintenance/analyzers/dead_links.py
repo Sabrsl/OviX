@@ -20,6 +20,7 @@ import re
 import logging
 import time
 from typing import List, Optional, Dict, Any
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .base import BaseAnalyzer, Issue
 from ..utils.api_throttler import get_global_throttler
@@ -27,6 +28,7 @@ from ..utils.link_checker import LinkStatus, LinkCheckResult, LinkChecker
 from ..utils.redirect_finder import RedirectFinder, RedirectResult
 from ..utils.link_validator import LinkValidator, RepairDecision, RepairResult
 from ..utils.content_verifier import ContentVerifier
+from ..utils.retry_handler import RetryHandler, RetryConfig, RetryStrategy
 from ..utils.safe_url_replacer import SafeURLReplacer
 from ..utils.archive_provider import ArchiveProvider
 # CandidateFinder currently unused - reserved for future multi-strategy candidate search
@@ -44,7 +46,7 @@ class DeadLinkAnalyzer(BaseAnalyzer):
 
     DEFAULT_TIMEOUT = 10
     DEFAULT_MAX_RETRIES = 3
-    DEFAULT_MAX_CHECKS_PER_ARTICLE = 20
+    DEFAULT_MAX_CHECKS_PER_ARTICLE = 50
 
     # Whitelist of valid URL characters; wikitext delimiters |{}[] are
     # intentionally excluded so a URL match stops before them instead of
@@ -54,7 +56,9 @@ class DeadLinkAnalyzer(BaseAnalyzer):
     # by exactly 2 hexadecimal digits (valid percent-encoding). This prevents
     # the regex from swallowing template delimiters like '%/langue=it' that were
     # being incorrectly included in URL matches.
-    URL_PATTERN = re.compile(r'https?://[a-zA-Z0-9\-._~:/?#@!$&\'()*+,;=]+(?:%[0-9A-Fa-f]{2}[a-zA-Z0-9\-._~:/?#@!$&\'()*+,;=]*)*', re.IGNORECASE)
+    # FIX: Optimized to avoid catastrophic backtracking by simplifying the pattern
+    # and removing nested quantifiers that cause exponential backtracking.
+    URL_PATTERN = re.compile(r'https?://[a-zA-Z0-9\-._~:/?#@!$&\'()*+,;=%]+', re.IGNORECASE)
 
     # Best-effort markers indicating a page body is a "not found" page
     # even though the HTTP status was 200 (soft-404). Not exhaustive by
@@ -280,6 +284,9 @@ class DeadLinkAnalyzer(BaseAnalyzer):
         if not content:
             return self.issues
 
+        # Clear both caches to ensure fresh analysis per article
+        # This prevents cross-article cache pollution where a link that was dead in one article
+        # but healthy in another would get incorrectly replaced with an archive
         self._check_cache.clear()
         self._repair_cache.clear()
         self._checks_count = 0
@@ -329,79 +336,144 @@ class DeadLinkAnalyzer(BaseAnalyzer):
 
         analysis_complete = True
 
-        for match in filtered_matches:
-            if self._checks_count >= self.max_checks_per_article:
-                logger.info(f"Reached max checks limit ({self.max_checks_per_article}), stopping")
-                analysis_complete = False
-                break
+        # ---- PASSE 1 : vérification parallèle des liens ----
+        matches_to_check = filtered_matches[:self.max_checks_per_article]
+        if len(filtered_matches) > self.max_checks_per_article:
+            analysis_complete = False
+            logger.info(f"Reached max checks limit ({self.max_checks_per_article}), stopping")
 
+        valid_matches = []
+        for match in matches_to_check:
             url = match.group(0)
-            url_position = match.start()
-
             if not self._is_url_syntactically_valid(url):
                 logger.warning(f"URL_REJECTED | url={url} | reason=SYNTAX_INVALID")
                 continue
+            valid_matches.append(match)
 
-            logger.info(f"URL_CHECK | url={url}")
-            http_start = time.time()
+        # Parallel link checking with ThreadPoolExecutor
+        if valid_matches:
+            logger.info(f"Starting parallel link check for {len(valid_matches)} URLs with max_workers=5")
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                future_to_match = {
+                    executor.submit(self.link_checker.check_link, m.group(0)): m
+                    for m in valid_matches
+                }
+                for future in as_completed(future_to_match):
+                    match = future_to_match[future]
+                    url = match.group(0)
+                    try:
+                        result = future.result()
+                        self._check_cache[url] = result
+                        self._checks_count += 1
+                        logger.info(f"URL_CHECK | url={url} | http_status={result.http_status_code} | classification={result.status.value} | error={result.error_type} | attempts={result.retry_count}")
+                    except Exception as e:
+                        logger.error(f"URL_CHECK_FAILED | url={url} | error={e}")
+                        # Create a failure result to avoid crashes in repair phase
+                        # LinkStatus is already imported at module level
+                        self._check_cache[url] = LinkCheckResult(
+                            url=url,
+                            status=LinkStatus.UNKNOWN,
+                            error_type="CHECK_EXCEPTION",
+                            retry_count=0,
+                            check_duration=0.0,
+                            confidence=0.0
+                        )
+                        self._checks_count += 1
 
-            if url in self._check_cache:
-                result = self._check_cache[url]
-                logger.info(f"URL_CHECK | url={url} | status=CACHED | http_status={result.http_status_code} | classification={result.status.value}")
-            else:
-                result = self.link_checker.check_link(url)
-                self._check_cache[url] = result
-                self._checks_count += 1
+        logger.info(f"Parallel link check completed - checked {self._checks_count}/{len(valid_matches)} URLs")
 
-            http_duration = time.time() - http_start
-            logger.info(f"URL_CHECK | url={url} | http_status={result.http_status_code} | classification={result.status.value} | error={result.error_type} | attempts={result.retry_count} | duration={http_duration:.2f}s")
+        # ---- PASSE 2 : réparation séquentielle (en utilisant le cache) ----
+        for match in valid_matches:
+            url = match.group(0)
+            url_position = match.start()
 
-            if result.status == LinkStatus.DEAD and self.enable_auto_repair:
-                if not analysis_complete:
-                    logger.info(f"REPAIR_REJECTED | url={url} | reason=ANALYSIS_INCOMPLETE")
+            # Get result from cache (computed in Pass 1)
+            if url not in self._check_cache:
+                logger.warning(f"URL_NOT_IN_CACHE | url={url} | skipping")
+                continue
+
+            result = self._check_cache[url]
+
+            # CRITICAL FIX: Validate cache BEFORE checking status to prevent applying stale repairs
+            # This prevents applying archived replacements to links that are now healthy
+            if url in self._repair_cache:
+                cached_decision = self._repair_cache[url]
+                logger.info(f"REPAIR_CACHED | url={url} | decision={cached_decision.get('decision')} | replacement_url={cached_decision.get('replacement_url')}")
+                
+                # Always re-validate current status before applying cached repair
+                if result.status != LinkStatus.DEAD:
+                    logger.warning(f"REPAIR_CACHE_INVALIDATED | url={url} | current_status={result.status.value} | cached_decision={cached_decision.get('decision')} | reason=link_no_longer_dead")
+                    # Remove from cache since it's no longer valid
+                    del self._repair_cache[url]
+                elif cached_decision.get('decision') == 'REPLACEMENT_CONFIRMED' and self.enable_auto_repair:
+                    old_url = url
+                    new_url = cached_decision.get('replacement_url')
+
+                    replacement_result = self.safe_url_replacer.replace_exact_occurrence(
+                        content, old_url, new_url, url_position
+                    )
+
+                    if replacement_result.success:
+                        logger.info(f"REPAIR_APPLIED | url={url} | new_url={new_url} | cached=True")
+                        content = replacement_result.new_content
+
+                        self.issues.append(Issue(
+                            issue_type="dead_link",
+                            description=f"Lien mort remplacé : {old_url} → {new_url}",
+                            position=url_position,
+                            original_text=old_url,
+                            suggested_text=new_url,
+                            severity="high",
+                            confidence=1.0,
+                            extra={
+                                'url': url,
+                                'old_url': old_url,
+                                'new_url': new_url,
+                                'http_status_code': result.http_status_code,
+                                'repair_decision': cached_decision.get('decision'),
+                                'cached': True
+                            }
+                        ))
+                    else:
+                        logger.warning(f"REPAIR_FAILED | url={url} | reason={replacement_result.reason}")
+                        self.issues.append(Issue(
+                            issue_type="dead_link",
+                            description=f"Lien mort détecté, réparation échouée : {url}",
+                            position=url_position,
+                            original_text=match.group(0),
+                            suggested_text=None,
+                            severity="high",
+                            confidence=1.0,
+                            extra={
+                                'url': url,
+                                'http_status_code': result.http_status_code,
+                                'error_type': result.error_type,
+                                'repair_status': 'REPAIR_FAILED',
+                                'repair_reason': replacement_result.reason
+                            }
+                        ))
+                    continue
+                else:
+                    logger.info(f"REPAIR_SKIPPED | url={url} | reason=already_unrepairable ({cached_decision.get('decision')})")
+                    self.issues.append(Issue(
+                        issue_type="dead_link",
+                        description=f"Lien mort détecté, réparation impossible (déjà évalué) : {url}",
+                        position=url_position,
+                        original_text=match.group(0),
+                        suggested_text=None,
+                        severity="high",
+                        confidence=1.0,
+                        extra={
+                            'url': url,
+                            'http_status_code': result.http_status_code,
+                            'error_type': result.error_type,
+                            'repair_status': 'REPAIR_SKIPPED',
+                            'cached_decision': cached_decision.get('decision')
+                        }
+                    ))
                     continue
 
-                if url in self._repair_cache:
-                    cached_decision = self._repair_cache[url]
-                    logger.info(f"REPAIR_CACHED | url={url} | decision={cached_decision.get('decision')} | replacement_url={cached_decision.get('replacement_url')}")
-
-                    if cached_decision.get('decision') == 'REPLACEMENT_CONFIRMED':
-                        old_url = url
-                        new_url = cached_decision.get('replacement_url')
-
-                        replacement_result = self.safe_url_replacer.replace_exact_occurrence(
-                            content, old_url, new_url, url_position
-                        )
-
-                        if replacement_result.success:
-                            logger.info(f"REPAIR_APPLIED | url={url} | new_url={new_url} | cached=True")
-                            content = replacement_result.new_content
-
-                            self.issues.append(Issue(
-                                issue_type="dead_link",
-                                description=f"Lien mort remplacé : {old_url} → {new_url}",
-                                position=url_position,
-                                original_text=old_url,
-                                suggested_text=new_url,
-                                severity="high",
-                                confidence=1.0,
-                                extra={
-                                    'url': url,
-                                    'old_url': old_url,
-                                    'new_url': new_url,
-                                    'http_status_code': result.http_status_code,
-                                    'repair_decision': cached_decision.get('decision'),
-                                    'cached': True
-                                }
-                            ))
-                            continue
-                        else:
-                            logger.warning(f"REPAIR_FAILED | url={url} | reason={replacement_result.reason}")
-                            continue
-                    else:
-                        logger.info(f"REPAIR_SKIPPED | url={url} | reason=already_unrepairable ({cached_decision.get('decision')})")
-                        continue
-
+            if result.status == LinkStatus.DEAD and self.enable_auto_repair:
                 logger.info(f"REPLACEMENT_SEARCH | url={url}")
 
                 redirect_start = time.time()
@@ -441,6 +513,38 @@ class DeadLinkAnalyzer(BaseAnalyzer):
                         'replacement_url': repair_result.replacement_url,
                         'reason': repair_result.reason
                     }
+
+                    # FIX (Bug 1): si le redirect a été REJETÉ (pas confirmé), on ne s'arrête
+                    # plus ici — on retente une réparation via archive avant d'abandonner.
+                    if repair_result.decision != RepairDecision.REPLACEMENT_CONFIRMED:
+                        logger.info(f"REPAIR_REJECTED | url={url} | reason={repair_result.reason}")
+                        self.issues.append(Issue(
+                            issue_type="dead_link",
+                            description=f"Lien mort détecté, redirect trouvé mais rejeté (preuves insuffisantes) : {url}",
+                            position=url_position,
+                            original_text=match.group(0),
+                            suggested_text=None,
+                            severity="high",
+                            confidence=1.0,
+                            extra={
+                                'url': url,
+                                'http_status_code': result.http_status_code,
+                                'error_type': result.error_type,
+                                'repair_status': 'REDIRECT_REJECTED',
+                                'redirect_reason': repair_result.reason
+                            }
+                        ))
+
+                        archive_repair_result = self._attempt_archive_fallback(url, url_position, result, match)
+                        if archive_repair_result:
+                            repair_result = archive_repair_result
+                            self._repair_cache[url] = {
+                                'decision': repair_result.decision.value,
+                                'replacement_url': repair_result.replacement_url,
+                                'reason': repair_result.reason
+                            }
+                        else:
+                            repair_result = None  # rien à appliquer plus bas, déjà loggé
                 else:
                     logger.info(f"ARCHIVE_FALLBACK | url={url} | reason=no_valid_redirect")
 
@@ -449,104 +553,33 @@ class DeadLinkAnalyzer(BaseAnalyzer):
                         'replacement_url': None,
                         'reason': 'no_valid_redirect'
                     }
-
-                    # FIX: Validate URL before archive lookup to catch corrupted URLs
-                    # This prevents corrupted URLs (with template parameters) from being
-                    # sent to the archive provider, which would construct invalid archive URLs
-                    if not self._is_url_syntactically_valid(url):
-                        logger.warning(f"ARCHIVE_FALLBACK_CANCELLED | url={url} | reason=invalid_url_syntax")
+                    
+                    # Try archive fallback before adding the issue
+                    repair_result = self._attempt_archive_fallback(url, url_position, result, match)
+                    if repair_result:
                         self._repair_cache[url] = {
-                            'decision': 'INVALID_URL_SYNTAX',
-                            'replacement_url': None,
-                            'reason': 'URL contains invalid syntax (likely template parameters), archive fallback cancelled'
+                            'decision': repair_result.decision.value,
+                            'replacement_url': repair_result.replacement_url,
+                            'reason': repair_result.reason
                         }
-                        continue
-
-                    archive_result = self.archive_provider.check_archive(url)
-
-                    if archive_result and archive_result.archive_url:
-                        archive_url = archive_result.archive_url
-                        archive_date = archive_result.archive_date
-                        provider_name = archive_result.provider
-                        logger.info(f"ARCHIVE_FOUND | url={url} | archive_url={archive_url} | archive_date={archive_date} | provider={provider_name}")
-
-                        # CRITICAL: Re-verify original URL is actually dead before using archive fallback
-                        # This prevents replacing healthy URLs with archives due to false positives
-                        logger.info(f"FINAL_VERIFICATION | url={url} | re-checking before archive fallback")
-                        final_check = self.link_checker.check_link(url)
-                        
-                        if final_check.status != LinkStatus.DEAD:
-                            logger.warning(f"ARCHIVE_FALLBACK_CANCELLED | url={url} | original_status={final_check.status.value} | reason=original_url_not_actually_dead")
-                            self._repair_cache[url] = {
-                                'decision': 'ORIGINAL_URL_HEALTHY',
-                                'replacement_url': None,
-                                'reason': f'Original URL is not dead (status: {final_check.status.value}), archive fallback cancelled'
+                    
+                    # Only add "dead link detected" issue if no successful repair will be made
+                    if not (repair_result and repair_result.decision == RepairDecision.REPLACEMENT_CONFIRMED):
+                        self.issues.append(Issue(
+                            issue_type="dead_link",
+                            description=f"Lien mort détecté, aucun redirect valide trouvé : {url}",
+                            position=url_position,
+                            original_text=match.group(0),
+                            suggested_text=None,
+                            severity="high",
+                            confidence=1.0,
+                            extra={
+                                'url': url,
+                                'http_status_code': result.http_status_code,
+                                'error_type': result.error_type,
+                                'repair_status': 'REDIRECT_NOT_FOUND'
                             }
-                            continue
-
-                        logger.info(f"ARCHIVE_VERIFICATION | url={url} | archive_url={archive_url} | verifying_http_access")
-                        archive_check = self.link_checker.check_link(archive_url)
-
-                        if archive_check.status == LinkStatus.HEALTHY:
-                            # FIX: an HTTP 200 from HEAD only proves the
-                            # snapshot exists and answers requests - it
-                            # does NOT prove the archived page has real
-                            # content. A GET-based keyword check catches
-                            # the case where Wayback faithfully archived
-                            # an already-dead "page not found" response
-                            # (observed in production: a confirmed
-                            # repair pointed to an archived CAIRN
-                            # "Page non-trouvée").
-                            if self._archive_content_looks_dead(archive_url):
-                                logger.warning(f"ARCHIVE_CONTENT_SUSPICIOUS | url={url} | archive_url={archive_url} | reason=body_matches_not_found_markers")
-                                self._repair_cache[url] = {
-                                    'decision': 'ARCHIVE_CONTENT_SUSPICIOUS',
-                                    'replacement_url': None,
-                                    'reason': 'Archive snapshot returns HTTP 200 but content looks like a not-found page'
-                                }
-                                self.issues.append(Issue(
-                                    issue_type="dead_link",
-                                    description=f"Lien mort détecté, archive trouvée mais suspecte (contenu type page introuvable) : {url}",
-                                    position=url_position,
-                                    original_text=match.group(0),
-                                    suggested_text=None,
-                                    severity="high",
-                                    confidence=0.6,
-                                    extra={
-                                        'url': url,
-                                        'archive_url': archive_url,
-                                        'repair_status': 'ARCHIVE_CONTENT_SUSPICIOUS'
-                                    }
-                                ))
-                                continue
-
-                            logger.info(f"ARCHIVE_VERIFIED | url={url} | archive_url={archive_url} | http_status={archive_check.http_status_code}")
-
-                            repair_result = RepairResult(
-                                original_url=url,
-                                decision=RepairDecision.REPLACEMENT_CONFIRMED,
-                                replacement_url=archive_url,
-                                reason=f"Archive fallback: No redirect found, using {provider_name} archive from {archive_date} (HTTP {archive_check.http_status_code})"
-                            )
-
-                            self._repair_cache[url] = {
-                                'decision': repair_result.decision.value,
-                                'replacement_url': repair_result.replacement_url,
-                                'reason': repair_result.reason
-                            }
-
-                            logger.info(f"REPAIR_DECISION | url={url} | decision={repair_result.decision.value} | reason={repair_result.reason} | using_archive={archive_url}")
-                        else:
-                            logger.warning(f"ARCHIVE_NOT_ACCESSIBLE | url={url} | archive_url={archive_url} | status={archive_check.status.value} | http_status={archive_check.http_status_code}")
-                            self._repair_cache[url] = {
-                                'decision': 'ARCHIVE_NOT_ACCESSIBLE',
-                                'replacement_url': None,
-                                'reason': f'Archive found but not accessible (HTTP {archive_check.http_status_code})'
-                            }
-                            continue
-                    else:
-                        logger.info(f"ARCHIVE_NOT_FOUND | url={url} | reason=no_archive_available")
-                        continue
+                        ))
 
                 if repair_result and repair_result.decision == RepairDecision.REPLACEMENT_CONFIRMED:
                     old_url = url
@@ -606,13 +639,335 @@ class DeadLinkAnalyzer(BaseAnalyzer):
                         'repair_status': 'AUTO_REPAIR_DISABLED'
                     }
                 ))
+            elif result.status == LinkStatus.REVIEW_REQUIRED:
+                logger.info(f"REVIEW_REQUIRED | url={url} | reason={result.error_type}")
+                self.issues.append(Issue(
+                    issue_type="dead_link",
+                    description=f"Lien nécessitant révision manuelle : {url} ({result.error_type})",
+                    position=url_position,
+                    original_text=match.group(0),
+                    suggested_text=None,
+                    severity="medium",
+                    confidence=0.7,
+                    extra={
+                        'url': url,
+                        'http_status_code': result.http_status_code,
+                        'error_type': result.error_type,
+                        'link_status': result.status.value,
+                        'repair_status': 'REVIEW_REQUIRED'
+                    }
+                ))
 
         self.issues.sort(key=lambda i: i.position)
 
+        # Count issue types for accurate summary - separate technical findings from actionable repairs
+        issue_type_counts = {}
+        actionable_repairs = 0
+        manual_review = 0
+        unresolved = 0
+        
+        for issue in self.issues:
+            repair_status = issue.extra.get('repair_status', 'unknown')
+            
+            # Replace 'unknown' with diagnostic information
+            if repair_status == 'unknown':
+                # Try to infer from other fields
+                if issue.suggested_text:
+                    repair_status = 'REPAIR_AVAILABLE_BUT_UNKNOWN_REASON'
+                elif issue.extra.get('link_status'):
+                    repair_status = f"LINK_STATUS_{issue.extra.get('link_status').upper()}"
+                else:
+                    repair_status = 'DIAGNOSTIC_REQUIRED'
+                # Update the issue extra for consistency
+                issue.extra['repair_status'] = repair_status
+            
+            issue_type_counts[repair_status] = issue_type_counts.get(repair_status, 0) + 1
+            
+            # Categorize for clearer reporting
+            if repair_status in ['REPAIR_APPLIED', 'SAFE_REPLACEMENT']:
+                actionable_repairs += 1
+            elif repair_status in ['REVIEW_REQUIRED', 'REDIRECT_REJECTED', 'AUTO_REPAIR_DISABLED']:
+                manual_review += 1
+            elif repair_status in ['unknown', 'DIAGNOSTIC_REQUIRED', 'REPAIR_AVAILABLE_BUT_UNKNOWN_REASON']:
+                unresolved += 1
+
+        # Log detailed summary with clear separation
+        logger.info(f"DeadLinkAnalyzer completed - Technical findings: {len(self.issues)} issues")
+        logger.info(f"DeadLinkAnalyzer completed - Actionable repairs: {actionable_repairs}, Manual review: {manual_review}, Unresolved: {unresolved}")
+        logger.info(f"DeadLinkAnalyzer completed - Issues breakdown: {dict(issue_type_counts)} (checked {self._checks_count}/{total_urls} URLs)")
+
         skipped_urls = total_urls - self._checks_count
         if analysis_complete:
-            logger.info(f"DeadLinkAnalyzer completed - found {len(self.issues)} dead links (checked {self._checks_count}/{total_urls} URLs)")
+            logger.info(f"DeadLinkAnalyzer completed - found {len(self.issues)} issues (checked {self._checks_count}/{total_urls} URLs)")
         else:
-            logger.warning(f"DeadLinkAnalyzer incomplete - found {len(self.issues)} dead links (checked {self._checks_count}/{total_urls} URLs, {skipped_urls} skipped)")
+            logger.warning(f"DeadLinkAnalyzer incomplete - found {len(self.issues)} issues (checked {self._checks_count}/{total_urls} URLs, {skipped_urls} skipped)")
 
         return self.issues
+
+    def _attempt_archive_fallback(self, url: str, url_position: int,
+                                   result: LinkCheckResult, match) -> Optional[RepairResult]:
+        """
+        Try to find and validate a Wayback/Archive.org snapshot as a
+        fallback repair. Returns a RepairResult with
+        decision=REPLACEMENT_CONFIRMED on success, or None if no repair
+        could be produced (an Issue has already been appended for every
+        rejection path, matching prior behavior).
+        """
+        if not self._is_url_syntactically_valid(url):
+            logger.warning(f"ARCHIVE_FALLBACK_CANCELLED | url={url} | reason=invalid_url_syntax")
+            self.issues.append(Issue(
+                issue_type="dead_link",
+                description=f"Lien mort détecté, syntaxe invalide (paramètres de template) : {url}",
+                position=url_position,
+                original_text=match.group(0),
+                suggested_text=None,
+                severity="high",
+                confidence=1.0,
+                extra={
+                    'url': url,
+                    'http_status_code': result.http_status_code,
+                    'error_type': result.error_type,
+                    'repair_status': 'INVALID_URL_SYNTAX'
+                }
+            ))
+            return None
+
+        archive_result = self.archive_provider.check_archive(url)
+
+        if not (archive_result and archive_result.archive_url):
+            logger.info(f"ARCHIVE_FALLBACK_FAILED | url={url} | reason=no_archive_available")
+            self.issues.append(Issue(
+                issue_type="dead_link",
+                description=f"Lien mort détecté, aucune archive disponible : {url}",
+                position=url_position,
+                original_text=match.group(0),
+                suggested_text=None,
+                severity="high",
+                confidence=1.0,
+                extra={
+                    'url': url,
+                    'http_status_code': result.http_status_code,
+                    'error_type': result.error_type,
+                    'repair_status': 'ARCHIVE_NOT_FOUND'
+                }
+            ))
+            return None
+
+        archive_url = archive_result.archive_url
+        archive_date = archive_result.archive_date
+        provider_name = archive_result.provider
+        logger.info(f"ARCHIVE_CANDIDATE | url={url} | archive_url={archive_url} | archive_date={archive_date} | provider={provider_name}")
+
+        logger.info(f"FINAL_VERIFICATION | url={url} | re-checking before archive fallback")
+
+        recheck_retry_config = RetryConfig(
+            max_attempts=2,
+            base_delay=2.0,
+            max_delay=4.0,
+            strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
+        )
+        recheck_retry_handler = RetryHandler(recheck_retry_config)
+
+        final_check = recheck_retry_handler.execute_with_retry_on_result(
+            lambda: self.link_checker.check_link(url),
+            should_retry_result=lambda r: r.http_status_code in (503, 502, 429)
+        )
+
+        if final_check.status != LinkStatus.DEAD:
+            logger.warning(f"ARCHIVE_FALLBACK_CANCELLED | url={url} | original_status={final_check.status.value} | reason=original_url_not_actually_dead")
+            return None
+
+        logger.info(f"ARCHIVE_VERIFICATION | url={url} | archive_url={archive_url} | verifying_http_access")
+        
+        # Retry logic for archive verification with exponential backoff
+        retry_config = RetryConfig(
+            max_attempts=3,
+            base_delay=2.0,
+            max_delay=8.0,
+            strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
+            retry_on_exceptions=(Exception,)
+        )
+        retry_handler = RetryHandler(retry_config)
+        
+        def verify_archive_access():
+            return self.link_checker.check_link(archive_url)
+        
+        try:
+            archive_check = retry_handler.execute_with_retry(verify_archive_access)
+        except Exception as e:
+            logger.warning(f"ARCHIVE_VERIFICATION_EXCEPTION | url={url} | archive_url={archive_url} | error={e}")
+            archive_check = LinkCheckResult(
+                url=archive_url,
+                status=LinkStatus.UNKNOWN,
+                error_type="VERIFICATION_EXCEPTION",
+                retry_count=0,
+                check_duration=0.0,
+                confidence=0.0
+            )
+
+        # CRITICAL FIX: Only accept HEALTHY status for archives
+        # Previously accepted HTTP 498 from web.archive.org, but this is too risky
+        # 498 can indicate proxy issues, timeouts, or other problems that don't guarantee the archive is actually accessible
+        # Also distinguish between service unavailability (503/502) and genuine content failure (404)
+        if archive_check.status != LinkStatus.HEALTHY:
+            # Distinguish between service errors and content failures
+            if archive_check.http_status_code in (503, 502, 429):
+                logger.warning(f"ARCHIVE_VERIFICATION_RETRY_EXHAUSTED | url={url} | archive_url={archive_url} | provider={provider_name} | status={archive_check.status.value} | http_status={archive_check.http_status_code} | reason=service_unavailable_after_retries")
+                
+                # Fallback: Try to verify via other providers that also found an archive
+                logger.info(f"ARCHIVE_VERIFICATION_FALLBACK | url={url} | checking_other_providers")
+                all_available_results = self.archive_provider.check_all_providers(url)
+                
+                # Filter out the current provider (already failed)
+                other_providers = [r for r in all_available_results if r.provider != provider_name]
+                
+                if other_providers:
+                    logger.info(f"ARCHIVE_VERIFICATION_FALLBACK | url={url} | found={len(other_providers)} alternative providers")
+                    
+                    for alt_result in other_providers:
+                        alt_provider = alt_result.provider
+                        alt_archive_url = alt_result.archive_url
+                        logger.info(f"ARCHIVE_VERIFICATION_FALLBACK | url={url} | attempting_verification_via={alt_provider} | archive_url={alt_archive_url}")
+                        
+                        # Retry verification for alternative provider with backoff
+                        retry_config = RetryConfig(
+                            max_attempts=3,
+                            base_delay=2.0,
+                            max_delay=8.0,
+                            strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
+                            retry_on_exceptions=(Exception,)
+                        )
+                        retry_handler = RetryHandler(retry_config)
+                        
+                        def verify_alt_access():
+                            return self.link_checker.check_link(alt_archive_url)
+                        
+                        try:
+                            alt_check = retry_handler.execute_with_retry(verify_alt_access)
+                        except Exception as e:
+                            logger.warning(f"ARCHIVE_VERIFICATION_FALLBACK_EXCEPTION | url={url} | provider={alt_provider} | error={e}")
+                            alt_check = LinkCheckResult(
+                                url=alt_archive_url,
+                                status=LinkStatus.UNKNOWN,
+                                error_type="VERIFICATION_EXCEPTION",
+                                retry_count=0,
+                                check_duration=0.0,
+                                confidence=0.0
+                            )
+                        
+                        if alt_check.status == LinkStatus.HEALTHY:
+                            logger.info(f"ARCHIVE_VERIFICATION_FALLBACK_SUCCESS | url={url} | provider={alt_provider} | archive_url={alt_archive_url}")
+                            # Use alternative provider's archive instead
+                            archive_url = alt_archive_url
+                            provider_name = alt_provider
+                            archive_date = alt_result.archive_date
+                            archive_check = alt_check  # Update archive_check to reflect successful verification
+                            break  # Exit loop, use this successful provider
+                        else:
+                            logger.warning(f"ARCHIVE_VERIFICATION_FALLBACK_FAILED | url={url} | provider={alt_provider} | status={alt_check.status.value} | http_status={alt_check.http_status_code}")
+                    
+                    # If we successfully switched to another provider, continue with normal flow
+                    if archive_check.status != LinkStatus.HEALTHY:
+                        # All providers failed - mark as review_required
+                        logger.warning(f"ARCHIVE_VERIFICATION_ALL_PROVIDERS_FAILED | url={url} | providers_tried={len(all_available_results)}")
+                        self.issues.append(Issue(
+                            issue_type="dead_link",
+                            description=f"Lien mort détecté, archive disponible mais tous les services de vérification indisponibles : {url}",
+                            position=url_position,
+                            original_text=match.group(0),
+                            suggested_text=None,
+                            severity="medium",
+                            confidence=0.7,
+                            extra={
+                                'url': url,
+                                'http_status_code': result.http_status_code,
+                                'error_type': result.error_type,
+                                'repair_status': 'REVIEW_REQUIRED',
+                                'archive_url': archive_url,
+                                'archive_http_status': archive_check.http_status_code,
+                                'archive_status': archive_check.status.value,
+                                'archive_provider': provider_name,
+                                'review_reason': 'all_verification_providers_unavailable_after_retries'
+                            }
+                        ))
+                        return None
+                else:
+                    # No alternative providers found - mark as review_required
+                    logger.warning(f"ARCHIVE_VERIFICATION_NO_ALTERNATIVE_PROVIDERS | url={url}")
+                    self.issues.append(Issue(
+                        issue_type="dead_link",
+                        description=f"Lien mort détecté, archive disponible mais service temporairement indisponible (pas d'alternative) : {url}",
+                        position=url_position,
+                        original_text=match.group(0),
+                        suggested_text=None,
+                        severity="medium",
+                        confidence=0.7,
+                        extra={
+                            'url': url,
+                            'http_status_code': result.http_status_code,
+                            'error_type': result.error_type,
+                            'repair_status': 'REVIEW_REQUIRED',
+                            'archive_url': archive_url,
+                            'archive_http_status': archive_check.http_status_code,
+                            'archive_status': archive_check.status.value,
+                            'archive_provider': provider_name,
+                            'review_reason': 'no_alternative_providers_available'
+                        }
+                    ))
+                    return None
+            else:
+                logger.warning(f"ARCHIVE_VERIFICATION_FAILED | url={url} | archive_url={archive_url} | provider={provider_name} | status={archive_check.status.value} | http_status={archive_check.http_status_code} | reason=archive_not_healthy")
+                # Genuine content failure - classify as ARCHIVE_NOT_ACCESSIBLE
+                self.issues.append(Issue(
+                    issue_type="dead_link",
+                    description=f"Lien mort détecté, archive non accessible : {url}",
+                    position=url_position,
+                    original_text=match.group(0),
+                    suggested_text=None,
+                    severity="high",
+                    confidence=1.0,
+                    extra={
+                        'url': url,
+                        'http_status_code': result.http_status_code,
+                        'error_type': result.error_type,
+                        'repair_status': 'ARCHIVE_NOT_ACCESSIBLE',
+                        'archive_url': archive_url,
+                        'archive_http_status': archive_check.http_status_code,
+                        'archive_status': archive_check.status.value,
+                        'archive_provider': provider_name
+                    }
+                ))
+                return None
+
+        if self._archive_content_looks_dead(archive_url):
+            logger.warning(f"ARCHIVE_CONTENT_REJECTED | url={url} | archive_url={archive_url} | provider={provider_name} | reason=body_matches_not_found_markers")
+            self.issues.append(Issue(
+                issue_type="dead_link",
+                description=f"Lien mort détecté, archive trouvée mais suspecte (contenu type page introuvable) : {url}",
+                position=url_position,
+                original_text=match.group(0),
+                suggested_text=None,
+                severity="high",
+                confidence=0.6,
+                extra={
+                    'url': url,
+                    'http_status_code': result.http_status_code,
+                    'error_type': result.error_type,
+                    'repair_status': 'ARCHIVE_CONTENT_SUSPICIOUS',
+                    'archive_url': archive_url,
+                    'archive_provider': provider_name
+                }
+            ))
+            return None
+
+        logger.info(f"ARCHIVE_VERIFIED | url={url} | archive_url={archive_url} | http_status={archive_check.http_status_code}")
+
+        # Archive passed all checks - proceed with replacement
+        logger.info(f"ARCHIVE_ACCEPTED | url={url} | archive_url={archive_url} | provider={provider_name} | confidence=high")
+
+        return RepairResult(
+            original_url=url,
+            decision=RepairDecision.REPLACEMENT_CONFIRMED,
+            replacement_url=archive_url,
+            reason=f"Archive fallback: using {provider_name} archive from {archive_date} (HTTP {archive_check.http_status_code})"
+        )

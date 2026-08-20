@@ -13,7 +13,8 @@ from urllib.parse import urlparse, urljoin
 from enum import Enum
 from dataclasses import dataclass
 
-from .api_throttler import get_global_throttler
+from .api_throttler import get_link_check_throttler
+from .retry_handler import RetryHandler, RetryConfig, RetryStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -73,31 +74,42 @@ class RedirectFinder:
             timeout: Request timeout in seconds
         """
         self.timeout = timeout or self.DEFAULT_TIMEOUT
-        self.api_throttler = get_global_throttler()
+        self.api_throttler = get_link_check_throttler()
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
     
     def find_redirect(self, url: str) -> RedirectResult:
         """
         Attempt to find a valid redirect for a dead URL.
-        
+
         Args:
             url: Dead URL to find redirect for
-            
+
         Returns:
             RedirectResult with decision and details
         """
         self.api_throttler.wait_if_needed()
-        
-        try:
-            # Attempt to fetch the URL and follow redirects
+
+        # Retry configuration for transient errors
+        retry_config = RetryConfig(
+            max_attempts=2,
+            base_delay=2.0,
+            max_delay=4.0,
+            strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
+            retry_on_exceptions=(urllib.error.URLError, urllib.error.HTTPError, Exception)
+        )
+        retry_handler = RetryHandler(retry_config)
+
+        def make_redirect_request():
             request = urllib.request.Request(
                 url,
                 headers={'User-Agent': self.USER_AGENT},
                 method='HEAD'
             )
-            
             context = urllib.request.ssl.create_default_context()
-            response = urllib.request.urlopen(request, timeout=self.timeout, context=context)
+            return urllib.request.urlopen(request, timeout=self.timeout, context=context)
+
+        try:
+            response = retry_handler.execute_with_retry(make_redirect_request)
             
             final_url = response.url
             status_code = response.getcode()

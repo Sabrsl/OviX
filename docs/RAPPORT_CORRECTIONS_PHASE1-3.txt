@@ -1,0 +1,137 @@
+# RAPPORT D'ÉTAPE - CORRECTIONS OviX
+
+**Date:** 2025-01-XX
+**Phases complétées:** 1 et 2, début de la phase 3
+
+================================================================================
+PHASE 1: FIX LOADING GLOBAL DASHBOARD - COMPLÉTÉ
+================================================================================
+
+Fichiers modifiés:
+1. frontend/src/pages/Dashboard.tsx
+2. backend/api/routes/system.py
+
+Corrections effectuées:
+
+Dashboard.tsx:
+- systemStatus est maintenant chargé avec immediate=false (non bloquant)
+- Le loading ne dépend plus de systemStatus
+- Seuls healthCheck et statistics bloquent le chargement
+- systemStatus est récupéré séparément avec refetch()
+
+system.py:
+- L'endpoint /api/system/status ne bloque plus si un service échoue
+- Chaque service (kill_switch, scheduler_state, wikipedia_session) a un try/catch
+- En cas d'échec, retourne des valeurs par défaut au lieu de lever une exception
+- Le endpoint ne plante plus toute l'application
+
+Résultat attendu:
+- Dashboard devrait se charger même si un service système est indisponible
+- Plus de "Loading..." permanent sur la page
+
+================================================================================
+PHASE 2: FIX LOGS ET OBSERVABILITÉ - COMPLÉTÉ
+================================================================================
+
+Fichiers modifiés:
+1. utils/logging_config.py
+2. backend/api/main.py
+
+Corrections effectuées:
+
+logging_config.py:
+- Ajout de sys.stdout.reconfigure(line_buffering=True)
+- Ajout de sys.stderr.reconfigure(line_buffering=True)
+- Ajout de force=True dans logging.basicConfig()
+- Configuration des loggers uvicorn et uvicorn.access au niveau INFO
+
+main.py:
+- Ajout de logger.info("Health check requested")
+- Ajout de logger.info(f"Health check status: {health_status}")
+
+Résultat attendu:
+- Logs devraient maintenant s'afficher dans le terminal backend
+- Pas de buffering stdout/stderr
+- Logs visibles en temps réel
+
+Note: Pour que les logs soient visibles, il faut redémarrer le backend avec:
+  PYTHONUNBUFFERED=1 python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+================================================================================
+PHASE 3: FIX RÉCUPÉRATION + PAGINATION + FILTRES - EN COURS
+================================================================================
+
+Fichiers modifiés:
+1. backend/api/routes/articles.py (endpoint /category)
+
+Corrections effectuées:
+
+articles.py (endpoint /category):
+- Implémentation de la pagination par lots (comme Streamlit)
+- Ajout de consecutive_empty_batches check (arrêt après 3 lots vides)
+- Filtres appliqués après chaque lot (exclude_published, include_analyzed)
+- Logs détaillés pour chaque batch
+- max_iterations = 10 pour éviter les boucles infinies
+- batch_size = limit * 2 pour compenser le filtrage
+
+Résultat attendu:
+- Comportement identique à Streamlit pour la récupération
+- Continue à récupérer jusqu'à atteindre le nombre demandé
+- Arrête si épuisement des résultats ou consecutive_empty_batches
+
+================================================================================
+PHASES RESTANTES À FAIRE
+================================================================================
+
+PHASE 4: Fix état article par article
+- Modifier la structure des jobs pour inclure article_index
+- Endpoint pour naviguer entre articles
+- État persistant après refresh
+
+PHASE 5: Fix analyse individuelle
+- Endpoint pour analyser un article spécifique
+- Ne pas lancer automatiquement tous les articles
+
+PHASE 6: Fix diff
+- Créer endpoint /api/diff/{job_id}/{article_title}
+- Récupérer original et corrected
+- Afficher diff dans React
+
+PHASE 7: Fix Ignorer / Publier / Suivant
+- Endpoint pour marquer article comme ignored
+- Endpoint pour publier avec validation
+- Endpoint pour naviguer au suivant
+
+PHASE 8: Centraliser configuration dans Paramètres
+- Déplacer config IA vers Settings
+- Sauvegarde persistante
+- Synchronisation avec backend Config
+
+PHASE 9: Fix persistance et récupération après refresh
+- État job persistant
+- Restauration de l'état après refresh
+
+PHASE 10: Tests complets de non-régression
+- Tests Dashboard (loading)
+- Tests récupération (pagination)
+- Tests workflow article par article
+- Tests refresh
+- Tests logs
+- Tests Streamlit (non-régression)
+
+================================================================================
+RECOMMANDATION
+================================================================================
+
+Avant de continuer avec les phases restantes, il est recommandé de:
+
+1. Redémarrer le backend avec PYTHONUNBUFFERED=1
+2. Vérifier que les logs s'affichent dans le terminal
+3. Vérifier que le Dashboard se charge sans bloquer
+4. Tester la récupération d'articles avec filtres
+5. Confirmer que les corrections fonctionnent comme attendu
+
+Cela permettra de s'assurer que les corrections de base sont valides avant
+de continuer avec les modifications plus complexes du workflow article par article.
+
+================================================================================

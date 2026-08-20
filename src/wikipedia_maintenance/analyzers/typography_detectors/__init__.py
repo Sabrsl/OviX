@@ -1,1 +1,0 @@
-"""Modules de détection typographique."""

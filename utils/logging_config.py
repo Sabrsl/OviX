@@ -47,13 +47,18 @@ def get_log_capture() -> LogCapture:
 def setup_logging() -> None:
     """Configure le logging pour l'application."""
     global _log_capture
-    
+
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
-    
+
     if _log_capture is None:
         _log_capture = LogCapture()
-    
+
+    # Force unbuffered output
+    import sys
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+
     # Configurer le logging si pas déjà configuré
     if not logging.getLogger().handlers:
         logging.basicConfig(
@@ -63,5 +68,10 @@ def setup_logging() -> None:
                 logging.StreamHandler(sys.stdout),
                 logging.FileHandler(log_dir / "app.log", encoding='utf-8'),
                 _log_capture
-            ]
+            ],
+            force=True  # Force reconfiguration even if already configured
         )
+
+    # Ensure uvicorn logs are also visible
+    logging.getLogger("uvicorn").setLevel(logging.INFO)
+    logging.getLogger("uvicorn.access").setLevel(logging.INFO)

@@ -1,0 +1,136 @@
+# OVIX Configuration File (Example)
+# Copy this file to config.yaml and customize for your environment
+# All parameters can also be managed from the UI Settings page
+
+# Project paths
+project_root: /path/to/ovix
+
+# Wikipedia connection settings
+wikipedia:
+  lang: fr
+  family: wikipedia
+  api_url: null
+  user_agent: null
+  timeout: 30.0
+
+# Rate limiting configuration
+rate_limiting:
+  min_edit_delay: 1.0
+  max_edits_per_minute: 10
+  max_requests_per_second: 2.0
+  burst: 5
+
+# Analysis configuration
+analysis:
+  enabled_analyzers:
+    - DeadLinkAnalyzer
+  min_severity: all
+  disabled_issue_types: []
+  issue_overrides: {}
+  parallel: false
+  analyzer_timeout: 60.0
+
+# Database configuration
+database:
+  path: data/wikipedia_maintenance.db
+  backup_enabled: true
+  backup_interval_hours: 24
+  max_backups: 7
+  pragmas:
+    journal_mode: WAL
+    synchronous: NORMAL
+    cache_size: -64000
+
+# UI configuration
+ui:
+  theme: dark
+  max_issues_display: 100
+  auto_expand_high_severity: true
+  show_diff_by_default: true
+  compact_view: false
+
+# Safety configuration
+safety:
+  dry_run_default: true
+  require_confirmation: true
+  max_article_batch_size: 50
+  max_edits_per_session: 100
+  max_change_bytes: 50000
+  excluded_namespaces:
+    - 0
+    - 4
+    - 10
+  enforce_edit_summary: true
+  default_edit_summary: Corrections automatiques ([[Projet:Maintenance]])
+
+# Logging configuration
+logging:
+  level: INFO
+  file: logs/wikipedia_maintenance.log
+  max_size_mb: 10
+  backup_count: 5
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  datefmt: "%Y-%m-%d %H:%M:%S"
+  console: true
+
+# Typography analyzer configuration
+typography:
+  check_nbsp: true
+  max_issues: null
+  check_ordinal_abbreviations: true
+  check_percent_nbsp: false
+  check_double_spaces: true
+  check_simple_punctuation_spacing: true
+  check_abusive_formatting: true
+  check_all_caps: true
+  check_abbreviations: true
+  check_dates: true
+  check_centuries: true
+  check_units: true
+  check_section_titles: true
+
+# References analyzer configuration
+references:
+  check_bare_refs: true
+  check_duplicate_refs: true
+  check_uppercase_refs: true
+  check_isbn_format: true
+  check_template_type: true
+  check_broken_links: false
+  use_wayback_api: false
+  link_check_timeout: 5.0
+
+# HTTPS verification configuration
+https_verification:
+  enabled: false
+  timeout: 10.0
+  ttl_available: 30
+  ttl_unavailable: 7
+  ttl_failed: 1
+
+# Works list analyzer configuration
+works_list:
+  filmography_threshold: 3
+  discography_threshold: 3
+  check_awards: true
+  check_italics: true
+  check_lang_template: true
+  check_sort_order: true
+
+# Structure analyzer configuration
+structure:
+  check_heading_levels: true
+  check_duplicate_sections: true
+  check_voir_aussi_algorithm: true
+  check_portal_placement: true
+  check_section_order: true
+  check_empty_sections: true
+
+# Timeouts for external APIs
+timeouts:
+  wikipedia_api: 30.0
+  analyzer: 60.0
+  link_check: 10.0
+  https_verification: 10.0
+  wayback_cdx: 5.0
+  archive_org: 10.0

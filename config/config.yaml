@@ -1,52 +1,26 @@
-ai:
-  gemini:
-    limit: 10800
-    model: gemini-flash-lite-latest
-    project_id: '804175778135'
-  ollama:
-    fallback: llama3:instruct
-    model: mistral:instruct
-    url: http://localhost:11434
 analysis:
   enabled_analyzers:
-  - LinkAnalyzer
-  - WhitespaceAnalyzer
-  - TypographyAnalyzer
-  - TemplateAnalyzer
-  - CategoryAnalyzer
-  - HTMLAnalyzer
   - DeadLinkAnalyzer
   severity:
     high:
-    - obsolete_template
-    - bare_external_link
     - dead_link
-    low:
-    - trailing_whitespace
-    - typo
-    - missing_accent
-    - empty_parameter
-    - duplicate_category
-    - unnecessary_html
-    - html_comment
     medium:
-    - suspicious_internal_link
-    - double_space
-    - space_before_punctuation
+    - dead_link_archive_found
+    low:
+    - dead_link_no_archive
 api_throttling:
-  max_requests_per_minute: 10.0
-  max_requests_per_minute_max: 15.0
-  max_requests_per_minute_min: 10.0
+  max_requests_per_minute: 10
+  max_requests_per_minute_max: 15
+  max_requests_per_minute_min: 10
   max_retries: 5
   min_delay: 11.5
-  min_delay_max: 15.0
-  min_delay_min: 8.0
+  min_delay_max: 15
+  min_delay_min: 8
   random_delay: true
   retry_backoff_factor: 2
   retry_delay: 5
+  maxlag: 10
 api_urls:
-  gemini: https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent
-  petscan: https://petscan.wmflabs.org/
   wikipedia: https://{lang}.wikipedia.org/w/api.php
 database:
   backup_enabled: true
@@ -55,10 +29,10 @@ database:
 dead_links_analyzer:
   confidence_threshold: 0.95
   enable_auto_repair: true
-  max_checks_per_article: 20
+  max_checks_per_article: 50
   max_retries: 3
   prefer_redirect_over_archive: true
-  timeout: 10
+  timeout: 15
   archive_search:
     enabled: true
     wayback_enabled: true
@@ -69,9 +43,6 @@ dead_links_analyzer:
     same_domain_only: true
     try_http_fallback: true
   validation:
-    # NOTE: These validation keys are currently NOT used by the code.
-    # Validation logic is hardcoded in link_validator.py with deterministic criteria.
-    # These keys are reserved for future configurable validation logic.
     require_unique_candidate: true
     require_same_domain: true
     require_title_match: true
@@ -87,16 +58,14 @@ logging:
   level: INFO
   max_size_mb: 10
 other:
-  character_limit: 10800
-  default_category: Article à wikifier/Liste complète
-  user_agent: WikipediaMaintenanceTool/1.0
+  user_agent: OviX/1.0
 publication_delays:
-  max_delay_minutes: 7.0
-  min_delay_minutes: 4.0
+  max_delay_minutes: 7
+  min_delay_minutes: 4
 rate_limiting:
   daily_limit: 50
   max_edits_per_minute: 10
-  min_edit_delay: 1.0
+  min_edit_delay: 1
 safety:
   dry_run_default: true
   max_article_batch_size: 50
@@ -109,13 +78,7 @@ timeouts:
   analyzer: 60
   archive_check: 5
   connection_check: 5
-  gemini_api: 10
   link_check: 5
-  model_download: 300
-  model_generation: 300
-  ollama_api: 10
-  petscan_api: 30
-  url_metadata: 10
   wikipedia_api: 30
 ui:
   auto_expand_high_severity: true

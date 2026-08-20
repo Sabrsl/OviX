@@ -134,11 +134,18 @@ apicache/
 apicache-py3/
 data/scheduler_state.json
 data/automation_state.json
+data/pending_publish_queue.json
 published_articles.json
+published_articles_archive.json
 analyzed_articles.json
 data/automation_reports/
 *.json.bak
 .cache/
+
+# -----------------------------------------------------
+# Config files with sensitive data
+# -----------------------------------------------------
+config/config.yaml
 
 # -----------------------------------------------------
 # Kill switch state (runtime)

@@ -5,9 +5,12 @@ Handles SQLite database operations for logging and history.
 
 import sqlite3
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional, Any
+
+logger = logging.getLogger(__name__)
 
 
 class DatabaseManager:
@@ -19,8 +22,35 @@ class DatabaseManager:
         Args:
             db_path: Path to SQLite database file
         """
-        self.db_path = Path(db_path)
+        # Convert relative path to absolute path if needed
+        db_path_obj = Path(db_path)
+        if not db_path_obj.is_absolute():
+            # Try to get PROJECT_ROOT from environment
+            import os
+            project_root = os.environ.get('PROJECT_ROOT')
+            if project_root:
+                db_path_obj = Path(project_root) / db_path_obj
+            else:
+                # Fallback to current working directory
+                db_path_obj = Path.cwd() / db_path_obj
+                logger.warning(f"PROJECT_ROOT not set, using CWD: {db_path_obj}")
+        
+        self.db_path = db_path_obj
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"Database path: {self.db_path.absolute()}")
+        logger.info(f"Database exists: {self.db_path.exists()}")
+        
+        # PRODUCTION: Disabled automatic database reset to preserve all data
+        # Database persists across restarts for professional data management
+        # if self.db_path.exists():
+        #     try:
+        #         import os
+        #         os.remove(self.db_path)
+        #         logger.info("Reset database for Dead Linker clean state")
+        #     except Exception as e:
+        #         logger.warning(f"Could not reset database: {e}")
+        
         self.conn = None
         self._initialize_database()
     
@@ -28,6 +58,8 @@ class DatabaseManager:
         """Create database tables if they don't exist."""
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        # Set UTF-8 encoding for text handling
+        self.conn.execute("PRAGMA encoding = 'UTF-8'")
         
         cursor = self.conn.cursor()
         
@@ -115,6 +147,138 @@ class DatabaseManager:
             )
         """)
         
+        # Manual review decisions table - stores human review decisions for links
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS manual_review_decisions (
+                id TEXT PRIMARY KEY,  -- item_id: "article_title_hash(url)"
+                article_title TEXT NOT NULL,
+                url TEXT NOT NULL,
+                status TEXT NOT NULL,  -- approved, rejected, pending
+                decision_date TIMESTAMP NOT NULL,
+                reviewer_id TEXT,  -- For future user tracking
+                decision_reason TEXT,  -- For future audit trail
+                article_id INTEGER,  -- Link to articles table if available
+                url_hash TEXT NOT NULL,  -- Deterministic hash of URL for indexing
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE SET NULL
+            )
+        """)
+
+        # Articles to analyze queue - persistent queue for articles waiting analysis
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS articles_to_analyze (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                page_id INTEGER,
+                revision_id INTEGER,
+                source TEXT NOT NULL,  -- category, manual, petscan, file, user-contribs
+                source_details TEXT,
+                priority TEXT DEFAULT 'medium',  -- low, medium, high
+                added_at TIMESTAMP NOT NULL,
+                started_at TIMESTAMP,
+                analyzed_at TIMESTAMP,
+                status TEXT DEFAULT 'pending',  -- pending, analyzing, analyzed
+                job_id TEXT,
+                FOREIGN KEY (job_id) REFERENCES analysis_jobs(id)
+            )
+        """)
+        
+        # Analysis jobs table - persistent job storage
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS analysis_jobs (
+                id TEXT PRIMARY KEY,
+                article_title TEXT NOT NULL,
+                mode TEXT NOT NULL,  -- regex, ai
+                status TEXT DEFAULT 'pending',  -- pending, running, completed, failed, cancelled
+                progress REAL DEFAULT 0.0,
+                message TEXT,
+                started_at TIMESTAMP,
+                completed_at TIMESTAMP,
+                error TEXT,
+                created_at TIMESTAMP NOT NULL,
+                ai_provider TEXT,
+                ai_character_limit INTEGER,
+                gemini_api_key TEXT,
+                gemini_project_id TEXT
+            )
+        """)
+
+        # Kill switch state table - stores kill switch status persistently
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS kill_switch_state (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                enabled INTEGER NOT NULL DEFAULT 0,
+                reason TEXT,
+                trigger_source TEXT,
+                requested_by TEXT,
+                requested_at TIMESTAMP,
+                last_checked TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Ensure there's exactly one row in kill_switch_state
+        cursor.execute("""
+            INSERT OR IGNORE INTO kill_switch_state (id, enabled, reason, trigger_source, requested_by, requested_at, last_checked)
+            VALUES (1, 0, '', '', '', NULL, NULL)
+        """)
+
+        # Analysis results table - persistent result storage
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS analysis_results (
+                id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL,
+                article_title TEXT NOT NULL,
+                page_id INTEGER,
+                revision_id INTEGER,
+                status TEXT NOT NULL,  -- pending, published, rejected, ignored, error
+                mode TEXT NOT NULL,
+                changes_count INTEGER,
+                summary TEXT,
+                original_content TEXT,
+                corrected_content TEXT,
+                character_count INTEGER,
+                total_links INTEGER,
+                dead_links_count INTEGER,
+                corrected_links_count INTEGER,
+                human_verified INTEGER DEFAULT 0,
+                manual_review_urls TEXT,  -- JSON array of URLs requiring manual review
+                analysis_date TIMESTAMP NOT NULL,
+                FOREIGN KEY (job_id) REFERENCES analysis_jobs(id) ON DELETE CASCADE
+            )
+        """)
+        
+        # Add manual_review_urls column if it doesn't exist (migration)
+        cursor.execute("PRAGMA table_info(analysis_results)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'manual_review_urls' not in columns:
+            cursor.execute("ALTER TABLE analysis_results ADD COLUMN manual_review_urls TEXT")
+            logger.info("Added manual_review_urls column to analysis_results table")
+        
+        # Add issues_json column if it doesn't exist (migration)
+        cursor.execute("PRAGMA table_info(analysis_results)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'issues_json' not in columns:
+            cursor.execute("ALTER TABLE analysis_results ADD COLUMN issues_json TEXT")
+            logger.info("Added issues_json column to analysis_results table")
+        
+        # User contributions table - stores cached user contributions
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_contributions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                page_id INTEGER NOT NULL,
+                revision_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                namespace INTEGER NOT NULL,
+                timestamp TIMESTAMP NOT NULL,
+                comment TEXT,
+                retrieved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(username, revision_id)
+            )
+        """)
+        
         # Create indexes for better performance
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_articles_title 
@@ -143,6 +307,78 @@ class DatabaseManager:
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_https_cache_status 
             ON https_verification_cache(status)
+        """)
+        
+        # Indexes for manual_review_decisions table
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_manual_review_status
+            ON manual_review_decisions(status)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_manual_review_article_title
+            ON manual_review_decisions(article_title)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_manual_review_url_hash
+            ON manual_review_decisions(url_hash)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_manual_review_decision_date
+            ON manual_review_decisions(decision_date)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_manual_review_article_id
+            ON manual_review_decisions(article_id)
+        """)
+
+        # Indexes for articles_to_analyze table
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_articles_to_analyze_status
+            ON articles_to_analyze(status)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_articles_to_analyze_priority
+            ON articles_to_analyze(priority)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_articles_to_analyze_added_at
+            ON articles_to_analyze(added_at)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_articles_to_analyze_source
+            ON articles_to_analyze(source)
+        """)
+        
+        # Indexes for analysis_jobs table
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_analysis_jobs_status
+            ON analysis_jobs(status)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_analysis_jobs_article_title
+            ON analysis_jobs(article_title)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_analysis_jobs_created_at
+            ON analysis_jobs(created_at)
+        """)
+        
+        # Indexes for analysis_results table
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_analysis_results_job_id
+            ON analysis_results(job_id)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_analysis_results_article_title
+            ON analysis_results(article_title)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_analysis_results_status
+            ON analysis_results(status)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_analysis_results_analysis_date
+            ON analysis_results(analysis_date)
         """)
         
         self.conn.commit()
@@ -552,11 +788,503 @@ class DatabaseManager:
         cursor.execute("DELETE FROM settings WHERE key = ?", (key,))
         self.conn.commit()
     
+    # Manual review decisions methods
+    def add_manual_review_decision(self, item_id: str, article_title: str, url: str, 
+                                   status: str, article_id: Optional[int] = None,
+                                   reviewer_id: Optional[str] = None, 
+                                   decision_reason: Optional[str] = None,
+                                   decision_date: Optional[str] = None) -> bool:
+        """Add or update a manual review decision.
+        
+        Args:
+            item_id: Unique ID for the decision (article_title_hash(url))
+            article_title: Title of the article
+            url: URL that was reviewed
+            status: Decision status (approved, rejected, pending)
+            article_id: Link to articles table if available
+            reviewer_id: ID of the reviewer (for future user tracking)
+            decision_reason: Reason for the decision (for audit trail)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        import hashlib
+        url_hash = hashlib.sha256(url.encode('utf-8')).hexdigest()[:16]
+        
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT OR REPLACE INTO manual_review_decisions 
+                (id, article_title, url, status, decision_date, reviewer_id, 
+                 decision_reason, article_id, url_hash, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (item_id, article_title, url, status, decision_date or datetime.now().isoformat(), 
+                  reviewer_id, decision_reason, article_id, url_hash, datetime.now().isoformat()))
+            self.conn.commit()
+            logger.info(f"Manual review decision saved: {item_id} -> {status}")
+            return True
+        except Exception as e:
+            logger.error(f"Error saving manual review decision: {e}")
+            self.conn.rollback()
+            return False
+    
+    def get_manual_review_decision(self, item_id: str) -> Optional[Dict[str, Any]]:
+        """Get a manual review decision by item ID.
+        
+        Args:
+            item_id: Unique ID for the decision
+            
+        Returns:
+            Decision data or None if not found
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM manual_review_decisions WHERE id = ?", (item_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    
+    def get_manual_review_decisions_by_status(self, status: str) -> List[Dict[str, Any]]:
+        """Get all manual review decisions with a specific status.
+        
+        Args:
+            status: Status to filter by (approved, rejected, pending)
+            
+        Returns:
+            List of decisions
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM manual_review_decisions 
+            WHERE status = ?
+            ORDER BY decision_date DESC
+        """, (status,))
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def get_manual_review_decisions_by_article(self, article_title: str) -> List[Dict[str, Any]]:
+        """Get all manual review decisions for a specific article.
+        
+        Args:
+            article_title: Article title
+            
+        Returns:
+            List of decisions
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM manual_review_decisions 
+            WHERE article_title = ?
+            ORDER BY decision_date DESC
+        """, (article_title,))
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def update_manual_review_decision_status(self, item_id: str, new_status: str, 
+                                          reviewer_id: Optional[str] = None,
+                                          decision_reason: Optional[str] = None) -> bool:
+        """Update the status of an existing manual review decision.
+        
+        Args:
+            item_id: Unique ID for the decision
+            new_status: New status (approved, rejected, pending)
+            reviewer_id: ID of the reviewer
+            decision_reason: Reason for the decision change
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        cursor = self.conn.cursor()
+        try:
+            if reviewer_id or decision_reason:
+                cursor.execute("""
+                    UPDATE manual_review_decisions 
+                    SET status = ?, updated_at = ?, reviewer_id = ?, decision_reason = ?
+                    WHERE id = ?
+                """, (new_status, datetime.now().isoformat(), reviewer_id, decision_reason, item_id))
+            else:
+                cursor.execute("""
+                    UPDATE manual_review_decisions 
+                    SET status = ?, updated_at = ?
+                    WHERE id = ?
+                """, (new_status, datetime.now().isoformat(), item_id))
+            self.conn.commit()
+            logger.info(f"Manual review decision updated: {item_id} -> {new_status}")
+            return True
+        except Exception as e:
+            logger.error(f"Error updating manual review decision: {e}")
+            self.conn.rollback()
+            return False
+    
+    def delete_manual_review_decision(self, item_id: str) -> bool:
+        """Delete a manual review decision.
+        
+        Args:
+            item_id: Unique ID for the decision
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("DELETE FROM manual_review_decisions WHERE id = ?", (item_id,))
+            self.conn.commit()
+            logger.info(f"Manual review decision deleted: {item_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting manual review decision: {e}")
+            self.conn.rollback()
+            return False
+    
+    def get_manual_review_statistics(self) -> Dict[str, Any]:
+        """Get statistics about manual review decisions.
+        
+        Returns:
+            Dictionary with statistics
+        """
+        cursor = self.conn.cursor()
+        
+        # Total decisions
+        cursor.execute("SELECT COUNT(*) as count FROM manual_review_decisions")
+        total_decisions = cursor.fetchone()['count']
+        
+        # Decisions by status
+        cursor.execute("""
+            SELECT status, COUNT(*) as count 
+            FROM manual_review_decisions 
+            GROUP BY status
+        """)
+        status_counts = {row['status']: row['count'] for row in cursor.fetchall()}
+        
+        # Decisions by article
+        cursor.execute("""
+            SELECT article_title, COUNT(*) as count 
+            FROM manual_review_decisions 
+            GROUP BY article_title 
+            ORDER BY count DESC 
+            LIMIT 10
+        """)
+        top_articles = {row['article_title']: row['count'] for row in cursor.fetchall()}
+        
+        return {
+            'total_decisions': total_decisions,
+            'status_counts': status_counts,
+            'top_articles': top_articles
+        }
+    
     def clear_settings(self) -> None:
         """Clear all settings."""
         cursor = self.conn.cursor()
         cursor.execute("DELETE FROM settings")
         self.conn.commit()
+    
+    # Analysis jobs methods
+    def create_analysis_job(self, job_id: str, article_title: str, mode: str, 
+                           ai_provider: Optional[str] = None, ai_character_limit: Optional[int] = None,
+                           gemini_api_key: Optional[str] = None, gemini_project_id: Optional[str] = None,
+                           status: Optional[str] = None, started_at: Optional[str] = None, 
+                           completed_at: Optional[str] = None) -> bool:
+        """Create a new analysis job in database.
+        
+        Args:
+            job_id: Unique job identifier
+            article_title: Title of the article to analyze
+            mode: Analysis mode (regex, ai)
+            ai_provider: AI provider (gemini, ollama)
+            ai_character_limit: Character limit for AI mode
+            gemini_api_key: Gemini API key
+            gemini_project_id: Gemini project ID
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO analysis_jobs 
+                (id, article_title, mode, status, progress, message, created_at, 
+                 ai_provider, ai_character_limit, gemini_api_key, gemini_project_id, started_at, completed_at)
+                VALUES (?, ?, ?, ?, 0.0, 'Job created', ?, ?, ?, ?, ?, ?, ?)
+            """, (job_id, article_title, mode, status or 'pending', datetime.now().isoformat(), 
+                  ai_provider, ai_character_limit, gemini_api_key, gemini_project_id, started_at, completed_at))
+            self.conn.commit()
+            logger.info(f"Analysis job created: {job_id} for article {article_title}")
+            return True
+        except Exception as e:
+            logger.error(f"Error creating analysis job: {e}")
+            self.conn.rollback()
+            return False
+    
+    def update_analysis_job(self, job_id: str, **kwargs) -> bool:
+        """Update analysis job status and progress.
+        
+        Args:
+            job_id: Job identifier
+            **kwargs: Fields to update (status, progress, message, started_at, completed_at, error)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        cursor = self.conn.cursor()
+        try:
+            # Build dynamic update query
+            valid_fields = ['status', 'progress', 'message', 'started_at', 'completed_at', 'error', 'results']
+            updates = []
+            values = []
+            
+            for field in valid_fields:
+                if field in kwargs and kwargs[field] is not None:
+                    updates.append(f"{field} = ?")
+                    values.append(kwargs[field])
+            
+            if not updates:
+                return True  # Nothing to update
+            
+            values.append(job_id)
+            
+            query = f"UPDATE analysis_jobs SET {', '.join(updates)} WHERE id = ?"
+            cursor.execute(query, values)
+            self.conn.commit()
+            logger.debug(f"Analysis job updated: {job_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error updating analysis job {job_id}: {e}")
+            self.conn.rollback()
+            return False
+    
+    def get_analysis_job(self, job_id: str) -> Optional[Dict[str, Any]]:
+        """Get analysis job by ID.
+        
+        Args:
+            job_id: Job identifier
+            
+        Returns:
+            Job data or None if not found
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM analysis_jobs WHERE id = ?", (job_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    
+    def get_analysis_jobs_by_status(self, status: str) -> List[Dict[str, Any]]:
+        """Get all analysis jobs with a specific status.
+        
+        Args:
+            status: Status to filter by (pending, running, completed, failed, cancelled)
+            
+        Returns:
+            List of jobs
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM analysis_jobs 
+            WHERE status = ?
+            ORDER BY created_at DESC
+        """, (status,))
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def delete_analysis_job(self, job_id: str) -> bool:
+        """Delete an analysis job.
+        
+        Args:
+            job_id: Job identifier
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("DELETE FROM analysis_jobs WHERE id = ?", (job_id,))
+            self.conn.commit()
+            logger.info(f"Analysis job deleted: {job_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting analysis job {job_id}: {e}")
+            self.conn.rollback()
+            return False
+    
+    # Analysis results methods
+    def create_analysis_result(self, result_id: str, job_id: str, article_title: str,
+                               page_id: int, revision_id: int, status: str, mode: str,
+                               changes_count: Optional[int] = None, summary: Optional[str] = None,
+                               original_content: Optional[str] = None, corrected_content: Optional[str] = None,
+                               character_count: Optional[int] = None, total_links: Optional[int] = None,
+                               dead_links_count: Optional[int] = None, corrected_links_count: Optional[int] = None,
+                               human_verified: bool = False, manual_review_urls: Optional[str] = None,
+                               issues_json: Optional[str] = None, analysis_date: Optional[str] = None) -> bool:
+        """Create or update an analysis result in database.
+        
+        Uses article_title and revision_id as unique key to prevent duplicates.
+        
+        Args:
+            result_id: Unique result identifier (ignored, kept for compatibility)
+            job_id: Associated job ID
+            article_title: Article title
+            page_id: Wikipedia page ID
+            revision_id: Wikipedia revision ID
+            status: Result status
+            mode: Analysis mode
+            changes_count: Number of changes made
+            summary: Edit summary
+            original_content: Original wikicode
+            corrected_content: Corrected wikicode
+            character_count: Character count
+            total_links: Total number of links
+            dead_links_count: Number of dead links found
+            corrected_links_count: Number of links corrected
+            human_verified: Whether human verified the result
+            manual_review_urls: JSON array of URLs requiring manual review
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        cursor = self.conn.cursor()
+        try:
+            # Use article_title + revision_id as unique key to prevent duplicates
+            cursor.execute("""
+                INSERT OR REPLACE INTO analysis_results 
+                (id, job_id, article_title, page_id, revision_id, status, mode, 
+                 changes_count, summary, original_content, corrected_content, 
+                 character_count, total_links, dead_links_count, corrected_links_count, 
+                 human_verified, manual_review_urls, issues_json, analysis_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (f"{article_title}_{revision_id}", job_id, article_title, page_id, revision_id, status, mode,
+                  changes_count, summary, original_content, corrected_content,
+                  character_count, total_links, dead_links_count, corrected_links_count,
+                  human_verified, manual_review_urls, issues_json, analysis_date or datetime.now().isoformat()))
+            self.conn.commit()
+            logger.info(f"Analysis result saved for article {article_title} (revision {revision_id})")
+            return True
+        except Exception as e:
+            logger.error(f"Error saving analysis result for {article_title}: {e}")
+            self.conn.rollback()
+            return False
+    
+    def get_analysis_result(self, result_id: str) -> Optional[Dict[str, Any]]:
+        """Get analysis result by ID.
+        
+        Args:
+            result_id: Result identifier
+            
+        Returns:
+            Result data or None if not found
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM analysis_results WHERE id = ?", (result_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    
+    def save_user_contribution(self, username: str, page_id: int, revision_id: int, 
+                              title: str, namespace: int, timestamp, comment: str = '') -> bool:
+        """Save a user contribution to the database.
+        
+        Args:
+            username: Wikipedia username
+            page_id: Page ID
+            revision_id: Revision ID
+            title: Page title
+            namespace: Namespace number
+            timestamp: Timestamp of the contribution
+            comment: Edit summary
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        cursor = self.conn.cursor()
+        try:
+            # Convert timestamp to ISO format if it's a datetime object
+            if hasattr(timestamp, 'isoformat'):
+                timestamp_str = timestamp.isoformat()
+            else:
+                timestamp_str = str(timestamp)
+            
+            cursor.execute("""
+                INSERT OR REPLACE INTO user_contributions 
+                (username, page_id, revision_id, title, namespace, timestamp, comment, retrieved_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (username, page_id, revision_id, title, namespace, timestamp_str, comment, datetime.now().isoformat()))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Error saving user contribution: {e}")
+            self.conn.rollback()
+            return False
+    
+    def get_user_contributions(self, username: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get recent contributions for a user.
+        
+        Args:
+            username: Wikipedia username
+            limit: Maximum number of contributions to return
+            
+        Returns:
+            List of contribution data
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT page_id, revision_id, title, namespace, timestamp, comment, retrieved_at
+            FROM user_contributions
+            WHERE username = ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """, (username, limit))
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+    
+    def get_analysis_results_by_article(self, article_title: str) -> List[Dict[str, Any]]:
+        """Get all analysis results for a specific article.
+        
+        Args:
+            article_title: Article title
+            
+        Returns:
+            List of results
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM analysis_results 
+            WHERE article_title = ?
+            ORDER BY analysis_date DESC
+        """, (article_title,))
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def get_analysis_results_by_status(self, status: str) -> List[Dict[str, Any]]:
+        """Get all analysis results with a specific status.
+        
+        Args:
+            status: Status to filter by (pending, published, rejected, ignored, error)
+            
+        Returns:
+            List of results
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM analysis_results 
+            WHERE status = ?
+            ORDER BY analysis_date DESC
+        """, (status,))
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def update_analysis_result_status(self, result_id: str, new_status: str) -> bool:
+        """Update the status of an analysis result.
+        
+        Args:
+            result_id: Result identifier
+            new_status: New status
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                UPDATE analysis_results 
+                SET status = ?
+                WHERE id = ?
+            """, (new_status, result_id))
+            self.conn.commit()
+            logger.info(f"Analysis result status updated: {result_id} -> {new_status}")
+            return True
+        except Exception as e:
+            logger.error(f"Error updating analysis result status {result_id}: {e}")
+            self.conn.rollback()
+            return False
     
     def close(self):
         """Close database connection."""

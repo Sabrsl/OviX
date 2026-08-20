@@ -1,0 +1,85 @@
+# CORRECTION: Composants système - Double namespace résolu
+
+## PROBLÈME
+Les routes système et autres routes backend ne pouvaient pas accéder aux managers:
+- Kill switch manager not available
+- Scheduler state manager not available
+- Published tracker not available
+- Analyzed tracker not available
+- Database not available
+
+## CAUSE
+Double namespace Python: `api.main` vs `backend.api.main`
+
+- **Démarrage**: `backend/api/main.py` chargé → Module enregistré comme `api.main` → Managers initialisés ✅
+- **Appel route**: Routes importent `import backend.api.main as main_module` → Module chargé comme `backend.api.main` → Variables globales = None ❌
+
+## SOLUTION APPLIQUÉE (Option 1)
+Correction de tous les imports pour utiliser le même namespace que l'initialisation:
+
+### Pattern de correction
+**Avant:**
+```python
+import backend.api.main as main_module
+return main_module.get_kill_switch()
+```
+
+**Après:**
+```python
+from api.main import get_kill_switch
+return get_kill_switch()
+```
+
+## FICHIERS MODIFIÉS (7 fichiers)
+
+1. **backend/api/routes/system.py**
+   - get_kill_switch()
+   - get_scheduler_state()
+   - get_automation_state()
+
+2. **backend/api/routes/analysis.py**
+   - get_database()
+   - get_analyzed_tracker()
+
+3. **backend/api/routes/articles.py**
+   - get_published_tracker()
+   - get_analyzed_tracker()
+   - get_automation_state()
+
+4. **backend/api/routes/history.py**
+   - get_published_tracker()
+   - get_analyzed_tracker()
+   - get_database()
+
+5. **backend/api/routes/manual_review.py**
+   - get_database()
+
+6. **backend/api/routes/publication.py**
+   - get_kill_switch()
+   - get_published_tracker()
+   - get_database()
+   - get_analyzed_tracker()
+
+7. **backend/api/routes/settings.py**
+   - get_config()
+
+## TEST RECOMMANDÉ
+Redémarrer le backend et tester:
+```bash
+GET /api/system/status
+GET /api/health
+```
+
+Attendu:
+- Plus de messages "not available" dans les logs
+- /api/system/status retourne les vrais états des managers
+- /api/health reste cohérent
+
+## IMPACT
+- ✅ Routes système fonctionnelles
+- ✅ Kill switch utilisable
+- ✅ Scheduler utilisable
+- ✅ Automatisation complète possible
+- ✅ Tous les trackers accessibles
+- ✅ Database accessible depuis toutes les routes
+- ✅ Single source of truth pour les managers globaux

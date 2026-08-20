@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 class SchedulerState:
     """Persistent state of the scheduler."""
     is_active: bool = True
+    is_paused: bool = False  # NEW: Track pause state separately from active
     daily_published_count: int = 0
     daily_reset_date: str = None  # ISO format date
     queue: List[Dict[str, Any]] = None  # Articles ready to publish
@@ -172,3 +173,14 @@ class StateManager:
         self._state.is_active = is_active
         self._save_state()
         logger.info(f"Scheduler set to {'ACTIVE' if is_active else 'STOPPED'}")
+
+    def set_paused(self, is_paused: bool) -> None:
+        """
+        Set scheduler paused status (separate from active status).
+        
+        Args:
+            is_paused: True to pause, False to resume.
+        """
+        self._state.is_paused = is_paused
+        self._save_state()
+        logger.info(f"Scheduler set to {'PAUSED' if is_paused else 'RESUMED'}")

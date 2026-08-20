@@ -233,8 +233,8 @@ def _apply_selected_corrections(article, issues, selected_indices):
         st.warning("Aucun problème sélectionné")
         return
 
-    # Use corrector.Corrector with offset tracking (same as automation orchestrator)
-    from wikipedia_maintenance.utils.corrector import Corrector
+    # Use publisher.Corrector (same as manual mode in app.py)
+    from wikipedia_maintenance.utils.publisher import Corrector
 
     # Get the ORIGINAL content from the article, not the corrected_content
     # This ensures we have the true original for diff display
@@ -244,10 +244,9 @@ def _apply_selected_corrections(article, issues, selected_indices):
         st.error("Contenu original non disponible")
         return
 
-    # Use corrector.Corrector with apply_corrections_with_offset_tracking
-    # This is the same method used in automation_orchestrator.py
-    corrector = Corrector(original_content, use_supervisor=False, max_validations=None)
-    corrected_content = corrector.apply_corrections_with_offset_tracking(issues, selected_indices=selected_indices)
+    # Use publisher.Corrector with apply_corrections (same as manual mode)
+    corrector = Corrector(original_content)
+    corrected_content = corrector.apply_corrections(issues, selected_indices=selected_indices)
 
     st.session_state.corrected_content[article.title] = corrected_content
     st.session_state.article_status[article.title] = "approved"
@@ -304,6 +303,16 @@ def _render_publication_section_inline(article):
 
         def render_word_diff(original: str, corrected: str) -> str:
             """Génère un diff HTML qui préserve la structure wikicode."""
+            import re
+
+            def make_urls_clickable(text):
+                """Rend les URLs copiables au clic dans le texte."""
+                url_pattern = r'https?://[^\s<>"\'\)]+'
+                def replace_url(match):
+                    url = match.group(0)
+                    return f'<span class="copyable-url" onclick="copyToClipboard(this, \'{url}\')" title="Cliquez pour copier">{url}</span>'
+                return re.sub(url_pattern, replace_url, text)
+
             orig_lines = original.split('\n')
             corr_lines = corrected.split('\n')
 
@@ -319,7 +328,9 @@ def _render_publication_section_inline(article):
                         out_lines.append(f'<span class="wm-diff-del">{html.escape(line)}</span>')
                 elif tag == "insert":
                     for line in corr_lines[j1:j2]:
-                        out_lines.append(f'<span class="wm-diff-ins">{html.escape(line)}</span>')
+                        escaped_line = html.escape(line)
+                        clickable_line = make_urls_clickable(escaped_line)
+                        out_lines.append(f'<span class="wm-diff-ins">{clickable_line}</span>')
                 elif tag == "replace":
                     for orig_line, corr_line in zip(orig_lines[i1:i2], corr_lines[j1:j2]):
                         # Simple word-level diff for replaced lines
@@ -334,10 +345,14 @@ def _render_publication_section_inline(article):
                             elif wtag == "delete":
                                 line_out.append(f'<span class="wm-diff-del">{html.escape(" ".join(orig_words[wi1:wi2]))}</span>')
                             elif wtag == "insert":
-                                line_out.append(f'<span class="wm-diff-ins">{html.escape(" ".join(corr_words[wj1:wj2]))}</span>')
+                                escaped_text = html.escape(" ".join(corr_words[wj1:wj2]))
+                                clickable_text = make_urls_clickable(escaped_text)
+                                line_out.append(f'<span class="wm-diff-ins">{clickable_text}</span>')
                             elif wtag == "replace":
                                 line_out.append(f'<span class="wm-diff-del">{html.escape(" ".join(orig_words[wi1:wi2]))}</span>')
-                                line_out.append(f'<span class="wm-diff-ins">{html.escape(" ".join(corr_words[wj1:wj2]))}</span>')
+                                escaped_text = html.escape(" ".join(corr_words[wj1:wj2]))
+                                clickable_text = make_urls_clickable(escaped_text)
+                                line_out.append(f'<span class="wm-diff-ins">{clickable_text}</span>')
                         out_lines.append(" ".join(line_out))
 
             return '<br>'.join(out_lines)
@@ -345,6 +360,14 @@ def _render_publication_section_inline(article):
         with st.container(border=True):
             diff_html = render_word_diff(original_content, corrected_content)
             st.markdown(f'<div class="diff-box">{diff_html}</div>', unsafe_allow_html=True)
+
+        # Extract and display corrected URLs for easy copying
+        import re
+        corrected_urls = re.findall(r'https?://[^\s<>"\'\)]+', corrected_content)
+        if corrected_urls:
+            with st.expander("🔗 Liens corrigés (sélectionner pour copier)", expanded=False):
+                for url in corrected_urls:
+                    st.code(url, language=None)
 
         # Option to see raw corrected wikicode
         with st.expander("📋 Voir le wikicode corrigé brut", expanded=False):

@@ -1,0 +1,46 @@
+# Environment Issues - Known Problems
+
+## UKWebArchive SSL Certificate Error
+
+### Problem
+UKWebArchive provider fails with SSL certificate verification error on Windows:
+```
+ARCHIVE_SSL_ERROR | url=https://www.webarchive.org.uk/act/wayback/search?url=... | provider=UKWebArchive | error=ssl_certificate_verification_failed
+```
+
+### Root Cause
+Missing or outdated CA (Certificate Authority) certificates on the Windows machine. The SSL/TLS handshake fails because Python's urllib cannot verify the SSL certificate chain for webarchive.org.uk.
+
+### Impact
+- UKWebArchive provider is non-functional in current environment
+- Returns ENVIRONMENT_ERROR status (correctly classified as environment problem, not provider failure)
+- Does not affect other providers
+
+### Resolution Options
+
+#### Option 1: Update CA Certificates (Recommended for Production)
+- Install latest CA certificates on Windows
+- Or update Python's certifi package: `pip install --upgrade certifi`
+- May require system-level certificate store update
+
+#### Option 2: Disable SSL Verification (NOT Recommended)
+- Add context to urllib to skip SSL verification
+- Security risk - should only be used for testing
+- Not recommended for production
+
+#### Option 3: Disable UKWebArchive Provider (Current State)
+- Provider remains in code but returns ENVIRONMENT_ERROR
+- Does not contribute to archive decisions
+- Can be re-enabled once SSL issue is resolved
+
+### Current Status
+- UKWebArchive is included in provider list
+- Returns ENVIRONMENT_ERROR on all requests
+- Correctly excluded from archive availability decisions
+- Logs clearly indicate environment error
+
+### Testing Recommendation
+Before enabling UKWebArchive in production:
+1. Test SSL certificate resolution on target environment
+2. Verify webarchive.org.uk is accessible with valid certificates
+3. Run stability tests with UKWebArchive enabled

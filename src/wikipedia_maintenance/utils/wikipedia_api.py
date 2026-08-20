@@ -58,9 +58,29 @@ class WikipediaAPIClient:
             user_agent: User-Agent string for API requests (if None, uses bot identity).
             use_throttling: Whether to apply global throttling (default: True).
         """
-        self.language = language.lower()
+        # Use provided language or fallback to config
+        if language is None or language == '':
+            try:
+                from .config import load_config
+                config = load_config()
+                self.language = config.wikipedia.lang.lower()
+            except Exception:
+                self.language = 'fr'  # Ultimate fallback
+        else:
+            self.language = language.lower()
+            
+        # Use provided timeout or fallback to config
+        if timeout is None or timeout <= 0:
+            try:
+                from .config import load_config
+                config = load_config()
+                self.timeout = config.wikipedia.timeout
+            except Exception:
+                self.timeout = 10.0  # Ultimate fallback
+        else:
+            self.timeout = timeout
+            
         self.api_url = api_url or f'https://{self.language}.wikipedia.org/w/api.php'
-        self.timeout = timeout
         
         # P2 FIX: Use bot identity system if user_agent not provided
         if user_agent is None:
@@ -529,10 +549,10 @@ _global_wikipedia_client: Optional[WikipediaAPIClient] = None
 
 
 def get_wikipedia_client(
-    language: str = 'fr',
+    language: str = None,
     api_url: Optional[str] = None,
     session=None,
-    timeout: float = 10.0,
+    timeout: float = None,
     user_agent: str = 'WikipediaMaintenanceTool/1.0',
     use_throttling: bool = True,
     force_new: bool = False
@@ -543,10 +563,10 @@ def get_wikipedia_client(
     This ensures all Wikipedia API calls go through a single, throttled client.
     
     Args:
-        language: Language code (e.g., 'fr', 'en').
+        language: Language code (e.g., 'fr', 'en'). If None, loads from config.
         api_url: Custom API URL (if None, uses standard Wikipedia API).
         session: Optional requests.Session for connection pooling.
-        timeout: Request timeout in seconds.
+        timeout: Request timeout in seconds. If None, loads from config.
         user_agent: User-Agent string for API requests.
         use_throttling: Whether to apply global throttling (default: True).
         force_new: If True, create a new instance instead of using the global one.
@@ -555,6 +575,23 @@ def get_wikipedia_client(
         Shared WikipediaAPIClient instance
     """
     global _global_wikipedia_client
+    
+    # Load config defaults if parameters not provided
+    if language is None:
+        try:
+            from .config import load_config
+            config = load_config()
+            language = config.wikipedia.lang
+        except Exception:
+            language = 'fr'
+            
+    if timeout is None:
+        try:
+            from .config import load_config
+            config = load_config()
+            timeout = config.wikipedia.timeout
+        except Exception:
+            timeout = 10.0
     
     if force_new:
         client = WikipediaAPIClient(

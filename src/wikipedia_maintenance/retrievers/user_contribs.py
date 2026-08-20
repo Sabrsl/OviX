@@ -12,10 +12,10 @@ from datetime import datetime, timedelta
 
 from .base import BaseRetriever, Article
 from ..utils.published_tracker import PublishedTracker
+from ..utils.api_throttler import get_global_throttler
 
-if TYPE_CHECKING:
-    import pywikibot
-    from pywikibot import Page, Site, User
+import pywikibot
+from pywikibot import Page, Site, User
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +47,7 @@ class UserContribsRetriever(BaseRetriever):
         self.site = site or pywikibot.Site()
         self.fetch_content = fetch_content
         self.tracker = PublishedTracker(tracker_file)
+        self.api_throttler = get_global_throttler()
 
     def set_site(self, site: 'pywikibot.Site') -> None:
         """Set the site to use for API calls."""
@@ -88,6 +89,9 @@ class UserContribsRetriever(BaseRetriever):
         articles: List[Article] = []
         seen_titles: set = set()
         count = 0
+        total_contribs = 0
+
+        logger.info(f"Starting user contributions retrieval for user: {username}, namespace: {namespace}")
 
         # Use a generator to get contributions with pagination
         for contrib in self._iter_contributions(
@@ -98,8 +102,10 @@ class UserContribsRetriever(BaseRetriever):
             only_major=only_major,
             only_minor=only_minor,
         ):
+            total_contribs += 1
             title = contrib.get('title')
             if not title or title in seen_titles:
+                logger.debug(f"Skipping contribution: title={title}, already seen or invalid")
                 continue
             seen_titles.add(title)
 
@@ -107,6 +113,8 @@ class UserContribsRetriever(BaseRetriever):
             # This ensures we can paginate through all articles even if some are filtered out
 
             try:
+                # Apply throttling before each pywikibot call
+                self.api_throttler.wait_if_needed()
                 page = Page(self.site, title)
                 if not page.exists():
                     continue
@@ -124,6 +132,7 @@ class UserContribsRetriever(BaseRetriever):
                 logger.warning(f"Error processing article {title}: {e}")
                 continue
 
+        logger.info(f"User contributions retrieval completed: {total_contribs} contributions processed, {len(articles)} articles retrieved")
         return articles
 
     def _iter_contributions(
@@ -142,23 +151,101 @@ class UserContribsRetriever(BaseRetriever):
         but applies filtering and pagination manually to respect max_articles
         and date filters.
         """
-        # Convert dates to timestamps if provided
-        start_ts = start_date.strftime("%Y%m%d%H%M%S") if start_date else None
-        end_ts = end_date.strftime("%Y%m%d%H%M%S") if end_date else None
-
+        logger.info(f"_iter_contributions called with user: {user.username}, namespace: {namespace}")
         # Use pywikibot's built-in contribution iterator
-        for contrib in user.contributions(
-            total=None,  # fetch all; we'll stop when done
-            namespace=namespace,
-            start=start_ts,
-            end=end_ts,
-        ):
-            # Filter by minor/major
-            if only_major and contrib.get('minor'):
-                continue
-            if only_minor and not contrib.get('minor'):
-                continue
-            yield contrib
+        logger.info(f"Calling user.contributions() for user: {user.username}")
+        contrib_gen = user.contributions(total=None)
+        
+        # Helper function to process a single contribution (without DB save)
+        def process_contrib(contrib):
+            page = contrib[0]
+            rev_id = contrib[1]
+            timestamp = contrib[2]
+            comment = contrib[3] if len(contrib) > 3 else ''
+            
+            # Get namespace from page
+            ns = page.namespace()
+            
+            # Filter by namespace
+            if ns != namespace:
+                return None
+            
+            # Filter by date range if provided
+            if start_date and timestamp and timestamp < start_date:
+                return None
+            if end_date and timestamp and timestamp > end_date:
+                return None
+            
+            # Convert to dict for consistency
+            contrib_dict = {
+                'pageid': page.pageid,
+                'revid': rev_id,
+                'timestamp': timestamp,
+                'ns': ns,
+                'title': page.title(),
+                'comment': comment,
+                'minor': False,  # Not available in this format
+                'tags': []
+            }
+            
+            return contrib_dict
+        
+        # Batch save to database at the end
+        contributions_to_save = []
+        def save_contributions_batch():
+            if not contributions_to_save:
+                return
+            try:
+                from ..utils.database import DatabaseManager
+                db = DatabaseManager()
+                for contrib in contributions_to_save:
+                    timestamp_str = str(contrib['timestamp']) if contrib['timestamp'] else ''
+                    title_str = str(contrib['title']) if contrib['title'] else ''
+                    page_id_int = int(contrib['pageid']) if contrib['pageid'] is not None else 0
+                    revision_id_int = int(contrib['revid']) if contrib['revid'] is not None else 0
+                    namespace_int = int(contrib['ns']) if contrib['ns'] is not None else 0
+                    comment_str = str(contrib['comment']) if contrib['comment'] else ''
+                    
+                    db.save_user_contribution(
+                        username=str(user.username),
+                        page_id=page_id_int,
+                        revision_id=revision_id_int,
+                        title=title_str,
+                        namespace=namespace_int,
+                        timestamp=timestamp_str,
+                        comment=comment_str
+                    )
+                logger.info(f"Saved {len(contributions_to_save)} contributions to database in batch")
+            except Exception as e:
+                logger.warning(f"Failed to save contributions to database: {e}")
+        
+        # Try to get first contribution to see if it works
+        try:
+            first_contrib = next(contrib_gen)
+            logger.info(f"First contribution received: {first_contrib}")
+            logger.info(f"First contribution type: {type(first_contrib)}, length: {len(first_contrib)}")
+            first_dict = process_contrib(first_contrib)
+            if first_dict:
+                contributions_to_save.append(first_dict)
+                yield first_dict
+        except StopIteration:
+            logger.warning(f"No contributions found for user: {user.username}")
+            save_contributions_batch()
+            return
+        except Exception as e:
+            logger.error(f"Error getting first contribution: {e}")
+            save_contributions_batch()
+            return
+        
+        # Continue iterating the rest
+        for contrib in contrib_gen:
+            contrib_dict = process_contrib(contrib)
+            if contrib_dict:
+                contributions_to_save.append(contrib_dict)
+                yield contrib_dict
+        
+        # Save all contributions to database in batch at the end
+        save_contributions_batch()
 
     def _create_article_from_contribution(
         self, page: 'pywikibot.Page', contrib: Dict[str, Any]
@@ -230,6 +317,8 @@ class UserContribsRetriever(BaseRetriever):
             seen_titles.add(title)
 
             try:
+                # Apply throttling before each pywikibot call
+                self.api_throttler.wait_if_needed()
                 page = Page(self.site, title)
                 if not page.exists():
                     continue

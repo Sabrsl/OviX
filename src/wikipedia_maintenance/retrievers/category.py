@@ -8,9 +8,11 @@ with built-in throttling, not bypassing our controls.
 
 import logging
 from typing import List, TYPE_CHECKING
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from .base import BaseRetriever, Article
 from ..utils.published_tracker import PublishedTracker
 from ..utils.api_cache import get_cache
+from ..utils.api_throttler import get_global_throttler
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,7 @@ class CategoryRetriever(BaseRetriever):
         self.tracker = PublishedTracker(tracker_file)
         self.use_cache = use_cache
         self.cache = get_cache() if use_cache else None
+        self.api_throttler = get_global_throttler()
     
     def retrieve(self, category_name: str, max_articles: int = 100,
                  recursive: bool = False, exclude_published: bool = True, offset: int = 0) -> List[Article]:
@@ -77,30 +80,42 @@ class CategoryRetriever(BaseRetriever):
         logger.info(f"Fetching from Wikipedia API: category={category_name}, max_articles={max_articles}, recursive={recursive}")
         category = pywikibot.Category(self.site, category_name)
         articles = []
-        
+
         logger.info(f"Starting article iteration for category: {category_name}")
-        if recursive:
-            # Get articles from subcategories recursively
-            for i, article in enumerate(category.articles(recurse=True, total=max_articles * 2 + offset)):  # Fetch more to account for filtering
-                if i < offset:  # Skip articles based on offset
-                    continue
-                if len(articles) >= max_articles:
-                    break
-                article_obj = self._create_article(article)
-                # Don't apply exclude_published filter here - let the caller handle it
-                # This ensures we can paginate through all articles even if some are filtered out
-                articles.append(article_obj)
-        else:
-            # Get articles only from this category
-            for i, article in enumerate(category.articles(total=max_articles * 2 + offset)):  # Fetch more to account for filtering
-                if i < offset:  # Skip articles based on offset
-                    continue
-                if len(articles) >= max_articles:
-                    break
-                article_obj = self._create_article(article)
-                # Don't apply exclude_published filter here - let the caller handle it
-                # This ensures we can paginate through all articles even if some are filtered out
-                articles.append(article_obj)
+
+        # Helper function to run iteration with timeout
+        def iterate_with_timeout():
+            if recursive:
+                # Get articles from subcategories recursively
+                for i, article in enumerate(category.articles(recurse=True, total=max_articles * 2 + offset)):  # Fetch more to account for filtering
+                    if i < offset:  # Skip articles based on offset
+                        continue
+                    if len(articles) >= max_articles:
+                        break
+                    article_obj = self._create_article(article)
+                    # Don't apply exclude_published filter here - let the caller handle it
+                    # This ensures we can paginate through all articles even if some are filtered out
+                    articles.append(article_obj)
+            else:
+                # Get articles only from this category
+                for i, article in enumerate(category.articles(total=max_articles * 2 + offset)):  # Fetch more to account for filtering
+                    if i < offset:  # Skip articles based on offset
+                        continue
+                    if len(articles) >= max_articles:
+                        break
+                    article_obj = self._create_article(article)
+                    # Don't apply exclude_published filter here - let the caller handle it
+                    # This ensures we can paginate through all articles even if some are filtered out
+                    articles.append(article_obj)
+
+        # Run iteration with timeout (5 minutes for large categories)
+        try:
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(iterate_with_timeout)
+                future.result(timeout=300)  # 5 minutes timeout
+        except FutureTimeoutError:
+            logger.error(f"Timeout while iterating category {category_name} after 5 minutes")
+            raise TimeoutError(f"Category iteration timed out after 5 minutes for {category_name}")
         
         logger.info(f"Article iteration completed: {len(articles)} articles retrieved")
         

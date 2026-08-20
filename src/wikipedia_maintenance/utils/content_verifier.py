@@ -14,8 +14,9 @@ from urllib.parse import urlparse
 from enum import Enum
 from dataclasses import dataclass
 
-from .api_throttler import get_global_throttler
+from .api_throttler import get_link_check_throttler
 from .archive_provider import ArchiveProvider
+from .retry_handler import RetryHandler, RetryConfig, RetryStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,7 @@ class ContentVerifier:
             timeout: Request timeout in seconds
         """
         self.timeout = timeout or self.DEFAULT_TIMEOUT
-        self.api_throttler = get_global_throttler()
+        self.api_throttler = get_link_check_throttler()
         self.archive_provider = ArchiveProvider()
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
     
@@ -239,30 +240,42 @@ class ContentVerifier:
     def _check_redirect_chain(self, original_url: str, candidate_url: str) -> bool:
         """
         Check if original URL actually redirects to candidate URL.
-        
+
         Normalizes URLs before comparison to accept legitimate variants:
         - Domain case insensitivity
         - www. prefix normalization
         - Trailing slash normalization
-        
+
         Args:
             original_url: Original URL
             candidate_url: Candidate URL
-            
+
         Returns:
             True if redirect chain proven
         """
         self.api_throttler.wait_if_needed()
-        
-        try:
+
+        # Retry configuration for transient errors
+        retry_config = RetryConfig(
+            max_attempts=2,
+            base_delay=2.0,
+            max_delay=4.0,
+            strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
+            retry_on_exceptions=(urllib.error.URLError, urllib.error.HTTPError, Exception)
+        )
+        retry_handler = RetryHandler(retry_config)
+
+        def make_redirect_request():
             request = urllib.request.Request(
                 original_url,
                 headers={'User-Agent': self.USER_AGENT},
                 method='HEAD'
             )
-            
             context = urllib.request.ssl.create_default_context()
-            response = urllib.request.urlopen(request, timeout=self.timeout, context=context)
+            return urllib.request.urlopen(request, timeout=self.timeout, context=context)
+
+        try:
+            response = retry_handler.execute_with_retry(make_redirect_request)
             
             final_url = response.url
             self.api_throttler.report_success()
@@ -328,21 +341,32 @@ class ContentVerifier:
         
         return domain_match, path_similarity
     
-    def _compare_titles(self, original_url: str, candidate_url: str, 
+    def _compare_titles(self, original_url: str, candidate_url: str,
                        reference_title: Optional[str] = None) -> Optional[bool]:
         """
         Compare page titles.
-        
+
         Args:
             original_url: Original URL
             candidate_url: Candidate URL
             reference_title: Title from Wikipedia reference
-            
+
         Returns:
             True if titles match, False if they don't, None if unable to determine
         """
         # Try to fetch titles from both URLs
         original_title = self._fetch_page_title(original_url)
+        # FIX: original_url is dead by definition in this flow — a direct
+        # fetch will almost always fail. Fall back to the archived snapshot
+        # before giving up, so title_match isn't spuriously None/False.
+        if not original_title:
+            try:
+                archive_result = self.archive_provider.check_archive(original_url)
+                if archive_result and archive_result.archive_url:
+                    original_title = self._fetch_page_title(archive_result.archive_url)
+            except Exception as e:
+                self._logger.debug(f"Archive title fallback failed for {original_url}: {e}")
+
         candidate_title = self._fetch_page_title(candidate_url)
         
         if original_title and candidate_title:

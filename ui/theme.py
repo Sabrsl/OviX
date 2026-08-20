@@ -203,6 +203,21 @@ def get_global_css() -> str:
         border: 1px solid rgba(16, 185, 129, 0.3);
     }}
 
+    .copyable-url {{
+        cursor: pointer;
+        border-bottom: 1px dashed rgba(16, 185, 129, 0.5);
+        transition: all {TRANSITIONS['fast']};
+    }}
+
+    .copyable-url:hover {{
+        background-color: rgba(16, 185, 129, 0.3);
+        border-bottom-style: solid;
+    }}
+
+    .copyable-url:active {{
+        background-color: rgba(16, 185, 129, 0.5);
+    }}
+
     /* Status dot (supports a subtle pulse via .status-dot--live) */
     .status-dot {{
         display: inline-block;

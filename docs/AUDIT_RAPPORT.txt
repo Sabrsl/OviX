@@ -1,0 +1,326 @@
+# OviX — AUDIT COMPLET DU SYSTÈME
+
+Date: 2025-01-XX
+Objectif: Diagnostic complet avant correction
+Règle: AUCUNE MODIFICATION AVANT LA FIN DE L'AUDIT
+
+================================================================================
+A. ARCHITECTURE ACTUELLE
+================================================================================
+
+Vue d'ensemble:
+  FRONTEND REACT (Dashboard, AnalysisNew, ArticleDetail, PublicationReview)
+       ↓
+  API Client (axios, timeout 300s)
+       ↓
+  BACKEND FASTAPI (Routes: auth, articles, analysis, history, system)
+       ↓
+  MOTEUR PYTHON (wikipedia_maintenance)
+       ↓
+  WIKIPÉDIA (API)
+
+================================================================================
+B. BUGS CRITIQUES
+================================================================================
+
+1. FRONTEND EN ÉTAT DE LOADING PERMANENT - CRITIQUE
+   Fichier: frontend/src/pages/Dashboard.tsx
+   Cause: systemApi.getSystemStatus() bloque tout le chargement
+   Impact: Application entièrement inutilisable
+   Comportement attendu: Dashboard devrait charger même si un service ne répond pas
+   Comportement actuel: Page reste en "Chargement..."
+
+2. TIMEOUT DE RÉCUPÉRATION D'ARTICLES - MAJEUR
+   Fichier: frontend/src/api/client.ts
+   Cause: Timeout initial 30s trop court
+   Correction appliquée: Timeout augmenté à 300s (5 min)
+
+3. DIFF NON AFFICHÉ DANS ARTICLEDETAIL - CRITIQUE
+   Fichier: frontend/src/pages/ArticleDetail.tsx
+   Cause: Pas de récupération du diff depuis le backend
+   Impact: L'utilisateur ne peut pas voir les modifications proposées
+   Solution nécessaire: Endpoint /api/diff/{job_id}/{article_title}
+
+4. FILTRES RÉCUPÉRATION - VÉRIFICATION NÉCESSAIRE - MAJEUR
+   Fichier: backend/api/routes/articles.py
+   Cause: Filtres appliqués une seule fois, pas par lots comme Streamlit
+   Impact: Résultats différents entre Streamlit et React
+   Tests nécessaires: Vérifier exclude_published et include_analyzed
+
+5. LOGS NON VISIBLES DANS TERMINAUX - MAJEUR
+   Fichier: utils/logging_config.py
+   Cause: Possible buffering stdout ou redirection Uvicorn
+   Impact: Impossible de déboguer le système
+   Vérification nécessaire: PYTHONUNBUFFERED=1, niveau DEBUG
+
+6. CONFIGURATION DISPERSÉE - MOYEN
+   Fichiers: AnalysisNew.tsx, Settings.tsx
+   Cause: Configuration IA locale, pas centralisée
+   Impact: Incohérence de configuration
+
+================================================================================
+C. WORKFLOW STREAMLIT VS REACT
+================================================================================
+
+STREAMLIT (Référence):
+  1. Récupération avec pagination automatique (lots avec consecutive_empty_batches)
+  2. Stockage dans session_state (articles, current_article_index, article_status)
+  3. Analyse article par article avec contrôle utilisateur
+  4. Diff visible nativement
+  5. Actions: Ignorer, Publier, Suivant simples
+  6. Navigation: Previous/Next buttons
+
+REACT (Actuel):
+  1. Récupération single shot sans pagination
+  2. État stocké dans job backend
+  3. Traitement batch sans granularité
+  4. Diff non visible
+  5. Actions incomplètes
+  6. Navigation via job
+
+DIFFÉRENCES CRITIQUES:
+  - Workflow: Article par article vs Batch job
+  - État: session_state centralisé vs Job backend
+  - Diff: Visible vs Non visible
+  - Pagination: Automatique avec lots vs Single API call
+  - Filtres: Après chaque lot vs Une seule fois
+  - Navigation: Native vs Via job
+
+================================================================================
+D. RÉCUPÉRATION - VÉRIFICATION FILTRES
+================================================================================
+
+STREAMLIT (app.py lignes 438-446):
+  - Filtre appliqué APRÈS CHAQUE LOT
+  - Pagination continue si filtres éliminent trop d'articles
+  - consecutive_empty_batches arrête après 3 lots vides
+
+REACT (articles.py lignes 136-146):
+  - Filtre appliqué UNE SEULE FOIS après récupération
+  - Pas de pagination automatique
+  - Si tous filtrés, retourne liste vide
+
+PROBLÈME: Si filtres éliminent 90% des articles, React retourne une petite liste
+         alors que Streamlit continue à récupérer jusqu'à atteindre max_articles
+
+================================================================================
+E. ANALYSE ARTICLE PAR ARTICLE
+================================================================================
+
+STREAMLIT:
+  - Fonction analyze_article() (lignes ~820-1000)
+  - Boucle sur articles[current_index]
+  - État persistant: articles, current_article_index, article_status, issues, corrected_content
+  - Contrôle total article par article
+
+REACT:
+  - Endpoint /api/analysis/start ou /api/analysis/batch
+  - Traitement batch sans granularité
+  - Frontend ne connaît pas l'état article par article
+  - Pas de current_article_index global
+
+PROBLÈME: Impossible de "passer" un article spécifique, impossible de reprendre
+         à un article spécifique, navigation dégradée
+
+================================================================================
+F. DIFF
+================================================================================
+
+STREAMLIT:
+  - Génération: Corrector.apply_corrections(all_issues)
+  - Affichage: Diff généré automatiquement par Streamlit
+
+REACT:
+  - Génération: Même logique côté backend
+  - Affichage: ArticleDetail affiche seulement Job ID, pas de diff
+
+PROBLÈME: Diff non récupéré/affiché
+SOLUTION: Endpoint /api/diff/{job_id}/{article_title}
+
+================================================================================
+G. IGNORER / PUBLIER / SUIVANT
+================================================================================
+
+STREAMLIT:
+  - Ignorer: article_status = "ignored", current_article_index++
+  - Publier: publisher.publish_page(), article_status = "published", current_article_index++
+  - Suivant: current_article_index++
+
+REACT:
+  - Ignorer: Pas implémenté clairement
+  - Publier: PublicationReview.tsx, statut non clair après publication
+  - Suivant: Navigation via ArticleDetail, pas de gestion d'index global
+
+PROBLÈME: Actions incomplètes
+
+================================================================================
+H. LOADING GLOBAL
+================================================================================
+
+CAUSE IDENTIFIÉE:
+  - Dashboard.tsx: systemApi.getSystemStatus()
+  - Endpoint /api/system/status bloque
+  - Dépend de kill_switch, scheduler_state, wikipedia_session
+  - Si l'un échoue, tout bloque
+
+DIAGNOSTIC:
+  - Dashboard dépend de plusieurs services
+  - Si un service ne répond pas, tout bloque
+  - Pas de fallback ou timeout individuel
+
+================================================================================
+I. CONFIGURATION
+================================================================================
+
+DISPERSION ACTUELLE:
+  AnalysisNew.tsx:
+    - aiProvider, aiCharacterLimit, geminiApiKey, geminiProjectId
+    - maxArticles, recursive, excludePublished, includeAnalyzed
+
+  Settings.tsx:
+    - Configuration système générale
+    - Pas de configuration IA visible
+
+  Backend:
+    - Config centralisée dans wikipedia_maintenance.utils.config.Config
+    - Streamlit utilise cette config
+    - React ne l'utilise pas directement
+
+PROBLÈME: Duplication, pas de synchronisation, pas de persistance React
+
+================================================================================
+J. LOGS
+================================================================================
+
+CONFIGURATION ACTUELLE (utils/logging_config.py):
+  - level: INFO
+  - handlers: StreamHandler(stdout), FileHandler, LogCapture
+
+PROBLÈME IDENTIFIÉ:
+  - Théorie: Logs devraient s'afficher dans stdout
+  - Réalité: Terminal backend semble silencieux
+
+CAUSES POSSIBLES:
+  1. Buffering stdout (Python buffer par défaut)
+  2. Uvicorn redirige stdout différemment
+  3. Processus enfants n'héritent pas handlers
+  4. Logs seulement au niveau WARNING/ERROR par défaut
+  5. Some modules n'utilisent pas logging (print statements)
+
+VÉRIFICATION NÉCESSAIRE:
+  1. Vérifier si Uvicorn capture stdout
+  2. Vérifier buffering avec PYTHONUNBUFFERED=1
+  3. Vérifier que tous les modules utilisent logging
+  4. Tester niveau DEBUG
+  5. Vérifier logs dans fichier logs/app.log
+
+================================================================================
+K. RÉGRESSIONS
+================================================================================
+
+FONCTIONNALITÉS STREAMLIT À PRÉSERVER:
+  1. Pagination automatique (lots avec consecutive_empty_batches)
+  2. État article par article (session_state avec index)
+  3. Diff visible
+  4. Filtres par lots
+  5. Configuration centralisée
+
+RISQUES:
+  - Limitation de volume (pagination)
+  - Perte de contrôle utilisateur (état)
+  - UX dégradée (diff)
+  - Résultats différents (filtres)
+  - Incohérence (configuration)
+
+================================================================================
+L. PLAN DE CORRECTION
+================================================================================
+
+CRITIQUE (Immédiat):
+  1. Fix loading global Dashboard
+     - Supprimer systemStatus ou le rendre optionnel
+     - Ajouter timeout individuel
+     - Fallback si service ne répond pas
+
+  2. Fix diff non visible
+     - Créer endpoint /api/diff/{job_id}/{article_title}
+     - Récupérer original et corrected
+     - Intégrer affichage diff dans ArticleDetail
+
+  3. Fix logs terminaux
+     - Ajouter PYTHONUNBUFFERED=1
+     - Vérifier configuration Uvicorn
+     - Tester niveau DEBUG
+     - S'assurer que tous les modules utilisent logging
+
+MAJEUR (Rapidement):
+  4. Implémenter workflow article par article
+     - Ajouter état global dans backend (job avec article_index)
+     - Endpoint pour naviguer entre articles
+     - État persistant après refresh
+
+  5. Ajouter pagination automatique
+     - Implémenter logique de lots dans API
+     - consecutive_empty_batches check
+     - Même comportement que Streamlit
+
+  6. Centraliser configuration
+     - Déplacer config IA vers Settings
+     - Sauvegarde persistante
+     - Synchronisation avec backend Config
+
+  7. Implémenter Ignorer/Publier/Suivant
+     - Endpoint pour marquer article comme ignored
+     - Endpoint pour publier avec validation
+     - Endpoint pour naviguer au suivant
+
+MOYEN (À terme):
+  8. Vérifier filtres récupération (tests unitaires, intégration)
+  9. Améliorer gestion des erreurs (messages explicites, retry, fallback)
+  10. Optimiser performance (caching, pagination, lazy loading)
+
+MINEUR (Optionnel):
+  11. Améliorer UX Dashboard (indicateurs, graphiques, notifications)
+  12. Tests automatisés (E2E, intégration, régression)
+
+================================================================================
+CONCLUSION
+================================================================================
+
+ÉTAT ACTUEL:
+  Fonctionnel:
+    - Backend API répond
+    - Récupération d'articles fonctionne (timeout corrigé)
+    - Analyse lance des jobs
+
+  Non fonctionnel:
+    - Dashboard bloqué (loading)
+    - Diff non visible
+    - Workflow article par article absent
+    - Logs non visibles
+    - Configuration dispersée
+
+PRIORITÉS:
+  1. Débloquer Dashboard (loading)
+  2. Rendre le diff visible
+  3. Corriger les logs
+  4. Implémenter workflow article par article
+  5. Centraliser configuration
+
+STRATÉGIE:
+  NE PAS RÉÉCRIRE LE MOTEUR POUR REACT
+
+  React doit s'adapter au moteur Python existant:
+    - Utiliser les mêmes retrievers
+    - Utiliser les mêmes filtres
+    - Utiliser les mêmes trackers
+    - Utiliser la même configuration
+
+  OBJECTIF:
+    React = Interface fiable au-dessus du moteur Python
+    Streamlit = Interface de référence
+    Les deux utilisent le même moteur
+
+================================================================================
+RAPPORT TERMINÉ - PRÊT POUR CORRECTION
+================================================================================

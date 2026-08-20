@@ -31,6 +31,8 @@ class SchedulerConfig:
     daily_limit: int = 100
     stop_on_empty_queue: bool = True  # Stop scheduler when queue is empty
     site: Optional[Any] = None  # Pywikibot site object
+    category: Optional[str] = None  # Wikipedia category for manual runs
+    articles_to_process: int = 10  # Number of articles to process in manual run
 
 
 class Scheduler:
@@ -44,9 +46,10 @@ class Scheduler:
     - Daily limits
     - Telegram bot integration
     - State persistence
+    - Kill Switch integration
     """
 
-    def __init__(self, config: SchedulerConfig, publisher, published_tracker: Optional[PublishedTracker] = None, analyzed_tracker: Optional[AnalyzedTracker] = None):
+    def __init__(self, config: SchedulerConfig, publisher, published_tracker: Optional[PublishedTracker] = None, analyzed_tracker: Optional[AnalyzedTracker] = None, kill_switch_manager=None, database=None):
         """
         Initialize scheduler.
 
@@ -55,11 +58,15 @@ class Scheduler:
             publisher: Publisher instance for publishing to Wikipedia.
             published_tracker: PublishedTracker instance for tracking published articles.
             analyzed_tracker: AnalyzedTracker instance for tracking analyzed articles.
+            kill_switch_manager: KillSwitchManager instance for emergency stop.
+            database: DatabaseManager instance for SQLite queue synchronization (P1-4).
         """
         self.config = config
         self.publisher = publisher
         self.published_tracker = published_tracker
         self.analyzed_tracker = analyzed_tracker
+        self.kill_switch_manager = kill_switch_manager
+        self.database = database  # P1-4: SQLite database for queue synchronization
 
         # Initialize components
         self.state_manager = StateManager(config.state_file)
@@ -68,6 +75,7 @@ class Scheduler:
 
         # Runtime state
         self._running = False
+        self._paused = False  # NEW: Track pause state
         self._task: Optional[asyncio.Task] = None
         self._active_pauses: List[PauseSchedule] = []
 
@@ -89,10 +97,12 @@ class Scheduler:
             return
 
         logger.info("Starting scheduler...")
+        self._paused = False  # Clear pause flag on fresh start
         self._running = True
 
         # Set state to active immediately
         self.state_manager.set_active(True)
+        self.state_manager.set_paused(False)  # Clear paused state on fresh start
 
         # Verify is_active was set
         state = self.state_manager.get_state()
@@ -127,6 +137,82 @@ class Scheduler:
     def is_running(self) -> bool:
         """Check if the scheduler is currently running."""
         return self._running
+
+    def is_paused(self) -> bool:
+        """Check if the scheduler is currently paused."""
+        return hasattr(self, '_paused') and self._paused
+
+    async def pause(self) -> None:
+        """Pause the scheduler temporarily (preserves state for resume)."""
+        if not self._running:
+            logger.warning("Scheduler not running, cannot pause")
+            return
+
+        if self._paused:
+            logger.warning("Scheduler already paused")
+            return
+
+        logger.info("Pausing scheduler...")
+        self._paused = True
+        
+        # Set state to paused (not inactive - preserves queue and state)
+        self.state_manager.set_paused(True)
+
+        # Cancel scheduler task temporarily
+        if self._task:
+            self._task.cancel()
+            try:
+                await asyncio.wait_for(self._task, timeout=2.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
+            except Exception as e:
+                logger.error(f"Error awaiting scheduler task during pause: {e}")
+            finally:
+                self._task = None
+
+        # Pause Telegram bot if configured
+        if self.telegram_bot:
+            try:
+                # Check if pause method exists, otherwise just stop
+                if hasattr(self.telegram_bot, 'pause'):
+                    await self.telegram_bot.pause()
+                else:
+                    await self.telegram_bot.stop()
+            except Exception as e:
+                logger.error(f"Error pausing Telegram bot: {e}")
+
+        # Keep state file as-is (preserves queue, counters, etc.)
+        logger.info("Scheduler paused (state preserved for resume)")
+
+    async def resume(self) -> None:
+        """Resume a paused scheduler."""
+        if not self._paused:
+            logger.warning("Scheduler not paused, cannot resume")
+            return
+
+        logger.info("Resuming scheduler...")
+        self._paused = False
+
+        # Set state back to active
+        self.state_manager.set_paused(False)
+        self.state_manager.set_active(True)
+
+        # Resume Telegram bot if configured
+        if self.telegram_bot:
+            try:
+                # Check if resume method exists, otherwise just start
+                if hasattr(self.telegram_bot, 'resume'):
+                    await self.telegram_bot.resume()
+                else:
+                    await self.telegram_bot.start()
+            except Exception as e:
+                logger.error(f"Error resuming Telegram bot: {e}")
+
+        # Restart scheduler loop
+        logger.info("Restarting scheduler loop...")
+        self._task = asyncio.create_task(self._scheduler_loop())
+        self._task.add_done_callback(self._on_loop_done)
+        logger.info("Scheduler resumed successfully")
 
     async def stop(self) -> None:
         """Stop the scheduler gracefully."""
@@ -231,10 +317,16 @@ class Scheduler:
 
         while self._running:
             try:
-                # P0 CRITICAL FIX: Enhanced Kill Switch check at loop start
+                # P1 CRITICAL FIX: Check Kill Switch from database (authoritative source)
+                if self.kill_switch_manager and self.kill_switch_manager.is_enabled():
+                    logger.warning("KILL SWITCH ENABLED (from database) - EXITING SCHEDULER LOOP")
+                    self.state_manager.set_active(False)  # Also update state file
+                    break
+                
+                # Also check state file for backward compatibility
                 state = self.state_manager.get_state()
                 if not state.is_active:
-                    logger.warning("KILL SWITCH ACTIVATED - EXITING SCHEDULER LOOP")
+                    logger.warning("KILL SWITCH ACTIVATED (from state file) - EXITING SCHEDULER LOOP")
                     break
                     
                 logger.info("=== Scheduler loop iteration ===")
@@ -244,11 +336,12 @@ class Scheduler:
                 # Check if queue is empty and stop if configured
                 if len(state.queue) == 0 and self.config.stop_on_empty_queue:
                     logger.info("Queue is empty and stop_on_empty_queue is enabled, stopping scheduler")
+                    self.state_manager.set_active(False)
                     self._running = False
                     break
 
-                # P0 CRITICAL FIX: Don't auto-activate if Kill Switch is off
-                if not state.is_active:
+                # P1 CRITICAL FIX: Don't auto-activate if Kill Switch is off
+                if not state.is_active or (self.kill_switch_manager and self.kill_switch_manager.is_enabled()):
                     logger.warning("KILL SWITCH ACTIVATED - Scheduler inactive, not auto-activating")
                     await asyncio.sleep(10)  # Wait before checking again
                     continue
@@ -263,8 +356,8 @@ class Scheduler:
                 logger.info(f"Working hours: {self.timing_manager.WORKING_HOUR_START}:00 - {self.timing_manager.WORKING_HOUR_END}:00")
                 logger.info(f"Within working hours: {self.timing_manager.is_within_working_hours(current_time)}")
 
-                # P0 CRITICAL FIX: Check Kill Switch before any operation
-                if not self.state_manager.get_state().is_active:
+                # P1 CRITICAL FIX: Check Kill Switch before any operation (both sources)
+                if not self.state_manager.get_state().is_active or (self.kill_switch_manager and self.kill_switch_manager.is_enabled()):
                     logger.warning("KILL SWITCH ACTIVATED - STOPPING SCHEDULER LOOP")
                     break
 
@@ -275,14 +368,14 @@ class Scheduler:
                     self.state_manager.update_state(next_publish_time=next_working.isoformat())
                     # Sleep in short intervals to allow cancellation with Kill Switch check
                     while wait_time > 0 and self._running:
-                        # P0 CRITICAL FIX: Check Kill Switch during wait
-                        if not self.state_manager.get_state().is_active:
+                        # P1 CRITICAL FIX: Check Kill Switch during wait (both sources)
+                        if not self.state_manager.get_state().is_active or (self.kill_switch_manager and self.kill_switch_manager.is_enabled()):
                             logger.warning("KILL SWITCH ACTIVATED - ABORTING WAIT")
                             break
                         sleep_time = min(wait_time, 30)  # Sleep max 30 seconds at a time
                         await asyncio.sleep(sleep_time)
                         wait_time -= sleep_time
-                    if not self.state_manager.get_state().is_active:
+                    if not self.state_manager.get_state().is_active or (self.kill_switch_manager and self.kill_switch_manager.is_enabled()):
                         break
                     continue
 
@@ -299,14 +392,14 @@ class Scheduler:
 
                     # Sleep in short intervals to allow cancellation with Kill Switch check
                     while wait_time > 0 and self._running:
-                        # P0 CRITICAL FIX: Check Kill Switch during wait
-                        if not self.state_manager.get_state().is_active:
+                        # P1 CRITICAL FIX: Check Kill Switch during wait (both sources)
+                        if not self.state_manager.get_state().is_active or (self.kill_switch_manager and self.kill_switch_manager.is_enabled()):
                             logger.warning("KILL SWITCH ACTIVATED - ABORTING WAIT")
                             break
                         sleep_time = min(wait_time, 30)  # Sleep max 30 seconds at a time
                         await asyncio.sleep(sleep_time)
                         wait_time -= sleep_time
-                    if not self.state_manager.get_state().is_active:
+                    if not self.state_manager.get_state().is_active or (self.kill_switch_manager and self.kill_switch_manager.is_enabled()):
                         break
                     continue
 
@@ -318,8 +411,8 @@ class Scheduler:
                     logger.info(f"In {active_pause.pause_type} pause, waiting {wait_time/60:.1f} minutes until {active_pause.end_time.strftime('%H:%M')}")
                     # Sleep in short intervals to allow cancellation with Kill Switch check
                     while wait_time > 0 and self._running:
-                        # P0 CRITICAL FIX: Check Kill Switch during wait
-                        if not self.state_manager.get_state().is_active:
+                        # P1 CRITICAL FIX: Check Kill Switch during wait (both sources)
+                        if not self.state_manager.get_state().is_active or (self.kill_switch_manager and self.kill_switch_manager.is_enabled()):
                             logger.warning("KILL SWITCH ACTIVATED - ABORTING WAIT")
                             break
                         sleep_time = min(wait_time, 30)  # Sleep max 30 seconds at a time
@@ -406,6 +499,7 @@ class Scheduler:
         corrected_content = article.get('corrected_content')
         summary = article.get('summary', get_random_summary())
         stored_changes_count = article.get('changes_count', 0)
+        character_count = len(corrected_content) if corrected_content else 0
 
         logger.info(f"Processing article: {title}")
         logger.info(f"Article has corrected_content: {corrected_content is not None}")
@@ -424,7 +518,8 @@ class Scheduler:
                         decision='error',
                         mode=article.get('mode', 'regex'),
                         changes_count=stored_changes_count,
-                        summary=summary
+                        summary=summary,
+                        character_count=character_count
                     )
                 except Exception as e:
                     logger.error(f"Failed to record analysis for missing content: {e}")
@@ -470,7 +565,8 @@ class Scheduler:
                     mode=article.get('mode', 'regex'),
                     changes_count=actual_changes_count,
                     summary=summary,
-                    corrected_content=corrected_content
+                    corrected_content=corrected_content,
+                    character_count=character_count
                 )
             return
 
@@ -488,7 +584,8 @@ class Scheduler:
                     mode=article.get('mode', 'regex'),
                     changes_count=0,
                     summary=summary,
-                    corrected_content=corrected_content
+                    corrected_content=corrected_content,
+                    character_count=character_count
                 )
             return
 
@@ -532,7 +629,8 @@ class Scheduler:
                     mode=article.get('mode', 'regex'),
                     changes_count=actual_changes_count,
                     summary=summary,
-                    corrected_content=corrected_content  # Preserve corrected content
+                    corrected_content=corrected_content,  # Preserve corrected content
+                    character_count=character_count
                 )
 
             logger.info(f"Successfully published: {title}")
@@ -554,7 +652,8 @@ class Scheduler:
                     decision='error',
                     mode=article.get('mode', 'regex'),
                     changes_count=actual_changes_count,
-                    summary=summary
+                    summary=summary,
+                    character_count=character_count
                 )
 
         self.state_manager.update_state(statistics=stats)
@@ -590,6 +689,9 @@ class Scheduler:
         """
         Add an article to the publication queue.
 
+        P1-4 FIX: Now synchronizes with SQLite analysis_results table as single source of truth.
+        JSON queue is kept for backward compatibility but SQLite is authoritative.
+
         Args:
             title: Article title.
             corrected_content: Corrected wikicode.
@@ -613,7 +715,41 @@ class Scheduler:
             'revision_id': revision_id,
             'added_at': datetime.now().isoformat()
         }
+        
+        # Add to JSON queue (backward compatibility)
         self.state_manager.add_to_queue(article_data)
+        
+        # P1-4 FIX: Also add to SQLite as single source of truth
+        if self.database:
+            try:
+                import uuid
+                result_id = str(uuid.uuid4())
+                cursor = self.database.conn.cursor()
+                cursor.execute("""
+                    INSERT OR REPLACE INTO analysis_results
+                    (id, job_id, article_title, page_id, revision_id, status, mode,
+                     changes_count, summary, corrected_content, character_count,
+                     analysis_date)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    result_id,
+                    f"scheduler_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                    title,
+                    page_id,
+                    revision_id,
+                    'pending',  # Status: pending publication
+                    mode,
+                    changes_count,
+                    summary,
+                    corrected_content,
+                    len(corrected_content) if corrected_content else 0,
+                    datetime.now().isoformat()
+                ))
+                self.database.conn.commit()
+                logger.info(f"Added article to SQLite queue (analysis_results): {title}")
+            except Exception as e:
+                logger.error(f"Failed to add article to SQLite queue: {e}")
+        
         logger.info(f"Added article to queue: {title}")
 
     def get_status(self) -> Dict[str, Any]:

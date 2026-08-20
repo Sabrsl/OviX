@@ -19,23 +19,8 @@ class UISettings:
     
     # Analyzer toggles
     enabled_analyzers: Dict[str, bool] = field(default_factory=lambda: {
-        "LinkAnalyzer": False,
-        "WhitespaceAnalyzer": False,
-        "TypographyAnalyzer": False,
-        "TemplateAnalyzer": False,
-        "CategoryAnalyzer": False,
-        "HTMLAnalyzer": False,
-        "ReferenceAnalyzer": False,
-        "StructureAnalyzer": False,
-        "WorksListAnalyzer": False,
-        "HttpLinksAnalyzer": False,
-        "DeadLinkAnalyzer": False,
+        "DeadLinkAnalyzer": True,
     })
-    
-    # HTTPS verification settings
-    enable_https_verification: bool = False  # Automatically linked to HttpLinksAnalyzer state
-    max_https_checks: int = 30  # Maximum HTTPS verifications per article
-    https_check_timeout: float = 60.0  # Global timeout for HTTPS checks in seconds
     
     # UI preferences
     compact_mode: bool = False
@@ -53,10 +38,6 @@ class UISettings:
         """Enable or disable a specific analyzer."""
         if analyzer_name in self.enabled_analyzers:
             self.enabled_analyzers[analyzer_name] = enabled
-            
-            # Automatically link HTTPS verification to HttpLinksAnalyzer
-            if analyzer_name == "HttpLinksAnalyzer":
-                self.enable_https_verification = enabled
         else:
             logger.warning(f"Unknown analyzer: {analyzer_name}")
     
@@ -86,54 +67,13 @@ class UISettingsManager:
     def _load_settings(self) -> UISettings:
         """Load settings from database or create defaults."""
         try:
-            # Load enabled_analyzers
-            analyzers_json = self.db.get_setting("enabled_analyzers")
-            
-            # Default analyzers (all new analyzers should be added here)
-            default_analyzers = {
-                "LinkAnalyzer": False,
-                "WhitespaceAnalyzer": False,
-                "TypographyAnalyzer": False,
-                "TemplateAnalyzer": False,
-                "CategoryAnalyzer": False,
-                "HTMLAnalyzer": False,
-                "ReferenceAnalyzer": False,
-                "StructureAnalyzer": False,
-                "WorksListAnalyzer": False,
-                "HttpLinksAnalyzer": False,
-                "DeadLinkAnalyzer": False,
+            # Dead Linker Project - Force DeadLinkAnalyzer only
+            # Ignore any old database settings
+            enabled_analyzers = {
+                "DeadLinkAnalyzer": True,
             }
-            
-            if analyzers_json:
-                enabled_analyzers = json.loads(analyzers_json)
-                
-                # Merge with defaults to add any new analyzers
-                for analyzer_name, default_value in default_analyzers.items():
-                    if analyzer_name not in enabled_analyzers:
-                        enabled_analyzers[analyzer_name] = default_value
-                        logger.info(f"Added new analyzer to settings: {analyzer_name}")
-                
-                # Check if settings match old defaults (most analyzers enabled)
-                old_defaults = {
-                    "LinkAnalyzer": True,
-                    "WhitespaceAnalyzer": False,
-                    "TypographyAnalyzer": True,
-                    "TemplateAnalyzer": True,
-                    "CategoryAnalyzer": True,
-                    "HTMLAnalyzer": True,
-                    "ReferenceAnalyzer": True,
-                    "StructureAnalyzer": True,
-                    "WorksListAnalyzer": True,
-                }
-                
-                # Force reset if settings match old defaults (without HttpLinksAnalyzer)
-                if enabled_analyzers == old_defaults:
-                    logger.info("Old settings detected, resetting to new defaults")
-                    enabled_analyzers = default_analyzers.copy()
-                    # Save the new defaults
-                    self.db.set_setting("enabled_analyzers", json.dumps(enabled_analyzers))
-            else:
-                enabled_analyzers = default_analyzers.copy()
+            logger.info("Dead Linker mode: only DeadLinkAnalyzer enabled")
+            self.db.set_setting("enabled_analyzers", json.dumps(enabled_analyzers))
             
             # Load UI preferences
             compact_mode = self.db.get_setting("compact_mode", "false") == "true"

@@ -39,7 +39,7 @@ class GeminiClient:
         """
         # Load defaults from config.yaml
         import yaml
-        default_project_id = "804175778135"
+        default_project_id = None
         default_model = "gemini-flash-lite-latest"
         default_limit = LIMITE_CARACTERES
         api_url_template = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"

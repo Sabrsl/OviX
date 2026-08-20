@@ -431,7 +431,17 @@ class Publisher:
         self.username = username
         self.password = password
         self.dry_run = dry_run
-        self.lang = lang
+        
+        # Use provided lang or fallback to config
+        if lang is None or lang == '':
+            try:
+                from .config import load_config
+                config = load_config()
+                self.lang = config.wikipedia.lang
+            except Exception:
+                self.lang = 'fr'  # Ultimate fallback
+        else:
+            self.lang = lang
         self.session = requests.Session()
         
         # Use global API throttler
@@ -895,6 +905,9 @@ class Publisher:
             csrf_token = token_data['query']['tokens']['csrftoken']
             logger.info("Got CSRF token")
             
+            # Use global throttler before posting
+            self.api_throttler.wait_if_needed()
+            
             # Make the edit
             edit_params = {
                 'action': 'edit',
@@ -907,7 +920,7 @@ class Publisher:
             }
             
             logger.info(f"Publishing to '{page_title}' with summary: {summary}")
-            edit_response = self._throttled_post(
+            edit_response = self.session.post(
                 self.api_url,
                 data=edit_params
             )
@@ -916,8 +929,9 @@ class Publisher:
             edit_data = edit_response.json()
             
             if edit_response.status_code == 200 and 'edit' in edit_data:
-                logger.info(f"Successfully published to '{page_title}'")
-                return True, f"Successfully published to '{page_title}'"
+                new_rev_id = edit_data['edit'].get('newrevid')
+                logger.info(f"Successfully published to '{page_title}' with revision ID: {new_rev_id}")
+                return True, str(new_rev_id) if new_rev_id else f"Successfully published to '{page_title}'"
             else:
                 error_msg = edit_data.get('error', {}).get('info', 'Unknown error')
                 logger.error(f"Publication failed: {error_msg}")

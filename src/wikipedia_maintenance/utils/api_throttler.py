@@ -24,28 +24,30 @@ class APIThrottler:
     and minimum delay between requests. Thread-safe for concurrent use.
     """
     
-    def __init__(self, min_delay: float = 11.0, max_requests_per_minute: int = 10):
+    def __init__(self, min_delay: float = 11.0, max_requests_per_minute: int = 10, load_from_config: bool = True):
         """
-        Initialize API throttler.
+        Initialize the API throttler.
         
         Args:
-            min_delay: Default delay between consecutive requests in seconds (will be randomized)
-            max_requests_per_minute: Maximum number of requests allowed per minute (10-15)
+            min_delay: Minimum delay between requests in seconds
+            max_requests_per_minute: Maximum requests per minute
+            load_from_config: Whether to load configuration from config.yaml (default True)
         """
         self.min_delay = min_delay
-        self.min_delay_min = 8.0
-        self.min_delay_max = 15.0
-        self.random_delay = True
         self.max_requests_per_minute = max_requests_per_minute
-        self.max_requests_per_minute_min = 10
-        self.max_requests_per_minute_max = 15
+        self.min_delay_min = 0.0
+        self.min_delay_max = 60.0
+        self.max_requests_per_minute_min = 1
+        self.max_requests_per_minute_max = 60
+        self.random_delay = False
+        self.consecutive_429s = 0
+        
         self.last_request_time = 0.0
         self.request_timestamps = []
         self.lock = threading.Lock()
-        self.consecutive_429s = 0  # Track backoff state for exponential backoff
         
-        # Load configuration from config.yaml if available
-        self._load_config()
+        if load_from_config:
+            self._load_config()
     
     def _load_config(self) -> None:
         """Load throttling settings from config.yaml."""
@@ -76,6 +78,8 @@ class APIThrottler:
     
     def wait_if_needed(self) -> None:
         """Wait if necessary to respect rate limits."""
+        wait_time = 0.0
+        
         with self.lock:
             current_time = time.time()
             
@@ -89,14 +93,13 @@ class APIThrottler:
             # Ensure max_requests_per_minute is within configured range
             effective_max_requests = max(self.max_requests_per_minute_min, 
                                        min(self.max_requests_per_minute, self.max_requests_per_minute_max))
+            rate_wait = 0.0
             if len(self.request_timestamps) >= effective_max_requests:
                 # Wait until the oldest request is more than 1 minute old
                 oldest_timestamp = min(self.request_timestamps)
-                wait_time = 60.0 - (current_time - oldest_timestamp)
-                if wait_time > 0:
-                    logger.info(f"Rate limit reached ({effective_max_requests}/min), waiting {wait_time:.2f}s")
-                    time.sleep(wait_time)
-                    current_time = time.time()
+                rate_wait = max(0.0, 60.0 - (current_time - oldest_timestamp))
+                if rate_wait > 0:
+                    logger.info(f"Rate limit reached ({effective_max_requests}/min), waiting {rate_wait:.2f}s")
             
             # Base minimum delay (random if configured)
             if self.random_delay:
@@ -111,16 +114,19 @@ class APIThrottler:
                 logger.debug(f"Applying exponential backoff: {effective_delay:.2f}s (consecutive_429s={self.consecutive_429s})")
             
             # Check minimum delay between requests
-            time_since_last_request = current_time - self.last_request_time
-            if time_since_last_request < effective_delay:
-                wait_time = effective_delay - time_since_last_request
-                if wait_time > 0:
-                    time.sleep(wait_time)
-                    current_time = time.time()
+            delay_wait = max(0.0, effective_delay - (current_time - self.last_request_time))
             
-            # Record this request
+            # Take the maximum wait time between rate limit and delay
+            wait_time = max(rate_wait, delay_wait)
+            
+            # Record the timestamp immediately (based on current time, not projected future)
+            # This allows other threads to see the slot is taken without creating artificial cascade
             self.last_request_time = current_time
             self.request_timestamps.append(current_time)
+        
+        # Sleep OUTSIDE the lock to allow other threads to proceed with their own wait calculations
+        if wait_time > 0:
+            time.sleep(wait_time)
     
     def report_429(self) -> None:
         """
@@ -191,3 +197,31 @@ def reset_global_throttler() -> None:
     """Reset the global throttler instance (useful for testing)."""
     global _global_throttler
     _global_throttler = None
+
+
+# Separate throttler for external link checks (more aggressive limits for parallelism)
+_link_check_throttler: Optional[APIThrottler] = None
+
+
+def get_link_check_throttler() -> APIThrottler:
+    """
+    Get or create the throttler for external link checks.
+    
+    This throttler uses more aggressive limits suitable for parallel
+    link checking operations (higher rate limit, lower delay).
+    
+    Returns:
+        Shared APIThrottler instance for link checks
+    """
+    global _link_check_throttler
+    if _link_check_throttler is None:
+        # More aggressive limits: 30 req/min instead of 10, 2s delay instead of 11s
+        # load_from_config=False to avoid being overridden by config.yaml global settings
+        _link_check_throttler = APIThrottler(min_delay=2.0, max_requests_per_minute=30, load_from_config=False)
+    return _link_check_throttler
+
+
+def reset_link_check_throttler() -> None:
+    """Reset the link check throttler instance (useful for testing)."""
+    global _link_check_throttler
+    _link_check_throttler = None

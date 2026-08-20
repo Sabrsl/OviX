@@ -1,0 +1,175 @@
+# RAPPORT DE VALIDATION AVANT MIGRATION
+# OviX - pending → awaiting_decision
+
+## 1. MIGRATION SÛRE ?
+
+```
+🟠 DO NOT MIGRATE YET
+```
+
+## 2. NOMBRE DE LIGNES CONCERNÉES
+
+```
+174 lignes analysis_results.status='pending' à migrer
+Pourcentage du total: 32.04% (174/543)
+Doublons détectés: 0
+Risques estimé: FAIBLE (volume de données)
+```
+
+## 3. RISQUES IDENTIFIÉS
+
+### CRITIQUES (doivent être corrigés avant migration)
+1. **ArticleStatusCard.tsx:33** - Polling condition inclut 'pending'
+   - Actuel: `if (status?.status === 'analyzing' || status?.status === 'pending')`
+   - Après migration: awaiting_decision ne doit PAS déclencher le polling
+   - Correction: `if (status?.status === 'analyzing')` (seuls les jobs en cours doivent poller)
+
+2. **backend/api/routes/analysis.py:452** - Création analysis_results avec status='pending'
+   - Actuel: `status="pending"` dans INSERT analysis_results
+   - Correction: `status="awaiting_decision"`
+
+3. **backend/stats/repository.py:85** - Compteur 'pending'
+   - Actuel: `for status in ['published', 'pending', 'rejected', 'ignored', 'error']`
+   - Correction: `for status in ['published', 'awaiting_decision', 'rejected', 'ignored', 'error']`
+
+### MOYENS (doivent être corrigés avant migration)
+4. **backend/api/routes/history.py** - Filtre 'pending' dans analyzed history
+   - Actuel: `WHERE status = 'pending'` (si présent)
+   - Correction: `WHERE status = 'awaiting_decision'`
+
+5. **frontend/src/api/types.ts:116** - Type ArticleHistoryItem.status
+   - Actuel: `'pending' | 'analyzing' | 'analyzed' | 'published' | 'rejected' | 'ignored' | 'error'`
+   - Correction: Ajouter `'awaiting_decision'`
+
+6. **frontend/src/components/ArticleHistory.tsx:52** - validStatuses
+   - Actuel: `['published', 'pending', 'rejected', 'ignored', 'error', 'analyzing', 'analyzed']`
+   - Correction: Ajouter `'awaiting_decision'`
+
+7. **frontend/src/components/ArticleStatusCard.tsx** - getStatusIcon, getStatusColor, getStatusText
+   - Actuel: Cas pour 'pending' uniquement
+   - Correction: Ajouter cas pour 'awaiting_decision' avec libellé "En attente de décision"
+
+8. **frontend/src/pages/AnalyzedHistory.tsx** - STATUS_META (si présent)
+   - Actuel: `pending: { label: 'En attente', color: '#f59e0b' }`
+   - Correction: Ajouter `awaiting_decision: { label: 'En attente de décision', color: '#f59e0b' }`
+
+### FAIBLES (peuvent être corrigés après migration)
+9. **Libellés UI** - Doivent afficher "En attente de décision" au lieu de "En attente"
+10. **Fallback trackers** - AnalyzedTracker et PublishedTracker doivent être vérifiés pour awaiting_decision
+
+## 4. FICHIERS BACKEND À MODIFIER
+
+1. `backend/api/routes/analysis.py` (ligne 452)
+   - Changer `status="pending"` → `status="awaiting_decision"`
+
+2. `backend/api/routes/history.py` (ligne 260 si présent)
+   - Changer `WHERE status = 'pending'` → `WHERE status = 'awaiting_decision'`
+
+3. `backend/stats/repository.py` (ligne 85)
+   - Changer `'pending'` → `'awaiting_decision'` dans la boucle
+
+## 5. FICHIERS FRONTEND À MODIFIER
+
+1. `frontend/src/api/types.ts` (ligne 116)
+   - Ajouter `'awaiting_decision'` au type ArticleHistoryItem.status
+
+2. `frontend/src/components/ArticleHistory.tsx` (ligne 52)
+   - Ajouter `'awaiting_decision'` à validStatuses
+   - Ajouter cas dans getStatusIcon, getStatusColor, getStatusText
+
+3. `frontend/src/components/ArticleStatusCard.tsx` (ligne 33)
+   - Changer condition polling: retirer `|| status?.status === 'pending'`
+   - Ajouter cas pour 'awaiting_decision' dans getStatusIcon, getStatusColor, getStatusText
+
+4. `frontend/src/pages/AnalyzedHistory.tsx`
+   - Ajouter STATUS_META['awaiting_decision']
+
+## 6. ENDPOINTS CONCERNÉS
+
+- `GET /api/articles/results` (filtre status)
+- `GET /api/articles/{title}/result`
+- `GET /api/articles/{title}/status`
+- `GET /api/articles/history`
+- `GET /api/history/analyzed`
+- `GET /api/history/published`
+- `GET /api/manual-review`
+- `GET /api/stats/v2/articles`
+
+## 7. STATUTS ENCORE 'pending' APRÈS MIGRATION
+
+```
+articles_to_analyze → pending = 81 (inchangé)
+analysis_jobs → pending = 0 (inchangé)
+analysis_results → pending = 0 (devra être 0 après migration)
+manual_review_decisions → pending = 0 (inchangé)
+publication_jobs → (table non existente)
+```
+
+## 8. POLLING
+
+**Actuel**:
+- ArticleStatusCard.tsx:33 poll si `status === 'analyzing' || status === 'pending'`
+
+**Après migration**:
+- Doit poller uniquement si `status === 'analyzing'` (jobs en cours)
+- NE DOIT PAS poller pour `awaiting_decision` (analyse terminée)
+
+**Risque**: Si la condition n'est pas corrigée, awaiting_decision déclenchera un polling inutile
+
+## 9. LEGACY
+
+**Usages restants**:
+- `PublishedTracker` → backend/api/main.py, api/routes/analysis.py, api/routes/articles.py
+- `AnalyzedTracker` → backend/api/main.py, api/routes/analysis.py, api/routes/articles.py
+
+**Type**: FALLBACK (si SQLite indisponible)
+
+**Action**: NE PAS supprimer, mais vérifier qu'ils gèrent awaiting_decision
+
+## 10. VERDICT
+
+```
+🟠 DO NOT MIGRATE YET
+```
+
+**Raisons**:
+1. Le polling condition dans ArticleStatusCard.tsx doit être corrigé AVANT migration
+2. Les fichiers backend doivent être modifiés AVANT migration
+3. Les fichiers frontend doivent être modifiés AVANT migration
+4. Les tests critiques doivent être exécutés APRÈS migration
+
+**Ordre recommandé**:
+1. Modifier les fichiers backend (3 fichiers)
+2. Modifier les fichiers frontend (4 fichiers)
+3. Exécuter la migration SQL
+4. Exécuter les tests critiques (TEST C, D, N, O)
+5. Si tests OK → migration validée
+6. Si tests KO → rollback
+
+**Critère de validation**:
+- ✅ Tous les fichiers modifiés
+- ✅ Migration SQL exécutée
+- ✅ TEST C: Analysis Job → Completed (vérifie awaiting_decision)
+- ✅ TEST D: Analysis Result → awaiting_decision (vérifie affichage)
+- ✅ TEST N: Polling condition (vérifie pas de polling pour awaiting_decision)
+- ✅ TEST O: Statistics (vérifie compteur awaiting_decision)
+
+Seulement après ces validations:
+```
+🟢 SAFE TO MIGRATE
+```
+
+## 11. DOCUMENTATION CRÉÉE
+
+1. `check_migration_impact.py` - Script READ-ONLY pour mesurer l'impact
+2. `workflow_transitions_analysis.py` - Analyse du workflow complet
+3. `checklist_tests_non_regression.txt` - Checklist de tests
+4. `VALIDATION_AVANT_MIGRATION_RAPPORT.txt` - Ce rapport
+
+## 12. RÉSUMÉ
+
+**Impact de la migration**: 174 lignes à migrer (32% du total)
+**Risque de données**: FAIBLE (pas de doublons, volume modéré)
+**Risque de code**: MOYEN (7 fichiers à modifier, 1 risque critique)
+
+**Recommandation**: Corriger les fichiers backend et frontend AVANT d'exécuter la migration SQL.

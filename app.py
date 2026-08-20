@@ -38,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).parent / 'src'))
 
 # Import categories config and published tracker
 sys.path.insert(0, str(Path(__file__).parent))
-from categories_config import get_predefined_categories
+from config.categories_config import get_predefined_categories
 
 # Now import wikipedia_maintenance modules
 from wikipedia_maintenance.utils.published_tracker import PublishedTracker
@@ -48,10 +48,7 @@ from wikipedia_maintenance.retrievers import (
     PetScanRetriever, FileRetriever, Article
 )
 from wikipedia_maintenance.analyzers import (
-    LinkAnalyzer, WhitespaceAnalyzer, TypographyAnalyzer,
-    TemplateAnalyzer, CategoryAnalyzer, HTMLAnalyzer,
-    ReferenceAnalyzer, StructureAnalyzer, WorksListAnalyzer,
-    HttpLinksAnalyzer, DeadLinkAnalyzer
+    DeadLinkAnalyzer
 )
 from wikipedia_maintenance.utils import DatabaseManager
 from wikipedia_maintenance.utils.ui_settings import get_settings_manager
@@ -68,8 +65,8 @@ _automation_orchestrator_instance = None
 
 # Page configuration
 st.set_page_config(
-    page_title="Wikipedia Maintenance Tool",
-    page_icon="📝",
+    page_title="OviX - Wikipedia Dead Link Repair",
+    page_icon="�",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -121,7 +118,7 @@ if 'ai_provider' not in st.session_state:
 if 'gemini_api_key' not in st.session_state:
     st.session_state.gemini_api_key = os.environ.get('GEMINI_API_KEY', "")
 if 'gemini_project_id' not in st.session_state:
-    st.session_state.gemini_project_id = os.environ.get('GEMINI_PROJECT_ID', "804175778135")
+    st.session_state.gemini_project_id = os.environ.get('GEMINI_PROJECT_ID', "")
 if 'automation_scheduler' not in st.session_state:
     st.session_state.automation_scheduler = None
 if 'automation_running' not in st.session_state:
@@ -292,19 +289,27 @@ def connect_to_wikipedia(lang: str, family: str):
         # Override the API request method to use our throttler
         from wikipedia_maintenance.utils.api_throttler import get_global_throttler
         api_throttler = get_global_throttler()
-        original_request = site._simple_request
-        def throttled_request(**kwargs):
-            api_throttler.wait_if_needed()
-            try:
-                result = original_request(**kwargs)
-                api_throttler.report_success()
-                return result
-            except Exception as e:
-                if '429' in str(e) or 'Too Many Requests' in str(e):
-                    api_throttler.report_429()
-                raise
         
-        site._simple_request = throttled_request
+        # Use the correct API method for current pywikibot versions
+        try:
+            original_request = site._simple_request
+            def throttled_request(**kwargs):
+                api_throttler.wait_if_needed()
+                try:
+                    result = original_request(**kwargs)
+                    api_throttler.report_success()
+                    return result
+                except Exception as e:
+                    if '429' in str(e) or 'Too Many Requests' in str(e):
+                        api_throttler.report_429()
+                    raise
+            
+            site._simple_request = throttled_request
+        except AttributeError:
+            # For newer pywikibot versions, we can't override internal methods
+            # Use the site's built-in rate limiting instead
+            logger.info("Using pywikibot built-in rate limiting")
+            pass
 
         # Get credentials from session state if provided
         username = st.session_state.get('wp_username', None)
@@ -819,7 +824,8 @@ def analyze_article_with_lia(article: Article, silent: bool = False):
                 mode='IA',
                 changes_count=1,
                 summary=summary,
-                corrected_content=article_corrige
+                corrected_content=article_corrige,
+                character_count=len(content) if content else 0
             )
             logger.info(f"Article '{article.title}' (LIA) recorded in analyzed tracker")
     except Exception as e:
@@ -882,51 +888,14 @@ def analyze_article(article: Article, silent: bool = False):
 
     # Map analyzer names to their classes
     analyzer_classes = {
-        "LinkAnalyzer": LinkAnalyzer,
-        "WhitespaceAnalyzer": WhitespaceAnalyzer,
-        "TypographyAnalyzer": TypographyAnalyzer,
-        "TemplateAnalyzer": TemplateAnalyzer,
-        "CategoryAnalyzer": CategoryAnalyzer,
-        "HTMLAnalyzer": HTMLAnalyzer,
-        "ReferenceAnalyzer": ReferenceAnalyzer,
-        "StructureAnalyzer": StructureAnalyzer,
-        "WorksListAnalyzer": WorksListAnalyzer,
-        "HttpLinksAnalyzer": HttpLinksAnalyzer,
         "DeadLinkAnalyzer": DeadLinkAnalyzer
     }
-
-    # Instantiate only enabled analyzers
+    
+    # Initialize analyzers
     analyzers = []
-    
-    # Initialize HTTPS verification service if HttpLinksAnalyzer is enabled
-    https_service = None
-    if "HttpLinksAnalyzer" in enabled_analyzer_names:
-        # Always enable HTTPS verification when HttpLinksAnalyzer is active
-        from wikipedia_maintenance.utils.database import DatabaseManager
-        from wikipedia_maintenance.utils.https_verification_cache import HttpsVerificationCache
-        from wikipedia_maintenance.utils.https_verification_service import HttpsVerificationService
-        
-        db_manager = DatabaseManager()
-        cache = HttpsVerificationCache(db_manager)
-        https_service = HttpsVerificationService(
-            cache,
-            timeout=settings.https_check_timeout
-        )
-    
     for analyzer_name in enabled_analyzer_names:
         if analyzer_name in analyzer_classes:
-            if analyzer_name == "HttpLinksAnalyzer":
-                # Always enable HTTPS verification when HttpLinksAnalyzer is active
-                analyzers.append(analyzer_classes[analyzer_name](
-                    enable_https_verification=True,  # Force enable
-                    https_verification_service=https_service,
-                    max_https_checks=settings.max_https_checks,
-                    https_check_timeout=settings.https_check_timeout
-                ))
-            elif analyzer_name in ["LinkAnalyzer", "WhitespaceAnalyzer", "ReferenceAnalyzer", "StructureAnalyzer", "WorksListAnalyzer"]:
-                analyzers.append(analyzer_classes[analyzer_name](language=language))
-            else:
-                analyzers.append(analyzer_classes[analyzer_name]())
+            analyzers.append(analyzer_classes[analyzer_name]())
 
     logger.info(f"Analyseurs instanciés: {[a.__class__.__name__ for a in analyzers]}")
 
@@ -934,6 +903,7 @@ def analyze_article(article: Article, silent: bool = False):
     analyzer_failed = False
     failed_analyzer_name = None
     
+    # Execute analyzers on original content
     for analyzer in analyzers:
         try:
             logger.info(f"Exécution de {analyzer.__class__.__name__}")
@@ -980,11 +950,11 @@ def analyze_article(article: Article, silent: bool = False):
     # If no corrections were actually applied, still use the corrected content
     # (Corrector might return unchanged content if no valid corrections)
     if not corrected or corrected == content:
-        logger.warning("No corrections applied, using content with issues shown")
+        logger.warning("No corrections applied, using original content with issues shown")
         corrected = content
     
     # Log the difference for debugging
-    logger.info(f"Original length: {len(content)}, Corrected length: {len(corrected)}, Changed: {content != corrected}")
+    logger.info(f"Original length: {len(content)}, Final length: {len(corrected)}, Changed: {content != corrected}")
     
     # Store the corrected content
     st.session_state.corrected_content[article.title] = corrected
@@ -1001,9 +971,9 @@ def analyze_article(article: Article, silent: bool = False):
         if tracker and not analyzer_failed:  # Only record if no analyzer failed
             # Generate summary - only count issues with suggested corrections
             correction_types = [issue.issue_type for issue in all_issues if issue.suggested_text is not None]
-            http_count = correction_types.count("http_link")
-            typo_count = len([t for t in correction_types if t != "http_link"])
-            logger.info(f"Résumé: http_link={http_count}, typo={typo_count}, total={len(correction_types)}")
+            from collections import Counter
+            type_counts = Counter(correction_types)
+            logger.info(f"Résumé: {dict(type_counts)}, total={len(correction_types)}")
             summary = "Correction typographique" if st.session_state.publisher else "Corrections typographiques"
             if st.session_state.publisher:
                 summary = st.session_state.publisher.generate_edit_summary(len(correction_types), correction_types)
@@ -1016,7 +986,8 @@ def analyze_article(article: Article, silent: bool = False):
                 mode='regex',
                 changes_count=len(all_issues),
                 summary=summary,
-                corrected_content=corrected
+                corrected_content=corrected,
+                character_count=len(content) if content else 0
             )
             logger.info(f"Article '{article.title}' recorded in analyzed tracker")
         elif analyzer_failed:
@@ -1294,7 +1265,11 @@ def _render_ai_analysis_history():
             return
         
         # Create dataframe for display
-        import pandas as pd
+        try:
+            import pandas as pd
+        except ImportError:
+            st.error("❌ pandas n'est pas installé. Installez-le avec: pip install pandas")
+            return
         
         data = []
         for record in filtered_records:
@@ -1439,7 +1414,11 @@ def _render_dashboard_statistics():
             with st.expander("📋 Historique des rapports", expanded=False):
                 reports = report_gen.get_all_reports()
                 if reports:
-                    import pandas as pd
+                    try:
+                        import pandas as pd
+                    except ImportError:
+                        st.error("❌ pandas n'est pas installé. Installez-le avec: pip install pandas")
+                        return
                     report_data = []
                     for report in reports[:10]:  # Show last 10 reports
                         from datetime import datetime
@@ -1489,9 +1468,13 @@ def _render_dashboard_statistics():
         status_data = {k: v for k, v in status_data.items() if v > 0}
         
         if status_data:
-            import pandas as pd
-            df_status = pd.DataFrame(list(status_data.items()), columns=["Statut", "Nombre"])
-            st.bar_chart(df_status.set_index("Statut"))
+            try:
+                import pandas as pd
+                df_status = pd.DataFrame(list(status_data.items()), columns=["Statut", "Nombre"])
+                st.bar_chart(df_status.set_index("Statut"))
+            except ImportError:
+                st.error("❌ pandas n'est pas installé. Installez-le avec: pip install pandas")
+                return
         else:
             st.info("Aucune donnée disponible.")
     
@@ -1582,6 +1565,10 @@ def main():
     # Initialize analyzed tracker in session state (using cached version)
     if 'analyzed_tracker' not in st.session_state or st.session_state.analyzed_tracker is None:
         st.session_state.analyzed_tracker = get_cached_analyzed_tracker()
+
+    # Initialize site in session state
+    if 'site' not in st.session_state:
+        st.session_state.site = None
 
     # Sidebar
     from ui.sidebar import render_sidebar

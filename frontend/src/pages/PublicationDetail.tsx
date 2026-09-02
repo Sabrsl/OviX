@@ -460,7 +460,7 @@ export default function PublicationDetail() {
             <div>
               <div style={{ fontSize: '12px', color: '#666666', marginBottom: '4px' }}>Modifications</div>
               <div style={{ fontSize: '14px', color: '#e0e0e0' }}>
-                {article.changes_count ?? 'N/A'}
+                {article.corrected_links_count ?? 'N/A'}
               </div>
             </div>
           </div>

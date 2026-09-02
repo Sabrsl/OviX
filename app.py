@@ -13,7 +13,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv()
+env_path = Path(__file__).parent / '.env'
+if env_path.exists():
+    load_dotenv(env_path)
+else:
+    load_dotenv()  # Try default location
 
 # Configure PYWIKIBOT_DIR BEFORE importing pywikibot
 project_root = Path(__file__).parent

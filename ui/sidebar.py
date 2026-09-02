@@ -934,7 +934,8 @@ def _render_settings_section():
         st.caption("Activez ou désactivez les analyseurs de problèmes")
 
         analyzer_descriptions = {
-            "DeadLinkAnalyzer": "Liens morts et brisés (détection et réparation)"
+            "DeadLinkAnalyzer": "Liens morts et brisés (détection et réparation)",
+            "ReferenceEnricherAnalyzer": "Enrichissement des références (ajout paramètres manquants)"
         }
 
         enabled_count = sum(

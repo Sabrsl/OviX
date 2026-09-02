@@ -55,6 +55,13 @@ apiClient.interceptors.response.use(
       window.dispatchEvent(new CustomEvent('auth:expired'))
     }
 
+    // Kill switch error detection - dispatch event for UI notification
+    if (message && (message.includes('kill switch') || message.includes('STOP command') || message.includes('système de sécurité'))) {
+      window.dispatchEvent(new CustomEvent('kill-switch:error', {
+        detail: { message: 'Publication bloquée par le système de sécurité (Kill Switch ou STOP sur page de discussion)' }
+      }))
+    }
+
     return Promise.reject({
       ...error,
       message,

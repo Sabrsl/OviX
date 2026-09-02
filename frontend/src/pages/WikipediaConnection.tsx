@@ -2,6 +2,12 @@ import { useState, useEffect, useCallback, type CSSProperties, type FormEvent } 
 import { Globe, Lock, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
 import { authApi } from '../api/auth.api'
 
+const logger = {
+  info: (msg: string, ...args: any[]) => console.log('[WikipediaConnection]', msg, ...args),
+  warn: (msg: string, ...args: any[]) => console.warn('[WikipediaConnection]', msg, ...args),
+  error: (msg: string, ...args: any[]) => console.error('[WikipediaConnection]', msg, ...args),
+}
+
 interface AuthStatus {
   authenticated: boolean
   username?: string
@@ -258,6 +264,36 @@ export default function WikipediaConnection() {
     window.addEventListener('auth:success', handleAuthSuccess)
     return () => window.removeEventListener('auth:success', handleAuthSuccess)
   }, [fetchStatus])
+
+  // Vérification périodique de la validité de la session (toutes les 2 heures)
+  // pour détecter les déconnexions réelles (ex: token expiré côté Wikipedia)
+  useEffect(() => {
+    const validateSession = async () => {
+      if (!authStatus?.authenticated) return // Ne valider que si on pense être connecté
+      
+      try {
+        const validation = await authApi.validateSession()
+        if (!validation.valid || !validation.authenticated) {
+          // La session n'est plus valide, mettre à jour le statut
+          logger.info('Session validation failed, updating auth status')
+          await fetchStatus()
+        }
+      } catch (err) {
+        logger.warn('Session validation check failed', err)
+      }
+    }
+
+    // Première validation après 10 minutes
+    const initialTimeout = setTimeout(validateSession, 600000)
+    
+    // Ensuite toutes les 2 heures
+    const interval = setInterval(validateSession, 7200000)
+
+    return () => {
+      clearTimeout(initialTimeout)
+      clearInterval(interval)
+    }
+  }, [authStatus?.authenticated, fetchStatus])
 
   const persistCredentials = (shouldRemember: boolean) => {
     try {

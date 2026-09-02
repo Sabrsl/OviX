@@ -100,6 +100,7 @@ export default function Settings() {
     { id: 'safety', label: 'Sécurité' },
     { id: 'logging', label: 'Logs' },
     { id: 'references', label: 'Références' },
+    { id: 'reference_enricher', label: 'Enrichissement' },
     { id: 'https_verification', label: 'HTTPS' },
     { id: 'timeouts', label: 'Timeouts' },
   ]
@@ -293,9 +294,28 @@ export default function Settings() {
             config={config}
             onChange={handleValueChange}
             fields={[
+              { key: 'enable_dead_link_analyzer', label: 'Analyseur de liens morts', type: 'boolean' },
               { key: 'min_severity', label: 'Sévérité minimum', type: 'select', options: ['all', 'low', 'medium', 'high', 'critical'] },
               { key: 'parallel', label: 'Analyse parallèle', type: 'boolean' },
               { key: 'analyzer_timeout', label: 'Timeout analyseur (s)', type: 'number' },
+              { key: 'enable_case_normalization', label: 'Normalisation des majuscules', type: 'boolean' },
+              { key: 'normalize_with_ai', label: 'Utiliser LIA pour la normalisation', type: 'boolean', dependsOn: 'enable_case_normalization' },
+            ]}
+          />
+        )}
+
+        {activeTab === 'reference_enricher' && (
+          <ConfigSection
+            section="reference_enricher_analyzer"
+            config={config}
+            onChange={handleValueChange}
+            fields={[
+              { key: 'enabled', label: 'Activer l\'enrichisseur de références', type: 'boolean' },
+              { key: 'timeout', label: 'Timeout vérification (s)', type: 'number' },
+              { key: 'max_retries', label: 'Tentatives max', type: 'number' },
+              { key: 'max_checks_per_article', label: 'Max vérifications par article', type: 'number' },
+              { key: 'enable_site_fill', label: 'Remplir paramètre |site=', type: 'boolean' },
+              { key: 'enable_consulte_le_fill', label: 'Remplir paramètre |consulté le=', type: 'boolean' },
             ]}
           />
         )}
@@ -392,6 +412,7 @@ interface ConfigSectionProps {
     label: string
     type: 'text' | 'number' | 'boolean' | 'select'
     options?: string[]
+    dependsOn?: string
   }>
 }
 
@@ -400,53 +421,63 @@ function ConfigSection({ section, config, onChange, fields }: ConfigSectionProps
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {fields.map(field => (
-        <div key={field.key} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <label style={{ fontSize: '14px', fontWeight: 500, color: '#e0e0e0' }}>
-            {field.label}
-          </label>
-          {field.type === 'boolean' ? (
-            <input
-              type="checkbox"
-              checked={sectionConfig[field.key] || false}
-              onChange={(e) => onChange(section, field.key, e.target.checked)}
-              style={{ width: '20px', height: '20px', cursor: 'pointer' }}
-            />
-          ) : field.type === 'select' ? (
-            <select
-              value={sectionConfig[field.key] || ''}
-              onChange={(e) => onChange(section, field.key, e.target.value)}
-              style={{
-                padding: '10px 12px',
-                backgroundColor: '#1a1a1a',
-                color: '#f5f5f5',
-                border: '1px solid #2a2a2a',
-                borderRadius: '6px',
-                fontSize: '14px',
-                cursor: 'pointer',
-              }}
-            >
-              {field.options?.map(option => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-            </select>
-          ) : (
-            <input
-              type={field.type}
-              value={sectionConfig[field.key] || ''}
-              onChange={(e) => onChange(section, field.key, field.type === 'number' ? Number(e.target.value) : e.target.value)}
-              style={{
-                padding: '10px 12px',
-                backgroundColor: '#1a1a1a',
-                color: '#f5f5f5',
-                border: '1px solid #2a2a2a',
-                borderRadius: '6px',
-                fontSize: '14px',
-              }}
-            />
-          )}
-        </div>
-      ))}
+      {fields.map(field => {
+        // Check if this field depends on another field being enabled
+        const isDisabled = field.dependsOn ? !sectionConfig[field.dependsOn] : false
+        
+        return (
+          <div key={field.key} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={{ fontSize: '14px', fontWeight: 500, color: isDisabled ? '#666666' : '#e0e0e0' }}>
+              {field.label}
+            </label>
+            {field.type === 'boolean' ? (
+              <input
+                type="checkbox"
+                checked={sectionConfig[field.key] || false}
+                disabled={isDisabled}
+                onChange={(e) => onChange(section, field.key, e.target.checked)}
+                style={{ width: '20px', height: '20px', cursor: isDisabled ? 'not-allowed' : 'pointer' }}
+              />
+            ) : field.type === 'select' ? (
+              <select
+                value={sectionConfig[field.key] || ''}
+                disabled={isDisabled}
+                onChange={(e) => onChange(section, field.key, e.target.value)}
+                style={{
+                  padding: '10px 12px',
+                  backgroundColor: '#1a1a1a',
+                  color: '#f5f5f5',
+                  border: '1px solid #2a2a2a',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  cursor: isDisabled ? 'not-allowed' : 'pointer',
+                  opacity: isDisabled ? 0.5 : 1,
+                }}
+              >
+                {field.options?.map(option => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type={field.type}
+                value={sectionConfig[field.key] || ''}
+                disabled={isDisabled}
+                onChange={(e) => onChange(section, field.key, field.type === 'number' ? Number(e.target.value) : e.target.value)}
+                style={{
+                  padding: '10px 12px',
+                  backgroundColor: '#1a1a1a',
+                  color: '#f5f5f5',
+                  border: '1px solid #2a2a2a',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  opacity: isDisabled ? 0.5 : 1,
+                }}
+              />
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

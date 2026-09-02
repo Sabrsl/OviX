@@ -15,8 +15,10 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
 from ..analyzers.base import Issue
-from ..analyzers import DeadLinkAnalyzer
+from ..analyzers import DeadLinkAnalyzer, HttpLinksAnalyzer
 from ..utils.publisher import Corrector
+from ..utils.tracking_service import TrackingService
+from ..utils.database import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +29,10 @@ class DeadLinkResult:
     original_content: str
     corrected_content: str
     issues: List[Issue]
-    dead_links_found: int
-    repairs_attempted: int
-    repairs_successful: int
+    dead_links_found: int = 0
+    http_links_found: int = 0  # Number of HTTP links detected
+    repairs_attempted: int = 0
+    repairs_successful: int = 0
 
 
 class DeadLinkOrchestrator:
@@ -48,24 +51,38 @@ class DeadLinkOrchestrator:
         self,
         language: str = 'fr',
         api_session=None,
+        db_manager: Optional[DatabaseManager] = None,
     ):
         """
         Args:
             language: Language code for analyzers.
             api_session: Optional requests.Session for API calls.
+            db_manager: Optional DatabaseManager for tracking service.
         """
         self.language = language
         self._session = api_session
         
-        # OviX Dead Link Analyzer
-        self.dead_link_analyzer = DeadLinkAnalyzer()
+        # Phase 2: Initialize TrackingService if db_manager provided
+        self.tracking_service: Optional[TrackingService] = None
+        if db_manager:
+            try:
+                self.tracking_service = TrackingService(db_manager)
+                logger.info("Phase 2: TrackingService initialized in DeadLinkOrchestrator")
+            except Exception as e:
+                logger.warning(f"Phase 2: Failed to initialize TrackingService: {e}")
+        
+        # OviX Dead Link Analyzer with tracking service
+        self.dead_link_analyzer = DeadLinkAnalyzer(tracking_service=self.tracking_service)
+        
+        # OviX HTTP Links Analyzer (for HTTP→HTTPS conversion)
+        self.http_links_analyzer = HttpLinksAnalyzer()
         
         # Corrector
         self.corrector: Optional[Corrector] = None
     
     def analyze(self, content: str) -> DeadLinkResult:
         """
-        Analyze content for dead links and generate corrections.
+        Analyze content for dead links and HTTP links, then generate corrections.
         
         Args:
             content: Original wikicode.
@@ -73,13 +90,20 @@ class DeadLinkOrchestrator:
         Returns:
             DeadLinkResult with analysis results.
         """
-        logger.info("Starting dead link analysis")
+        logger.info("Starting dead link and HTTP link analysis")
         
         # Run dead link analyzer
-        issues = self.dead_link_analyzer.analyze(content)
+        dead_link_issues = self.dead_link_analyzer.analyze(content)
         
-        # Count dead links
+        # Run HTTP links analyzer (if enabled)
+        http_link_issues = self.http_links_analyzer.analyze(content)
+        
+        # Combine all issues
+        issues = dead_link_issues + http_link_issues
+        
+        # Count issues by type
         dead_links_found = len([i for i in issues if i.issue_type == 'dead_link'])
+        http_links_found = len([i for i in issues if i.issue_type == 'http_link'])
         
         # Initialize corrector
         self.corrector = Corrector(content)
@@ -89,15 +113,19 @@ class DeadLinkOrchestrator:
         
         # Count repairs
         repairs_attempted = len([i for i in issues if i.suggested_text])
-        repairs_successful = 1 if corrected != content else 0
+        repairs_successful = len([c for c in self.corrector.corrections if c.applied])
         
-        logger.info(f"Dead link analysis complete: {dead_links_found} dead links found, {repairs_successful} repairs applied")
+        logger.info(
+            f"Analysis complete: {dead_links_found} dead links found, "
+            f"{http_links_found} HTTP links found, {repairs_successful} repairs applied"
+        )
         
         return DeadLinkResult(
             original_content=content,
             corrected_content=corrected,
             issues=issues,
             dead_links_found=dead_links_found,
+            http_links_found=http_links_found,
             repairs_attempted=repairs_attempted,
             repairs_successful=repairs_successful
         )

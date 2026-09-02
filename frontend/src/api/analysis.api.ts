@@ -38,6 +38,58 @@ export const analysisApi = {
   },
 
   /**
+   * Stream analysis job status using Server-Sent Events
+   */
+  streamAnalysisStatus(jobId: string, onStatus: (status: AnalysisJob) => void, onComplete?: () => void, onError?: (error: string) => void): () => void {
+    const eventSource = new EventSource(`/api/analysis/${jobId}/stream`)
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.error) {
+          onError?.(data.error)
+          eventSource.close()
+          return
+        }
+
+        const status: AnalysisJob = {
+          job_id: jobId,
+          article_title: data.article_title || '',
+          status: data.status,
+          created_at: new Date().toISOString(),
+          started_at: data.started_at,
+          completed_at: data.completed_at,
+          error: data.error,
+          progress: data.progress || 0,
+          message: data.message || '',
+          results: data.results
+        }
+
+        onStatus(status)
+
+        // Close stream if completed or failed
+        if (data.status === 'completed' || data.status === 'failed') {
+          eventSource.close()
+          onComplete?.()
+        }
+      } catch (e) {
+        console.error('Failed to parse SSE message:', e)
+      }
+    }
+
+    eventSource.onerror = (error) => {
+      console.error('SSE error:', error)
+      onError?.('Connection error')
+      eventSource.close()
+    }
+
+    // Return cleanup function
+    return () => {
+      eventSource.close()
+    }
+  },
+
+  /**
    * Cancel an analysis
    */
   async cancelAnalysis(jobId: string): Promise<{ success: boolean }> {

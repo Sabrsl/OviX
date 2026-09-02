@@ -197,7 +197,7 @@ class BotDiscussionManager:
         content += "== Contact ==\n"
         content += "* '''Bot Operator''' : [[User talk:Sysoperator|Contact the operator]]\n"
         content += f"* '''Bot Discussion''' : [[{self.discussion_page_title}|This page]]\n"
-        content += "* '''Repository''' : https://github.com/yourusername/syns_operator_bot\n\n"
+        content += "* '''Repository''' : https://github.com/Sabrsl/OviX\n\n"
         
         content += "----\n"
         content += f"''Last updated: {datetime.now().strftime('%d %B %Y %H:%M')}''\n"

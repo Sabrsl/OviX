@@ -96,6 +96,10 @@ class ArticleStatusResponse(BaseModel):
     dead_links_count: Optional[int] = None
     corrected_links_count: Optional[int] = None
     human_verified: Optional[bool] = None
+    # Normalization fields
+    normalization_changes_count: Optional[int] = None
+    normalization_ignored_count: Optional[int] = None
+    normalization_reports: Optional[str] = None
 
 
 class ArticleHistoryResponse(BaseModel):
@@ -115,6 +119,8 @@ class ArticleHistoryResponse(BaseModel):
     character_count: Optional[int] = None
     dead_links_count: Optional[int] = None
     corrected_links_count: Optional[int] = None
+    normalization_changes_count: Optional[int] = None
+    normalization_ignored_count: Optional[int] = None
 
 
 class ArticleAnalysisRequest(BaseModel):
@@ -742,7 +748,8 @@ async def get_all_analysis_results(
         if status:
             cursor.execute("""
                 SELECT article_title, page_id, revision_id, status, analysis_date, changes_count,
-                       summary, character_count, mode, human_verified
+                       summary, character_count, mode, human_verified, normalization_changes_count,
+                       normalization_ignored_count
                 FROM analysis_results
                 WHERE status = ?
                 ORDER BY analysis_date DESC
@@ -751,7 +758,8 @@ async def get_all_analysis_results(
         else:
             cursor.execute("""
                 SELECT article_title, page_id, revision_id, status, analysis_date, changes_count,
-                       summary, character_count, mode, human_verified
+                       summary, character_count, mode, human_verified, normalization_changes_count,
+                       normalization_ignored_count
                 FROM analysis_results
                 ORDER BY analysis_date DESC
                 LIMIT ? OFFSET ?
@@ -772,7 +780,10 @@ async def get_all_analysis_results(
                 character_count=row[7],
                 mode=row[8],
                 score=None,  # Could be calculated from analysis
-                decision=None  # Could be linked to manual review decisions
+                decision=None,  # Could be linked to manual review decisions
+                human_verified=row[9],
+                normalization_changes_count=row[10],
+                normalization_ignored_count=row[11]
             ))
         
         return results
@@ -820,25 +831,26 @@ async def get_article_result(
 ):
     """
     Get analysis result for a specific article.
-    
+
     Returns detailed analysis status and results for a single article.
     """
     try:
         logger.info(f"Looking for article: '{article_title}'")
         logger.info(f"Database connection: {database.conn}")
         logger.info(f"Database path: {database.db_path}")
-        
+
         cursor = database.conn.cursor()
         cursor.execute("""
-            SELECT article_title, page_id, revision_id, status, analysis_date, changes_count, 
-                   summary, corrected_content, character_count, mode, human_verified, 
-                   original_content, total_links, dead_links_count, corrected_links_count
+            SELECT article_title, page_id, revision_id, status, analysis_date, changes_count,
+                   summary, corrected_content, character_count, mode, human_verified,
+                   original_content, total_links, dead_links_count, corrected_links_count,
+                   normalization_changes_count, normalization_ignored_count, normalization_reports
             FROM analysis_results
             WHERE article_title = ?
             ORDER BY analysis_date DESC
             LIMIT 1
         """, (article_title,))
-        
+
         row = cursor.fetchone()
         if not row:
             logger.warning(f"Article not found in database: '{article_title}'")
@@ -851,7 +863,7 @@ async def get_article_result(
             total_count = cursor.fetchone()[0]
             logger.info(f"Total analysis results in database: {total_count}")
             raise HTTPException(status_code=404, detail="Article analysis not found")
-        
+
         logger.info(f"Found article: {row[0]}")
         result = {
             "title": row[0],
@@ -868,16 +880,59 @@ async def get_article_result(
             "original_content": row[11],
             "total_links": row[12],
             "dead_links_count": row[13],
-            "corrected_links_count": row[14]
+            "corrected_links_count": row[14],
+            "normalization_changes_count": row[15],
+            "normalization_ignored_count": row[16],
+            "normalization_reports": row[17]
         }
-        
+
         return result
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to get article result: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to get result: {str(e)}")
+
+
+class UpdateSummaryRequest(BaseModel):
+    """Request to update article summary."""
+    summary: str
+
+
+@router.put("/results/{article_title}/summary")
+async def update_article_summary(
+    article_title: str,
+    request: UpdateSummaryRequest,
+    database = Depends(get_database)
+):
+    """
+    Update the edit summary for an article.
+
+    Updates the summary field in the analysis_results table.
+    """
+    try:
+        cursor = database.conn.cursor()
+        cursor.execute("""
+            UPDATE analysis_results
+            SET summary = ?
+            WHERE article_title = ?
+        """, (request.summary, article_title))
+
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Article analysis not found")
+
+        database.conn.commit()
+        logger.info(f"Updated summary for article: {article_title}")
+
+        return {"success": True, "article_title": article_title, "summary": request.summary}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update article summary: {e}", exc_info=True)
+        database.conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update summary: {str(e)}")
 
 
 @router.get("/queue", response_model=ArticlesToAnalyzeResponse)

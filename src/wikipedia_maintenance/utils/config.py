@@ -109,6 +109,9 @@ class AnalysisConfig:
     enabled_analyzers: List[str] = field(default_factory=lambda: [
         "DeadLinkAnalyzer"
     ])
+    # Enable/disable specific analyzers (for UI convenience)
+    enable_dead_link_analyzer: bool = True
+    enable_http_links_analyzer: bool = False  # HttpLinksAnalyzer controlled by https_verification.enabled
     # Minimum severity to report (or 'all')
     min_severity: str = "all"  # Changed to "all" to show all corrections including minor ones
     # Disable specific issue types (globally)
@@ -119,6 +122,12 @@ class AnalysisConfig:
     parallel: bool = False
     # Timeout per analyzer in seconds
     analyzer_timeout: float = field(default_factory=lambda: _load_timeout_from_config('analyzer', 60.0))
+    # Enable case normalization for reference templates
+    enable_case_normalization: bool = False
+    # Enable NER-based title normalization (requires spaCy + fr_core_news_sm model)
+    enable_ner_title_normalization: bool = False
+    # Enable AI-assisted normalization using Gemini (only if enable_case_normalization is true)
+    normalize_with_ai: bool = False
 
     _VALID_SEVERITIES = {"low", "medium", "high", "critical", "all"}
 
@@ -279,6 +288,25 @@ class HttpsVerificationConfig:
 
 
 @dataclass
+class ReferenceEnricherAnalyzerConfig:
+    """Reference enricher analyzer configuration."""
+    enabled: bool = False  # Whether to enable the reference enricher analyzer
+    timeout: float = 10.0  # Link check timeout in seconds
+    max_retries: int = 3  # Maximum retry attempts
+    max_checks_per_article: int = 50  # Maximum URLs to check per article
+    enable_site_fill: bool = True  # Whether to auto-fill |site= parameter
+    enable_consulte_le_fill: bool = True  # Whether to auto-fill |consulté le= parameter
+    
+    def __post_init__(self):
+        if self.timeout <= 0:
+            raise ValueError("timeout must be positive")
+        if self.max_retries < 0:
+            raise ValueError("max_retries must be >= 0")
+        if self.max_checks_per_article < 1:
+            raise ValueError("max_checks_per_article must be at least 1")
+
+
+@dataclass
 class WorksListConfig:
     """Works list analyzer configuration."""
     filmography_threshold: int = 3
@@ -318,6 +346,7 @@ class Config:
     typography: TypographyConfig = field(default_factory=TypographyConfig)
     references: ReferencesConfig = field(default_factory=ReferencesConfig)
     https_verification: HttpsVerificationConfig = field(default_factory=HttpsVerificationConfig)
+    reference_enricher_analyzer: ReferenceEnricherAnalyzerConfig = field(default_factory=ReferenceEnricherAnalyzerConfig)
     works_list: WorksListConfig = field(default_factory=WorksListConfig)
     structure: StructureConfig = field(default_factory=StructureConfig)
     # Profile name (optional)
@@ -427,11 +456,11 @@ class Config:
 
             section = parts[0]
             field_name = "_".join(parts[1:])
-            # Try to parse JSON if value looks like a list or dict
+            # Try to parse via YAML to handle booleans, numbers, lists, dicts
             try:
                 parsed = yaml.safe_load(value)
-                # Only use if it's a container
-                if isinstance(parsed, (list, dict)):
+                # Use parsed value if it's not a string (handles bool, int, float, list, dict)
+                if not isinstance(parsed, str):
                     value = parsed
             except Exception:
                 pass  # keep as string
@@ -439,6 +468,10 @@ class Config:
             # Store in nested dict
             data.setdefault(section, {})[field_name] = value
 
+        # If no environment variables found, return None to avoid overriding file config with defaults
+        if not data:
+            return None
+        
         # Merge with defaults (from_env takes precedence over defaults, but not over file)
         # We'll create a base config from defaults and update with env values
         base = cls()
@@ -484,7 +517,10 @@ class Config:
                     fname = f.name
                     other_val = getattr(other_sub, fname)
                     current_val = getattr(current_sub, fname)
-                    if override or (current_val is None) or (isinstance(current_val, (list, dict)) and not current_val):
+                    # Override if explicitly requested, or if current value is None/empty
+                    # For booleans, we need explicit override since False is a valid value
+                    should_override = override or current_val is None or (isinstance(current_val, (list, dict)) and not current_val)
+                    if should_override:
                         setattr(current_sub, fname, other_val)
             else:
                 # Simple assignment if override or current is None/empty
@@ -562,7 +598,7 @@ def load_config(
     # Start with defaults
     config = Config()
 
-    # Try to load from file
+    # Try to load from file FIRST (file has highest priority)
     if config_path is None:
         # Try default locations
         default_paths = [
@@ -583,10 +619,12 @@ def load_config(
         except Exception as e:
             logger.warning(f"Failed to load config from {config_path}: {e}")
 
-    # Apply environment overrides
+    # Apply environment overrides SECOND (only if variables are actually defined)
+    # Environment variables override file config
     if use_env:
         env_config = Config.from_env()
-        config = config.merge(env_config, override=True)
+        if env_config is not None:
+            config = config.merge(env_config, override=True)
 
     # If profile is specified, we might load profile-specific config here
     # For now, just set the profile attribute

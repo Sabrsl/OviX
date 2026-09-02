@@ -15,7 +15,7 @@ import asyncio
 import random
 import yaml
 from datetime import datetime
-from typing import List, Optional, Dict, Any, TYPE_CHECKING
+from typing import List, Optional, Dict, Any, TYPE_CHECKING, Tuple
 from pathlib import Path
 import sys
 
@@ -28,17 +28,18 @@ if TYPE_CHECKING:
 
 from wikipedia_maintenance.retrievers import CategoryRetriever, Article
 from wikipedia_maintenance.utils.analyzed_tracker import AnalyzedTracker, AnalysisStatus, AnalysisRecord, get_analyzed_tracker
-from wikipedia_maintenance.analyzers import DeadLinkAnalyzer
+from wikipedia_maintenance.utils.ui_settings import get_settings_manager
+from wikipedia_maintenance.analyzers import DeadLinkAnalyzer, HttpLinksAnalyzer
 from wikipedia_maintenance.utils.publisher import Publisher, Corrector
 from wikipedia_maintenance.utils.published_tracker import PublishedTracker
-from wikipedia_maintenance.utils.ui_settings import get_settings_manager
 from wikipedia_maintenance.utils.database import DatabaseManager
 from wikipedia_maintenance.utils.automation_report import get_report_generator, AutomationReport
-from wikipedia_maintenance.utils.automation_state import (
-    AutomationStateManager, SessionStatus, ArticleProcessingStatus, ArticleState
+from wikipedia_maintenance.utils.automation_state_sqlite import (
+    SQLiteAutomationStateManager, SessionStatus, ArticleProcessingStatus, ArticleState
 )
 from wikipedia_maintenance.utils import get_wikipedia_retry_handler, get_gemini_retry_handler
 from wikipedia_maintenance.utils.connection_checker import get_connection_checker
+from wikipedia_maintenance.utils.event_manager import get_event_manager, EventType
 from .scheduler import Scheduler, SchedulerConfig
 
 logger = logging.getLogger(__name__)
@@ -153,11 +154,18 @@ class AutomationOrchestrator:
         self.scheduler: Optional[Scheduler] = None
         self.lia_client: Optional[Any] = None
         
-        # State management and retry handlers
-        self.state_manager = AutomationStateManager()
+        # State management and retry handlers - SQLite as single source of truth
+        if self.database:
+            self.state_manager = SQLiteAutomationStateManager(self.database)
+        else:
+            # Fallback to JSON if database not provided (should not happen in production)
+            from wikipedia_maintenance.utils.automation_state import AutomationStateManager
+            self.state_manager = AutomationStateManager()
+            logger.warning("Using JSON-based state manager - SQLite database not provided")
         self.wikipedia_retry_handler = get_wikipedia_retry_handler()
         self.gemini_retry_handler = get_gemini_retry_handler()
         self.connection_checker = get_connection_checker()
+        self.event_manager = get_event_manager()
         
         # API throttler for rate limiting
         from wikipedia_maintenance.utils.api_throttler import get_global_throttler
@@ -367,6 +375,18 @@ class AutomationOrchestrator:
         logger.info("STARTING AUTOMATION ORCHESTRATOR")
         logger.info("=" * 60)
         
+        # Émettre l'événement AUTOMATION_STARTED
+        await self.event_manager.emit(
+            EventType.AUTOMATION_STARTED,
+            {
+                "category": self.category_name,
+                "max_articles": self.max_articles,
+                "include_analyzed": self.include_analyzed,
+                "lia_mode": self.lia_mode
+            },
+            session_id=self.session_id
+        )
+        
         # P1 CRITICAL FIX: Check if automation is already running to prevent double launch
         current_state = self.state_manager.get_state()
         if current_state and current_state.status in ['running', 'paused']:
@@ -374,18 +394,49 @@ class AutomationOrchestrator:
             logger.warning("Rejecting duplicate automation launch attempt")
             return False
         
-        # P1 CRITICAL FIX: Clean up stale article states from previous crashes/interruptions
+        # P1 CRITICAL FIX: Clean up stale article states from previous crashes/interruptions with timeout mechanism
         if current_state and current_state.article_states:
             stale_count = 0
+            timeout_threshold_minutes = 30  # Articles stuck > 30 min are considered stale
+            current_time = datetime.now()
+            
             for article_state in current_state.article_states:
-                if article_state.get('status') in ['analyzing', 'retrieving', 'correcting']:
-                    article_state['status'] = 'interrupted'
-                    article_state['completed_at'] = datetime.now().isoformat()
-                    article_state['error_message'] = 'Automation interrupted (crash or unexpected stop)'
-                    stale_count += 1
+                status = article_state.get('status')
+                
+                # Check for stale states (analyzing, retrieving, correcting) with timeout
+                if status in ['analyzing', 'retrieving', 'correcting']:
+                    started_at = article_state.get('started_at')
+                    
+                    # If we have a timestamp, check if it's stale
+                    if started_at:
+                        try:
+                            start_time = datetime.fromisoformat(started_at)
+                            time_diff = (current_time - start_time).total_seconds() / 60  # Convert to minutes
+                            
+                            if time_diff > timeout_threshold_minutes:
+                                article_state['status'] = 'interrupted'
+                                article_state['completed_at'] = current_time.isoformat()
+                                article_state['error_message'] = f'Automation interrupted (stale for {time_diff:.1f} minutes - timeout threshold: {timeout_threshold_minutes} min)'
+                                stale_count += 1
+                                logger.warning(f"Marked article as stale: {article_state.get('title', 'unknown')} stuck in '{status}' for {time_diff:.1f} minutes")
+                        except Exception as e:
+                            logger.warning(f"Could not parse timestamp for article state: {e}")
+                            # Fallback: mark as interrupted if we can't parse the timestamp
+                            article_state['status'] = 'interrupted'
+                            article_state['completed_at'] = current_time.isoformat()
+                            article_state['error_message'] = 'Automation interrupted (invalid timestamp)'
+                            stale_count += 1
+                    else:
+                        # No timestamp - assume stale (safer to interrupt than leave hanging)
+                        article_state['status'] = 'interrupted'
+                        article_state['completed_at'] = current_time.isoformat()
+                        article_state['error_message'] = 'Automation interrupted (no timestamp - assumed stale)'
+                        stale_count += 1
+                        logger.warning(f"Marked article as stale (no timestamp): {article_state.get('title', 'unknown')} stuck in '{status}'")
+            
             if stale_count > 0:
                 self.state_manager.save_state()
-                logger.warning(f"Cleaned up {stale_count} stale article states from previous interrupted session")
+                logger.warning(f"Cleaned up {stale_count} stale article states from previous interrupted session (timeout threshold: {timeout_threshold_minutes} minutes)")
         
         # Check for resumable session
         if self.state_manager.can_resume():
@@ -461,6 +512,17 @@ class AutomationOrchestrator:
                 if self._check_kill_switch() or await self._check_control_flags():
                     return False
                 new_articles = await self._retrieve_articles(max_articles=needed_articles)
+                
+                # Émettre ARTICLE_DISCOVERED pour chaque article
+                for article in new_articles:
+                    await self.event_manager.emit(
+                        EventType.ARTICLE_DISCOVERED,
+                        {
+                            "title": article.title,
+                            "page_id": article.page_id
+                        },
+                        session_id=self.session_id
+                    )
                 if not new_articles:
                     logger.warning(f"No new articles retrieved, will use only existing analyzed articles ({len(existing_analyzed)})")
             
@@ -490,6 +552,17 @@ class AutomationOrchestrator:
                 return False
             await self._feed_queue(all_corrected)
             
+            # Émettre ARTICLE_QUEUED pour chaque article mis en file
+            for article in all_corrected:
+                await self.event_manager.emit(
+                    EventType.ARTICLE_QUEUED,
+                    {
+                        "title": article.get('title', article.get('article_title', 'unknown')),
+                        "changes_count": article.get('changes_count', 0)
+                    },
+                    session_id=self.session_id
+                )
+            
             # Step 9/10: Start scheduler AFTER queue is fed
             self.state_manager.update_step("9/10 - Starting scheduler")
             if self._check_kill_switch() or await self._check_control_flags():
@@ -501,6 +574,16 @@ class AutomationOrchestrator:
             await self._generate_and_save_report()
             
             self.state_manager.update_status(SessionStatus.COMPLETED)
+            
+            # Émettre AUTOMATION_STOPPED (complété avec succès)
+            await self.event_manager.emit(
+                EventType.AUTOMATION_STOPPED,
+                {
+                    "status": "completed",
+                    "articles_processed": len(all_corrected)
+                },
+                session_id=self.session_id
+            )
             logger.info("=" * 60)
             logger.info("AUTOMATION ORCHESTRATOR STARTUP COMPLETE")
             logger.info("=" * 60)
@@ -732,16 +815,14 @@ class AutomationOrchestrator:
         if self._analyzers_cache is not None:
             return self._analyzers_cache
         
-        # Initialize settings manager once
-        if self._settings_manager is None:
-            self._settings_manager = get_settings_manager()
-        
-        settings = self._settings_manager.get_settings()
-        enabled_analyzer_names = settings.get_enabled_analyzers()
+        # Read enabled analyzers from config.yaml (same source as UI settings)
+        enabled_analyzer_names = self._get_enabled_analyzers_from_config()
+        logger.info(f"Enabled analyzers from config.yaml: {enabled_analyzer_names}")
         
         # Map analyzer names to their classes
         analyzer_classes = {
-            "DeadLinkAnalyzer": DeadLinkAnalyzer
+            "DeadLinkAnalyzer": DeadLinkAnalyzer,
+            "HttpLinksAnalyzer": HttpLinksAnalyzer
         }
         
         # Initialize only enabled analyzers once
@@ -754,6 +835,109 @@ class AutomationOrchestrator:
         self._analyzers_cache = analyzers
         logger.info(f"Cached {len(analyzers)} analyzers for reuse across articles")
         return analyzers
+    
+    def _get_enabled_analyzers_from_config(self) -> List[str]:
+        """
+        Get the list of enabled analyzers from config.yaml.
+        
+        This unifies the configuration source between UI and automation.
+        The UI saves to config.yaml via the /api/config/section endpoint,
+        and automation reads from the same file.
+        
+        Returns:
+            List[str]: List of enabled analyzer names
+        """
+        try:
+            from wikipedia_maintenance.utils.config import load_config
+            config = load_config()
+            
+            # Check if analysis section exists
+            if not hasattr(config, 'analysis'):
+                logger.debug("analysis section not found in config, defaulting to DeadLinkAnalyzer")
+                return ["DeadLinkAnalyzer"]
+            
+            # Build enabled analyzers list
+            enabled_list = []
+            
+            # Always check DeadLinkAnalyzer
+            if hasattr(config.analysis, 'enable_dead_link_analyzer'):
+                if config.analysis.enable_dead_link_analyzer:
+                    enabled_list.append("DeadLinkAnalyzer")
+                    logger.info("DeadLinkAnalyzer enabled via enable_dead_link_analyzer setting")
+                else:
+                    logger.info("DeadLinkAnalyzer disabled via enable_dead_link_analyzer setting")
+            else:
+                # Default to enabled if not specified
+                enabled_list.append("DeadLinkAnalyzer")
+                logger.info("DeadLinkAnalyzer enabled by default")
+            
+            # Check if https_verification is enabled for HttpLinksAnalyzer
+            if hasattr(config, 'https_verification') and hasattr(config.https_verification, 'enabled'):
+                if config.https_verification.enabled:
+                    enabled_list.append("HttpLinksAnalyzer")
+                    logger.info("HttpLinksAnalyzer enabled via https_verification.enabled setting")
+                else:
+                    logger.info("HttpLinksAnalyzer disabled via https_verification.enabled setting")
+            
+            # Also check analysis.enable_http_links_analyzer as fallback/supplement
+            if hasattr(config.analysis, 'enable_http_links_analyzer'):
+                if config.analysis.enable_http_links_analyzer and "HttpLinksAnalyzer" not in enabled_list:
+                    enabled_list.append("HttpLinksAnalyzer")
+                    logger.info("HttpLinksAnalyzer enabled via enable_http_links_analyzer setting")
+            
+            return enabled_list if enabled_list else ["DeadLinkAnalyzer"]
+            
+            # Fallback to enabled_analyzers list if the boolean is not available
+            if hasattr(config.analysis, 'enabled_analyzers'):
+                return config.analysis.enabled_analyzers
+            
+            # Fallback to DeadLinkAnalyzer only if not configured
+            logger.debug("enabled_analyzers not found in config, defaulting to DeadLinkAnalyzer")
+            return ["DeadLinkAnalyzer"]
+        except Exception as e:
+            logger.warning(f"Failed to load enabled_analyzers from config: {e}, defaulting to DeadLinkAnalyzer")
+            return ["DeadLinkAnalyzer"]
+    
+    def _get_case_normalization_setting(self) -> Tuple[bool, bool, bool]:
+        """
+        Get the case normalization settings from config.yaml.
+        
+        This unifies the configuration source between UI and automation.
+        The UI saves to config.yaml via the /api/config/section endpoint,
+        and automation reads from the same file.
+        
+        Returns:
+            Tuple[bool, bool, bool]: (enable_case_normalization, enable_ner_title_normalization, normalize_with_ai)
+        """
+        try:
+            from wikipedia_maintenance.utils.config import load_config
+            config = load_config()
+            
+            # Check if analysis section exists and has enable_case_normalization
+            enable_case = False
+            enable_ner = False
+            normalize_with_ai = False
+            
+            if hasattr(config, 'analysis'):
+                if hasattr(config.analysis, 'enable_case_normalization'):
+                    enable_case = config.analysis.enable_case_normalization
+                if hasattr(config.analysis, 'enable_ner_title_normalization'):
+                    enable_ner = config.analysis.enable_ner_title_normalization
+                if hasattr(config.analysis, 'normalize_with_ai'):
+                    normalize_with_ai = config.analysis.normalize_with_ai
+            
+            # normalize_with_ai only takes effect if enable_case_normalization is true
+            if not enable_case:
+                normalize_with_ai = False
+            
+            # Fallback to False if not configured
+            if not enable_case and not enable_ner:
+                logger.debug("enable_case_normalization not found in config, defaulting to False")
+            
+            return enable_case, enable_ner, normalize_with_ai
+        except Exception as e:
+            logger.warning(f"Failed to load case normalization settings from config: {e}, defaulting to False")
+            return False, False, False
     
     async def _get_analyzed_pending_articles(self) -> List[Dict[str, Any]]:
         """Get already analyzed but unpublished articles from AnalyzedTracker."""
@@ -1159,6 +1343,41 @@ class AutomationOrchestrator:
             
             content = page.get()
             
+            # Apply case normalization if enabled (BEFORE LIA analysis)
+            # Read from config.yaml (same source as UI settings)
+            enable_case_normalization, enable_ner, normalize_with_ai = self._get_case_normalization_setting()
+            logger.info(f"Case normalization setting for {article.title} (LIA mode): enable={enable_case_normalization}, ner={enable_ner}, ai={normalize_with_ai}")
+            
+            case_normalization_changes = 0
+            if enable_case_normalization:
+                from wikipedia_maintenance.utils.case_normalizer import CaseNormalizer
+                # normalize_with_ai only takes effect if enable_case_normalization is true
+                if not enable_case_normalization:
+                    normalize_with_ai = False
+                normalizer = CaseNormalizer(
+                    enabled=enable_case_normalization,
+                    enable_ner_title_normalization=enable_ner,
+                    normalize_with_ai=normalize_with_ai
+                )
+                normalization_result = normalizer.normalize_text(content)
+                
+                if normalization_result.total_changes > 0:
+                    logger.info(f"Case normalization applied to {article.title} (LIA mode): {normalization_result.total_changes} changes, {normalization_result.total_ignored} ignored")
+                    content = normalization_result.normalized_text
+                    case_normalization_changes = normalization_result.total_changes
+                    
+                    # Log normalization details for debugging
+                    for report in normalization_result.reports:
+                        logger.debug(f"Template '{report.template_name}': {len(report.parameter_changes)} changes, {len(report.ignored_occurrences)} ignored")
+                        for param, (before, after) in report.parameter_changes.items():
+                            logger.debug(f"  {param}: '{before}' -> '{after}'")
+                        for param, reason in report.ignored_occurrences:
+                            logger.debug(f"  {param}: ignored ({reason})")
+                else:
+                    logger.info(f"Case normalization: no changes needed for {article.title} (LIA mode)")
+            else:
+                logger.info(f"Case normalization disabled in config.yaml for {article.title} (LIA mode)")
+            
             # Check length limit
             from wikipedia_maintenance.utils.verif_longueur import verifier
             ok, nb_caracteres = verifier(content, self.lia_limit)
@@ -1178,20 +1397,33 @@ class AutomationOrchestrator:
                 logger.error(f"LIA correction failed for {article.title}: {erreur}")
                 return None
             
-            # Generate summary using Publisher's configured comments only (enforce Publisher comments)
-            # For LIA mode, use the publisher's method to ensure consistent comments
-            summary = self.publisher.generate_edit_summary(1, ['lia_correction'])
-            
-            # Estimate changes count for LIA (simplified)
-            changes_count = len(article_corrige) - len(content) if article_corrige else 0
-            
-            # Calculate link statistics
+            # Calculate link statistics BEFORE generating summary
             dead_links_count = 0
             corrected_links_count = 0
+            http_links_count = 0
             if all_issues:
                 dead_links_count = len([issue for issue in all_issues if issue.get('type') == 'dead_link'])
                 corrected_links_count = len([issue for issue in all_issues if issue.get('corrected')])
-            logger.info(f"LIA link statistics: {dead_links_count} dead links, {corrected_links_count} corrected")
+                http_links_count = len([issue for issue in all_issues if issue.get('type') == 'http_link'])
+            logger.info(f"LIA link statistics: {dead_links_count} dead links, {corrected_links_count} corrected, {http_links_count} HTTP links")
+
+            # Generate summary using Publisher's configured comments only (enforce Publisher comments)
+            # For LIA mode, use the publisher's method to ensure consistent comments
+            # Determine correction type based on what was actually changed
+            correction_types = []
+            if case_normalization_changes > 0:
+                correction_types.extend(['case_normalization'] * case_normalization_changes)
+            # Only add dead_link and http_link if they were actually corrected
+            if corrected_links_count > 0:
+                correction_types.extend(['dead_link'] * corrected_links_count)
+            if http_links_count > 0:
+                correction_types.extend(['http_link'] * http_links_count)
+            # Always add lia_correction if LIA was used
+            correction_types.append('lia_correction')
+            summary = self.publisher.generate_edit_summary(len(correction_types), correction_types)
+
+            # Estimate changes count for LIA (simplified)
+            changes_count = len(article_corrige) - len(content) if article_corrige else 0
 
             # Record analysis in tracker
             if self.analyzed_tracker:
@@ -1270,6 +1502,41 @@ class AutomationOrchestrator:
             
             content = page.get()
             
+            # Apply case normalization if enabled (BEFORE dead link analysis)
+            # Read from config.yaml (same source as UI settings)
+            enable_case_normalization, enable_ner, normalize_with_ai = self._get_case_normalization_setting()
+            logger.info(f"Case normalization setting for {article.title} (regex mode): enable={enable_case_normalization}, ner={enable_ner}, ai={normalize_with_ai}")
+            
+            case_normalization_changes = 0
+            if enable_case_normalization:
+                from wikipedia_maintenance.utils.case_normalizer import CaseNormalizer
+                # normalize_with_ai only takes effect if enable_case_normalization is true
+                if not enable_case_normalization:
+                    normalize_with_ai = False
+                normalizer = CaseNormalizer(
+                    enabled=enable_case_normalization,
+                    enable_ner_title_normalization=enable_ner,
+                    normalize_with_ai=normalize_with_ai
+                )
+                normalization_result = normalizer.normalize_text(content)
+                
+                if normalization_result.total_changes > 0:
+                    logger.info(f"Case normalization applied to {article.title}: {normalization_result.total_changes} changes, {normalization_result.total_ignored} ignored")
+                    content = normalization_result.normalized_text
+                    case_normalization_changes = normalization_result.total_changes
+                    
+                    # Log normalization details for debugging
+                    for report in normalization_result.reports:
+                        logger.debug(f"Template '{report.template_name}': {len(report.parameter_changes)} changes, {len(report.ignored_occurrences)} ignored")
+                        for param, (before, after) in report.parameter_changes.items():
+                            logger.debug(f"  {param}: '{before}' -> '{after}'")
+                        for param, reason in report.ignored_occurrences:
+                            logger.debug(f"  {param}: ignored ({reason})")
+                else:
+                    logger.info(f"Case normalization: no changes needed for {article.title}")
+            else:
+                logger.info(f"Case normalization disabled in config.yaml for {article.title} (regex mode)")
+            
             # Use cached analyzers to avoid repeated initialization
             analyzers = self._get_cached_analyzers()
             
@@ -1284,8 +1551,15 @@ class AutomationOrchestrator:
             
             for analyzer in analyzers:
                 try:
+                    logger.info(f"Running {analyzer.__class__.__name__} on {article.title} with content length: {len(content)}")
                     issues = analyzer.analyze(content)
+                    logger.info(f"{analyzer.__class__.__name__} found {len(issues)} issues in {article.title}")
                     all_issues.extend(issues)
+                    
+                    # Check if analyzer has repaired content and update content accordingly
+                    if hasattr(analyzer, 'repaired_content') and analyzer.repaired_content:
+                        content = analyzer.repaired_content
+                        logger.info(f"Updated content with repairs from {analyzer.__class__.__name__}")
                 except Exception as e:
                     logger.error(f"{analyzer.__class__.__name__} failed: {e}", exc_info=True)
                     analyzer_failed = True
@@ -1297,7 +1571,7 @@ class AutomationOrchestrator:
                 logger.error(f"Analysis failed for {article.title}: {failed_analyzer_name} raised exception")
                 return None
             
-            logger.info(f"Found {len(all_issues)} issues in {article.title}")
+            logger.info(f"Total issues found in {article.title}: {len(all_issues)}")
             
             # Extract link statistics from issues
             dead_links_count = len([i for i in all_issues if i.issue_type == 'dead_link'])
@@ -1324,9 +1598,18 @@ class AutomationOrchestrator:
             # Apply corrections using the same robust method as frontend
             corrector = Corrector(content)
             corrected_content = corrector.apply_corrections(all_issues)
-            
-            # Generate summary - only count issues with suggested corrections
+
+            # Calculate link statistics for summary
+            dead_links_count = len([issue for issue in all_issues if issue.issue_type == 'dead_link'])
+            http_links_count = len([issue for issue in all_issues if issue.issue_type == 'http_link'])
+            corrected_links_count = len([issue for issue in all_issues if issue.suggested_text is not None and issue.issue_type == 'dead_link'])
+            logger.info(f"Regex mode statistics: {dead_links_count} dead links, {corrected_links_count} corrected, {http_links_count} HTTP links")
+
+            # Generate summary - only count issues with suggested corrections (actually applied)
             correction_types = [issue.issue_type for issue in all_issues if issue.suggested_text is not None]
+            # Add case_normalization to correction_types if it was applied
+            if case_normalization_changes > 0:
+                correction_types.extend(['case_normalization'] * case_normalization_changes)
             from collections import Counter
             type_counts = Counter(correction_types)
             logger.info(f"Résumé: {dict(type_counts)}, total={len(correction_types)}")
@@ -1490,7 +1773,7 @@ class AutomationOrchestrator:
                 telegram_bot_token=self.telegram_bot_token,
                 telegram_admin_ids=self.telegram_admin_ids,
                 dry_run=self.dry_run,
-                daily_limit=100,  # Default daily limit
+                daily_limit=None,  # P0 FIX: Load from config via TimingManager, not hardcoded
                 site=self.site,  # Pass the site object
                 category=self.category_name,  # Store category for manual runs
                 articles_to_process=self.max_articles  # Store max articles for manual runs

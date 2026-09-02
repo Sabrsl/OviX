@@ -22,8 +22,21 @@ export function ArticleWorkflow({ articles = [] }: ArticleWorkflowProps) {
   const handleReanalyze = async (title: string) => {
     // Trigger re-analysis via API
     const { articlesApi } = await import('../api/articles.api')
+    const { configApi } = await import('../api/config.api')
     try {
-      await articlesApi.analyzeArticle(title, 'regex')
+      // Read configuration to determine analysis mode
+      const configResponse = await configApi.getConfig()
+      const config = configResponse.config
+      
+      // Determine mode based on configuration
+      let analysisMode = 'regex' // Default mode
+      
+      // Use AI mode if case normalization is enabled (LIA's main prompt now handles case normalization)
+      if (config.analysis?.enable_case_normalization) {
+        analysisMode = 'ai'
+      }
+      
+      await articlesApi.analyzeArticle(title, analysisMode)
       // Status will be updated via polling in ArticleStatusCard
     } catch (err) {
       console.error('Failed to reanalyze:', err)

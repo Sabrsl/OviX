@@ -75,19 +75,22 @@ class StatsRepository:
                 cursor.execute("SELECT COUNT(*) FROM analysis_results")
                 stats['total'] = cursor.fetchone()[0] or 0
                 
-                # Analyzed = published + rejected + ignored + error
-                cursor.execute(
-                    "SELECT COUNT(*) FROM analysis_results WHERE status IN ('published', 'rejected', 'ignored', 'error')"
-                )
-                stats['analyzed'] = cursor.fetchone()[0] or 0
-                
-                # By status
+                # By status (get each status individually)
                 for status in ['published', 'pending', 'rejected', 'ignored', 'error']:
                     cursor.execute(
                         "SELECT COUNT(*) FROM analysis_results WHERE status = ?",
                         (status,)
                     )
                     stats[status] = cursor.fetchone()[0] or 0
+                
+                # Published with actual changes (really published on Wikipedia)
+                cursor.execute(
+                    "SELECT COUNT(*) FROM analysis_results WHERE status = 'published' AND (changes_count > 0 OR corrected_links_count > 0)"
+                )
+                stats['published'] = cursor.fetchone()[0] or 0
+                
+                # Analyzed = published + rejected + ignored + error (calculated from individual counts)
+                stats['analyzed'] = stats['published'] + stats['rejected'] + stats['ignored'] + stats['error']
                 
                 # Skipped (if status exists, otherwise 0)
                 cursor.execute(
@@ -245,8 +248,10 @@ class StatsRepository:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Total published
-                cursor.execute("SELECT COUNT(*) FROM analysis_results WHERE status = 'published'")
+                # Total published (with actual changes)
+                cursor.execute(
+                    "SELECT COUNT(*) FROM analysis_results WHERE status = 'published' AND (changes_count > 0 OR corrected_links_count > 0)"
+                )
                 stats['total'] = cursor.fetchone()[0] or 0
                 
                 # Successful publications (from actions if exists, else use published)
@@ -284,10 +289,13 @@ class StatsRepository:
                     stats['success_rate'] = (stats['successful'] / total_attempts) * 100
                 
                 # Publication rate (published / analyzed)
-                cursor.execute("SELECT COUNT(*) FROM analysis_results")
-                total_articles = cursor.fetchone()[0] or 0
-                if total_articles > 0:
-                    stats['publication_rate'] = (stats['total'] / total_articles) * 100
+                # Analyzed = published + rejected + ignored + error
+                cursor.execute(
+                    "SELECT COUNT(*) FROM analysis_results WHERE status IN ('published', 'rejected', 'ignored', 'error')"
+                )
+                analyzed_count = cursor.fetchone()[0] or 0
+                if analyzed_count > 0:
+                    stats['publication_rate'] = (stats['total'] / analyzed_count) * 100
                 
                 # Time-based statistics
                 now = datetime.now()
@@ -295,23 +303,23 @@ class StatsRepository:
                 time_7d = now - timedelta(days=7)
                 time_30d = now - timedelta(days=30)
                 
-                # Recent 24h
+                # Recent 24h (with actual changes)
                 cursor.execute(
-                    "SELECT COUNT(*) FROM analysis_results WHERE status = 'published' AND analysis_date >= ?",
+                    "SELECT COUNT(*) FROM analysis_results WHERE status = 'published' AND (changes_count > 0 OR corrected_links_count > 0) AND analysis_date >= ?",
                     (time_24h.isoformat(),)
                 )
                 stats['recent_24h'] = cursor.fetchone()[0] or 0
                 
-                # Recent 7d
+                # Recent 7d (with actual changes)
                 cursor.execute(
-                    "SELECT COUNT(*) FROM analysis_results WHERE status = 'published' AND analysis_date >= ?",
+                    "SELECT COUNT(*) FROM analysis_results WHERE status = 'published' AND (changes_count > 0 OR corrected_links_count > 0) AND analysis_date >= ?",
                     (time_7d.isoformat(),)
                 )
                 stats['recent_7d'] = cursor.fetchone()[0] or 0
                 
-                # Recent 30d
+                # Recent 30d (with actual changes)
                 cursor.execute(
-                    "SELECT COUNT(*) FROM analysis_results WHERE status = 'published' AND analysis_date >= ?",
+                    "SELECT COUNT(*) FROM analysis_results WHERE status = 'published' AND (changes_count > 0 OR corrected_links_count > 0) AND analysis_date >= ?",
                     (time_30d.isoformat(),)
                 )
                 stats['recent_30d'] = cursor.fetchone()[0] or 0

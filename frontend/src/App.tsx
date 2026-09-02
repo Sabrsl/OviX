@@ -19,6 +19,7 @@ import ManualReview from './pages/ManualReview'
 import ArticlesToAnalyze from './pages/ArticlesToAnalyze'
 import ReadyToPublish from './pages/ReadyToPublish'
 import UserContributions from './pages/UserContributions'
+import ArticleScheduler from './pages/ArticleScheduler'
 
 function App() {
   return (
@@ -34,6 +35,7 @@ function App() {
           <Route path="manual-review" element={<ManualReview />} />
           <Route path="articles/to-analyze" element={<ArticlesToAnalyze />} />
           <Route path="articles/ready-to-publish" element={<ReadyToPublish />} />
+          <Route path="articles/scheduler" element={<ArticleScheduler />} />
           <Route path="publication/pending" element={<PublicationPending />} />
           <Route path="publication/review" element={<PublicationReview />} />
           <Route path="publication/history" element={<PublicationHistory />} />

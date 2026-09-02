@@ -50,6 +50,9 @@ academic_publisher_domains:
   - jstor.org
   - researchgate.net
 
+  # Bibliothèque nationale de France (Gallica)
+  - gallica.bnf.fr
+
   # AAAS / Science
   - science.org
 
@@ -76,3 +79,6 @@ academic_publisher_domains:
   # Wolters Kluwer / LWW (revues médicales)
   - journals.lww.com
   - wolterskluwer.com
+
+  # Thèses académiques françaises
+  - theses.fr

@@ -54,8 +54,8 @@ class KillSwitchManager:
         self._database = database
         if self._database is None:
             try:
-                from wikipedia_maintenance.utils.database import get_database
-                self._database = get_database()
+                from wikipedia_maintenance.utils.database import DatabaseManager
+                self._database = DatabaseManager()
             except Exception as e:
                 logger.warning(f"Could not get database for kill switch: {e}")
 

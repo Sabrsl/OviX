@@ -45,10 +45,10 @@ export const systemApi = {
   /**
    * Deactivate Kill Switch
    */
-  async deactivateKillSwitch(reason: string, _requestedBy: string): Promise<{ success: boolean }> {
+  async deactivateKillSwitch(reason: string, _requestedBy: string, confirmation: string = "CONFIRM_RESUME"): Promise<{ success: boolean }> {
     const response = await apiClient.post('/api/system/kill-switch/deactivate', {
-      enabled: false,
       reason,
+      confirmation,
       requested_by: _requestedBy
     })
     return response.data
@@ -162,6 +162,114 @@ export const systemApi = {
    */
   async stopAutomation(): Promise<{ success: boolean; message: string }> {
     const response = await apiClient.post('/api/system/automation/stop')
+    return response.data
+  },
+
+  /**
+   * Get Automation Lock Status
+   */
+  async getAutomationLockStatus(): Promise<{ 
+    locked: boolean; 
+    locked_by?: string; 
+    locked_at?: string; 
+    session_id?: string; 
+    automation_type?: string 
+  }> {
+    const response = await apiClient.get('/api/system/automation/lock-status')
+    return response.data
+  }
+}
+
+/**
+ * Article Scheduler API - Semi-automatic scheduler for processing articles
+ */
+export const articleSchedulerApi = {
+  /**
+   * Get article scheduler status
+   */
+  async getStatus(): Promise<{
+    is_active: boolean;
+    is_paused: boolean;
+    session_id?: string;
+    total_articles: number;
+    processed_articles: number;
+    current_article?: string;
+    current_step?: string;
+    progress_percentage: number;
+    articles_analyzed: number;
+    articles_corrected: number;
+    articles_published: number;
+    articles_error: number;
+    started_at?: string;
+    estimated_completion?: string;
+    config?: {
+      article_count: number;
+      publish_automatically: boolean;
+      dry_run: boolean;
+    };
+  }> {
+    const response = await apiClient.get('/api/article-scheduler/status')
+    return response.data
+  },
+
+  /**
+   * Start article scheduler
+   */
+  async start(config: {
+    article_count: number;
+    publish_automatically: boolean;
+    dry_run: boolean;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    session_id?: string;
+    status?: any;
+  }> {
+    const response = await apiClient.post('/api/article-scheduler/start', config)
+    return response.data
+  },
+
+  /**
+   * Pause article scheduler
+   */
+  async pause(): Promise<{ success: boolean; message: string; status?: any }> {
+    const response = await apiClient.post('/api/article-scheduler/pause')
+    return response.data
+  },
+
+  /**
+   * Resume article scheduler
+   */
+  async resume(): Promise<{ success: boolean; message: string; status?: any }> {
+    const response = await apiClient.post('/api/article-scheduler/resume')
+    return response.data
+  },
+
+  /**
+   * Stop article scheduler
+   */
+  async stop(): Promise<{ success: boolean; message: string; status?: any }> {
+    const response = await apiClient.post('/api/article-scheduler/stop')
+    return response.data
+  },
+
+  /**
+   * Get scheduled articles with progress
+   */
+  async getScheduledArticles(): Promise<{
+    success: boolean;
+    articles: Array<{
+      title: string;
+      status: string;
+      current_step?: string;
+      progress: number;
+      started_at?: string;
+      completed_at?: string;
+      error_message?: string;
+    }>;
+    total: number;
+  }> {
+    const response = await apiClient.get('/api/article-scheduler/articles')
     return response.data
   }
 }

@@ -8,6 +8,7 @@ spécifique, en vérifiant d'abord la longueur de l'article par regex.
 import requests
 import json
 import time
+import os
 from typing import Optional, Tuple
 from pathlib import Path
 import logging
@@ -23,7 +24,7 @@ class GeminiClient:
     
     def __init__(
         self,
-        api_key: str,
+        api_key: str = None,
         project_id: str = None,
         model: str = None,
         prompt: Optional[str] = None,
@@ -31,13 +32,19 @@ class GeminiClient:
     ):
         """
         Args:
-            api_key: Clé API Google Gemini
-            project_id: ID du projet Google Cloud (défaut depuis config.yaml)
-            model: Nom du modèle à utiliser (défaut depuis config.yaml)
+            api_key: Clé API Google Gemini (priorité: paramètre > .env > config.yaml)
+            project_id: ID du projet Google Cloud (priorité: paramètre > .env > config.yaml)
+            model: Nom du modèle à utiliser (priorité: paramètre > .env > config.yaml)
             prompt: Prompt système à envoyer avant l'article
-            limite_caracteres: Limite de caractères pour l'article (défaut depuis config.yaml)
+            limite_caracteres: Limite de caractères pour l'article (priorité: paramètre > .env > config.yaml)
         """
-        # Load defaults from config.yaml
+        # Load from environment variables (.env) first
+        env_api_key = os.environ.get('GEMINI_API_KEY')
+        env_project_id = os.environ.get('GEMINI_PROJECT_ID')
+        env_model = os.environ.get('GEMINI_MODEL')
+        env_limit = os.environ.get('GEMINI_LIMIT')
+
+        # Load defaults from config.yaml as fallback
         import yaml
         default_project_id = None
         default_model = "gemini-flash-lite-latest"
@@ -51,11 +58,13 @@ class GeminiClient:
                     config = yaml.safe_load(f)
                     if config:
                         if 'ai' in config and 'gemini' in config['ai']:
-                            if 'project_id' in config['ai']['gemini']:
+                            if 'api_key' in config['ai']['gemini'] and not env_api_key:
+                                env_api_key = config['ai']['gemini']['api_key']
+                            if 'project_id' in config['ai']['gemini'] and not env_project_id:
                                 default_project_id = config['ai']['gemini']['project_id']
-                            if 'model' in config['ai']['gemini']:
+                            if 'model' in config['ai']['gemini'] and not env_model:
                                 default_model = config['ai']['gemini']['model']
-                            if 'limit' in config['ai']['gemini']:
+                            if 'limit' in config['ai']['gemini'] and not env_limit:
                                 default_limit = config['ai']['gemini']['limit']
                         if 'api_urls' in config and 'gemini' in config['api_urls']:
                             api_url_template = config['api_urls']['gemini']
@@ -64,11 +73,20 @@ class GeminiClient:
         except Exception:
             pass
         
-        self.api_key = api_key
-        self.project_id = project_id or default_project_id
-        self.model = model or default_model
+        # Priority: parameter > .env > config.yaml
+        self.api_key = api_key or env_api_key
+        self.project_id = project_id or env_project_id or default_project_id
+        self.model = model or env_model or default_model
         self.prompt = prompt or self._default_prompt()
+
+        # Parse limit from string if needed
+        if env_limit:
+            try:
+                default_limit = int(env_limit)
+            except ValueError:
+                pass
         self.limite_caracteres = limite_caracteres or default_limit
+        
         self.base_url = api_url_template.format(model=self.model)
         self.api_timeout = 10
         self.temperature = 0.1  # Température basse pour tâche déterministe de correction
@@ -115,12 +133,19 @@ deux fois. Si aucune correction autorisée n'est nécessaire, renvoie le wikicod
 strictement identique à l'entrée, caractère pour caractère. Ne jamais reformuler
 une phrase ni remplacer un mot par un synonyme.
 
-Ne jamais modifier, sous aucun prétexte, y compris la casse :
+Ne jamais modifier, sous aucun prétexte :
 - le sens du texte
 - le contenu des <ref>...</ref>
 - les liens [[...]], externes [https://...] (y compris URLs, même casse ou
   encodage inhabituels)
-- le contenu des modèles {{...}}, y compris leur ponctuation interne
+- le contenu des modèles {{...}}, SAUF pour la normalisation de casse des paramètres
+  spécifiques suivants dans les modèles de référence ({{Lien web}}, {{Article}}, {{Ouvrage}}, {{Lien brisé}}) :
+  * titre= (normaliser la casse selon les conventions françaises)
+  * site= (normaliser la casse selon les conventions françaises)
+  * éditeur= (normaliser la casse selon les conventions françaises)
+  * auteur= (normaliser la casse selon les conventions françaises)
+  * nom= (normaliser la casse selon les conventions françaises)
+  * prénom= (normaliser la casse selon les conventions françaises)
 - les lignes [[Catégorie:...]] et {{Portail|...}}
 - le contenu des commentaires <!-- ... -->
 - le contenu de <syntaxhighlight>, <source>, <code>, <math>, <nowiki>, <pre>,

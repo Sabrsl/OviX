@@ -310,3 +310,67 @@ async def get_account_info():
     except Exception as e:
         logger.error(f"Failed to get account info: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to get account info: {str(e)}")
+
+
+@router.get("/validate")
+async def validate_session():
+    """
+    Validate the current Wikipedia session by making a test API call.
+    
+    This endpoint checks if the session is still valid by attempting to fetch
+    the current user information. If the session has expired or the connection
+    has been lost, it will return authenticated=False.
+    """
+    try:
+        with _session_lock:
+            if not _wikipedia_session["authenticated"]:
+                return {
+                    "valid": False,
+                    "authenticated": False,
+                    "message": "Session not authenticated"
+                }
+            
+            if not _wikipedia_session["site"]:
+                return {
+                    "valid": False,
+                    "authenticated": False,
+                    "message": "Wikipedia site not initialized"
+                }
+            
+            site = _wikipedia_session["site"]
+            
+            # Test the connection by trying to get the current user
+            try:
+                user = site.user()
+                if user:
+                    logger.info(f"Session validation successful for user: {user.name}")
+                    return {
+                        "valid": True,
+                        "authenticated": True,
+                        "username": user.name,
+                        "message": "Session is valid"
+                    }
+                else:
+                    logger.warning("Session validation failed: user is None")
+                    return {
+                        "valid": False,
+                        "authenticated": False,
+                        "message": "Unable to retrieve user information"
+                    }
+            except Exception as e:
+                logger.warning(f"Session validation failed with error: {e}")
+                # Session appears to be invalid, mark as not authenticated
+                _wikipedia_session["authenticated"] = False
+                return {
+                    "valid": False,
+                    "authenticated": False,
+                    "message": f"Session validation failed: {str(e)}"
+                }
+        
+    except Exception as e:
+        logger.error(f"Failed to validate session: {e}", exc_info=True)
+        return {
+            "valid": False,
+            "authenticated": False,
+            "message": f"Validation error: {str(e)}"
+        }

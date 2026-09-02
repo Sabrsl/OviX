@@ -220,7 +220,7 @@ usernames['wikipedia']['fr'] = 'YourWikipediaUsername'
 usernames['wikipedia']['en'] = 'YourEnglishUsername'
 
 # Optional: Set a custom user agent
-user_agent_description = 'WikipediaMaintenanceTool/1.0 (https://github.com/yourusername/wikipedia-maintenance-tool)'
+user_agent_description = 'WikipediaMaintenanceTool/1.0 (https://github.com/Sabrsl/OviX)'
 
 # Optional: Disable console logging (for cleaner output)
 console_encoding = 'utf-8'

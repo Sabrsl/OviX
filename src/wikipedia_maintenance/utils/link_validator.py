@@ -376,20 +376,27 @@ class LinkValidator:
             details['content_match'] = (content_result.decision == ContentMatch.STRONG_MATCH)
             details['content_decision'] = content_result.decision.value
         
-        # Check redirect consistency
+        # Check redirect consistency (must have valid redirect for any confirmation)
         if redirect_result and redirect_result.decision == RedirectDecision.VALID_REDIRECT:
             details['redirect_consistent'] = True
-        
-        # Only confirm if multiple proofs are positive
-        proof_count = sum([
-            details['domain_match'],
-            details['title_match'],
-            details['content_match'],
-            details['redirect_consistent']
-        ])
-        
-        # Require at least 2 positive proofs
-        confirmed = (proof_count >= 2)
+
+        # Calculate composite confidence score with weighted proofs
+        # Domain match: 0.4 weight (strong signal of same source)
+        # Title match: 0.35 weight (content similarity)
+        # Content match: 0.25 weight (structural similarity)
+        confidence_score = 0.0
+        if details['domain_match']:
+            confidence_score += 0.4
+        if details['title_match']:
+            confidence_score += 0.35
+        if details['content_match']:
+            confidence_score += 0.25
+
+        details['confidence_score'] = confidence_score
+
+        # Require valid redirect AND confidence score >= 0.6 (at least 2 strong proofs)
+        # This is more flexible than binary counting while maintaining high certainty
+        confirmed = (details['redirect_consistent'] and confidence_score >= 0.6)
         
         return ProofEvidence(
             proof_type=ProofType.SAME_RESOURCE_CONFIRMED,

@@ -415,10 +415,10 @@ export default function AnalyzedHistory() {
             </select>
           </div>
 
-          {/* Mode Filter */}
+          {/* Type de correction Filter */}
           <div>
             <label style={{ display: 'block', fontSize: '11px', color: '#a0a0a0', marginBottom: '4px' }}>
-              Mode
+              Type de correction
             </label>
             <select
               value={modeFilter}
@@ -427,7 +427,7 @@ export default function AnalyzedHistory() {
             >
               <option value="all">Tous</option>
               <option value="ia">IA</option>
-              <option value="regex">Regex</option>
+              <option value="regex">Règles</option>
             </select>
           </div>
 
@@ -647,7 +647,7 @@ function HistoryRow({ item, onOpen }: { item: HistoryItem; onOpen: (item: Histor
               {formatDate(item.analysis_date)}
             </div>
             <div style={{ fontSize: '10px', color: '#888888', marginTop: '2px' }}>
-              Mode: {item.mode?.toUpperCase() || 'N/A'} • Changements: {formatNumber(item.changes_count)}
+              Type de correction: {item.mode === 'ia' ? 'IA' : item.mode === 'regex' ? 'Règles' : 'Règles'} • Modifications: {formatNumber(item.corrected_links_count)}
             </div>
             {(item.character_count ?? 0) > 0 && (
               <div style={{ fontSize: '10px', color: '#888888', marginTop: '1px' }}>

@@ -730,13 +730,20 @@ export default function PublicationReview() {
             <h3 id="confirm-title" style={styles.dialogTitle}>
               Confirmer la publication
             </h3>
-            <p id="confirm-desc" style={styles.dialogBody}>
-              Vous êtes sur le point de publier l'article <strong style={{ color: colors.text }}>{articleTitle}</strong>{' '}
-              sur Wikipedia.
+            <div id="confirm-desc" style={styles.dialogBody}>
+              <p>Vous êtes sur le point de publier l'article <strong style={{ color: colors.text }}>{articleTitle}</strong>{' '}
+              sur Wikipedia.</p>
               <br />
-              <br />
+              <div style={{ backgroundColor: colors.surface, border: `1px solid ${colors.border}`, borderRadius: '6px', padding: '12px', marginBottom: '12px' }}>
+                <div style={{ fontSize: '12px', color: colors.textMuted, marginBottom: '4px', fontWeight: 500 }}>
+                  Résumé de l'édition :
+                </div>
+                <div style={{ fontSize: '13px', color: colors.text, lineHeight: '1.4', wordBreak: 'break-word' }}>
+                  {summaryTrimmed || '(vide)'}
+                </div>
+              </div>
               <span style={styles.dialogWarning}>Cette action est irréversible.</span>
-            </p>
+            </div>
             <div style={styles.dialogActions}>
               <Button variant="secondary" onClick={() => setShowConfirmDialog(false)} disabled={loading}>
                 Annuler

@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { FileText, AlertTriangle, CheckCircle2, Clock, Activity, Database, Radar, RefreshCw, ArrowUpRight } from 'lucide-react'
+import { FileText, AlertTriangle, CheckCircle2, Clock, Activity, Database, Radar, RefreshCw, ArrowUpRight, WifiOff } from 'lucide-react'
 import { useApi } from '../hooks/useApi'
 import { systemApi } from '../api/system.api'
 import { articlesApi } from '../api/articles.api'
 import { statsApi } from '../api/stats.api'
+import { authApi } from '../api/auth.api'
 
 interface ActivityItem {
   article: string
@@ -22,6 +23,10 @@ const STATUS_CONFIG: Record<string, { action: string; tone: string }> = {
 const DEFAULT_STATUS = { action: 'Analyse terminée', tone: 'var(--accent-cyan)' }
 
 const CONNECTED_LABELS = new Set(['Opérationnel', 'Connectée', 'Opérationnels', 'Connecté'])
+
+// Nombre de tentatives de refetch automatique en cas d'échec réseau (avec backoff),
+// évite de laisser le dashboard "mort" silencieusement après une erreur transitoire.
+const AUTO_RETRY_DELAYS_MS = [4000, 10000, 20000]
 
 /** Formate une différence de temps en français, de façon sûre (jamais NaN / Invalid Date). */
 function formatRelativeTime(rawDate: unknown): string {
@@ -48,14 +53,24 @@ function formatRelativeTime(rawDate: unknown): string {
 }
 
 function getGreeting(hour: number): string {
+  if (hour < 5) return 'Bonsoir'
   if (hour < 12) return 'Bonjour'
   if (hour < 18) return 'Bon après-midi'
   return 'Bonsoir'
 }
 
+/** Formate un nombre de façon sûre, avec repli explicite si la valeur est absente/invalide. */
+function safeNumber(value: unknown): string | null {
+  if (typeof value !== 'number' || !isFinite(value)) return null
+  return value.toLocaleString('fr-FR')
+}
+
 export default function Dashboard() {
   const [now, setNow] = useState(() => new Date())
+  const [isOffline, setIsOffline] = useState(() => typeof navigator !== 'undefined' ? !navigator.onLine : false)
   const mountedRef = useRef(true)
+  const retryAttemptRef = useRef(0)
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // isAuthenticated doit refléter en temps réel l'état du token/session (contexte d'auth).
   // Tant que ce flag ne change pas quand l'utilisateur se connecte, le dashboard
   // ne saura jamais qu'il doit relancer les appels avec le nouveau token.
@@ -72,6 +87,10 @@ export default function Dashboard() {
     () => now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
     [now]
   )
+  const dateStr = useMemo(
+    () => now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }),
+    [now]
+  )
 
   useEffect(() => {
     mountedRef.current = true
@@ -81,6 +100,19 @@ export default function Dashboard() {
     return () => {
       mountedRef.current = false
       clearInterval(t)
+    }
+  }, [])
+
+  // Suivi de la connectivité réseau du navigateur — affiche un bandeau clair plutôt
+  // que de laisser l'utilisateur face à des tuiles à "0" sans explication.
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false)
+    const handleOffline = () => setIsOffline(true)
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
     }
   }, [])
 
@@ -107,11 +139,72 @@ export default function Dashboard() {
   // connectait après coup, le dashboard gardait les anciennes données/erreurs (401)
   // jusqu'à un clic manuel sur "Actualiser".
   useEffect(() => {
-    const handleAuthSuccess = () => refetchAll()
+    const handleAuthSuccess = () => {
+      retryAttemptRef.current = 0
+      refetchAll()
+    }
     window.addEventListener('auth:success', handleAuthSuccess)
     return () => window.removeEventListener('auth:success', handleAuthSuccess)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Vérification périodique de la validité de la session Wikipedia
+  // pour s'assurer que le statut de connexion affiché est toujours à jour
+  useEffect(() => {
+    const validateWikipediaSession = async () => {
+      try {
+        const validation = await authApi.validateSession()
+        if (!validation.valid || !validation.authenticated) {
+          // La session n'est plus valide, rafraîchir le statut système
+          console.log('[Dashboard] Wikipedia session validation failed, refreshing system status')
+          systemStatus.refetch()
+        }
+      } catch (err) {
+        console.warn('[Dashboard] Session validation check failed', err)
+      }
+    }
+
+    // Validation toutes les 2 heures
+    const interval = setInterval(validateWikipediaSession, 7200000)
+
+    return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const hasAnyError = Boolean(
+    systemStatus.error || articleStats.error || analysisStats.error ||
+    publicationStats.error || healthCheck.error || articleHistory.error
+  )
+  const isAnyLoading = systemStatus.loading || articleStats.loading || analysisStats.loading ||
+    publicationStats.loading || healthCheck.loading || articleHistory.loading
+
+  // Retry automatique avec backoff progressif en cas d'échec, tant que l'onglet est
+  // visible et que le navigateur est en ligne. Se réinitialise dès qu'un cycle réussit.
+  useEffect(() => {
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current)
+      retryTimeoutRef.current = null
+    }
+
+    if (!hasAnyError || isAnyLoading || isOffline) {
+      if (!hasAnyError) retryAttemptRef.current = 0
+      return
+    }
+
+    const attempt = retryAttemptRef.current
+    if (attempt >= AUTO_RETRY_DELAYS_MS.length) return
+
+    retryTimeoutRef.current = setTimeout(() => {
+      if (!mountedRef.current) return
+      retryAttemptRef.current = attempt + 1
+      refetchAll()
+    }, AUTO_RETRY_DELAYS_MS[attempt])
+
+    return () => {
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasAnyError, isAnyLoading, isOffline])
 
   const recentActivity: ActivityItem[] = useMemo(() => {
     const data = articleHistory.data
@@ -130,10 +223,11 @@ export default function Dashboard() {
     })
   }, [articleHistory.data])
 
-  const isRefreshing = systemStatus.loading || articleStats.loading || analysisStats.loading || publicationStats.loading || healthCheck.loading || articleHistory.loading
+  const isRefreshing = isAnyLoading
 
   // Chaque tuile suit le loading de SA propre source — une API lente ne doit pas
-  // afficher "0" figé pendant qu'une autre API répond plus vite.
+  // afficher "0" figé pendant qu'une autre API répond plus vite. Une valeur manquante
+  // ou invalide affiche "—" plutôt qu'un "0" trompeur.
   const stats = useMemo(() => {
     const a = articleStats.data
     const an = analysisStats.data
@@ -141,55 +235,68 @@ export default function Dashboard() {
     const articleLoading = articleStats.loading && !a
     const analysisLoading = analysisStats.loading && !an
     const publicationLoading = publicationStats.loading && !p
+    const articleFailed = Boolean(articleStats.error) && !a
+    const analysisFailed = Boolean(analysisStats.error) && !an
+    const publicationFailed = Boolean(publicationStats.error) && !p
+
+    const publicationRateValue = typeof p?.publication_rate === 'number' && isFinite(p.publication_rate)
+      ? `${p.publication_rate.toFixed(1)}%`
+      : null
 
     return [
       {
         name: 'Articles analysés',
-        value: a?.analyzed?.toLocaleString?.() ?? '0',
+        value: safeNumber(a?.analyzed),
         icon: FileText,
         accent: 'var(--accent-cyan)',
         isLoading: articleLoading,
+        isFailed: articleFailed,
       },
       {
         name: 'Articles publiés',
-        value: a?.published?.toLocaleString?.() ?? '0',
+        value: safeNumber(a?.published),
         icon: CheckCircle2,
         accent: 'var(--accent-green)',
         isLoading: articleLoading,
+        isFailed: articleFailed,
       },
       {
         name: 'En attente',
-        value: a?.pending?.toLocaleString?.() ?? '0',
+        value: safeNumber(a?.pending),
         icon: Clock,
         accent: 'var(--accent-yellow)',
         isLoading: articleLoading,
+        isFailed: articleFailed,
       },
       {
         name: 'Liens morts détectés',
-        value: an?.dead_links_detected?.toLocaleString?.() ?? '0',
+        value: safeNumber(an?.dead_links_detected),
         icon: AlertTriangle,
         accent: 'var(--accent-red)',
         isLoading: analysisLoading,
+        isFailed: analysisFailed,
       },
       {
         name: 'Liens morts corrigés',
-        value: an?.dead_links_corrected?.toLocaleString?.() ?? '0',
+        value: safeNumber(an?.dead_links_corrected),
         icon: CheckCircle2,
         accent: 'var(--accent-green)',
         isLoading: analysisLoading,
+        isFailed: analysisFailed,
       },
       {
         name: 'Taux de publication',
-        value: `${typeof p?.publication_rate === 'number' ? p.publication_rate.toFixed(1) : '0.0'}%`,
+        value: publicationRateValue,
         icon: Activity,
         accent: 'var(--accent-purple)',
         isLoading: publicationLoading,
+        isFailed: publicationFailed,
       },
     ]
   }, [
-    articleStats.data, articleStats.loading,
-    analysisStats.data, analysisStats.loading,
-    publicationStats.data, publicationStats.loading,
+    articleStats.data, articleStats.loading, articleStats.error,
+    analysisStats.data, analysisStats.loading, analysisStats.error,
+    publicationStats.data, publicationStats.loading, publicationStats.error,
   ])
 
   const systemStatusItems = useMemo(() => [
@@ -228,10 +335,25 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col gap-md text-md animate-fadeIn">
+      {isOffline && (
+        <div className="alert alert-error" role="status" aria-live="polite">
+          <WifiOff className="icon-sm flex-shrink-0" />
+          Connexion internet indisponible. Les données affichées peuvent être obsolètes.
+        </div>
+      )}
+
       {/* Header strip */}
-      <div className="flex items-center justify-between gap-md" style={{ padding: '16px 22px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.06)', background: 'linear-gradient(to right, var(--bg-secondary), rgba(17, 17, 17, 0.4))' }}>
+      <div
+        className="flex items-center justify-between gap-md"
+        style={{
+          padding: '16px 22px',
+          borderRadius: '10px',
+          border: '1px solid rgba(255, 255, 255, 0.06)',
+          background: 'linear-gradient(to right, var(--bg-secondary), rgba(17, 17, 17, 0.4))',
+        }}
+      >
         <div className="flex items-center gap-sm" style={{ height: '100%' }}>
-          <span className="relative flex" style={{ width: '8px', height: '8px' }}>
+          <span className="relative flex" style={{ width: '8px', height: '8px' }} aria-hidden="true">
             {!isHealthLoading && (
               <span className={`absolute inline-flex rounded-full ${allOk ? 'status-dot-online' : 'status-dot-offline'}`} style={{ width: '100%', height: '100%', opacity: 0.75 }} />
             )}
@@ -239,15 +361,18 @@ export default function Dashboard() {
           </span>
           <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '2px' }}>
             <h2 className="text-secondary font-semibold" style={{ fontSize: '15px', lineHeight: 1, margin: 0, padding: 0 }}>{greeting}</h2>
-            <p className="text-muted" style={{ fontSize: '11px', lineHeight: 1, margin: 0, padding: 0 }}>Vue d'ensemble · {timeStr}</p>
+            <p className="text-muted capitalize" style={{ fontSize: '11px', lineHeight: 1, margin: 0, padding: 0 }}>
+              {dateStr} · {timeStr}
+            </p>
           </div>
         </div>
         <button
           type="button"
-          onClick={refetchAll}
+          onClick={() => { retryAttemptRef.current = 0; refetchAll() }}
           disabled={isRefreshing}
           aria-busy={isRefreshing}
-          className="btn btn-secondary btn-sm"
+          aria-label="Actualiser les données du tableau de bord"
+          className="btn btn-secondary btn-sm transition-normal"
           style={{ padding: '6px 10px', fontSize: '11px' }}
         >
           <RefreshCw className={`icon-sm ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -269,7 +394,7 @@ export default function Dashboard() {
               const isConnected = CONNECTED_LABELS.has(item.status)
               const isLoading = isHealthLoading
               return (
-                <div key={item.name} className="flex items-center gap-sm">
+                <div key={item.name} className="flex items-center gap-sm transition-normal">
                   <div className={`icon-wrapper ${isConnected ? 'icon-wrapper-green' : 'icon-wrapper-red'}`} style={{ width: '30px', height: '30px', flexShrink: 0 }}>
                     <Icon className="icon-sm" />
                   </div>
@@ -278,7 +403,13 @@ export default function Dashboard() {
                     {isLoading ? (
                       <div className="loading-skeleton mt-xs" style={{ height: '7px', width: '56px', borderRadius: '999px' }} />
                     ) : (
-                      <div className={`${isConnected ? 'text-accent-green' : 'text-accent-red'} line-tight truncate mt-xs`} style={{ fontSize: '9px' }}>{item.status}</div>
+                      <div
+                        className={`${isConnected ? 'text-accent-green' : 'text-accent-red'} line-tight truncate mt-xs`}
+                        style={{ fontSize: '9px' }}
+                        title={item.status}
+                      >
+                        {item.status}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -296,16 +427,25 @@ export default function Dashboard() {
                 key={stat.name}
                 className="card transition-normal p-md"
                 style={{ minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}
+                title={stat.isFailed ? `${stat.name} — données indisponibles` : stat.name}
               >
                 <div className="flex items-center justify-between mb-md">
-                  <div className={`icon-wrapper`} style={{ width: '26px', height: '26px', backgroundColor: `${stat.accent}18`, flexShrink: 0 }}>
+                  <div className="icon-wrapper" style={{ width: '26px', height: '26px', backgroundColor: `${stat.accent}18`, flexShrink: 0 }}>
                     <Icon className="icon-sm" style={{ color: stat.accent, flexShrink: 0 }} />
                   </div>
+                  {stat.isFailed && (
+                    <AlertTriangle className="icon-sm text-accent-red" style={{ opacity: 0.7 }} aria-label="Données indisponibles" />
+                  )}
                 </div>
                 {stat.isLoading ? (
                   <div className="loading-skeleton mb-xs" style={{ height: '20px', width: '48px' }} />
                 ) : (
-                  <div className="text-primary font-semibold tabular-nums truncate" style={{ fontSize: '19px', lineHeight: 1 }}>{stat.value}</div>
+                  <div
+                    className={`font-semibold tabular-nums truncate ${stat.value === null ? 'text-muted' : 'text-primary'}`}
+                    style={{ fontSize: '19px', lineHeight: 1 }}
+                  >
+                    {stat.value ?? '—'}
+                  </div>
                 )}
                 <div className="text-muted mt-xs line-tight truncate" style={{ fontSize: '10.5px' }}>{stat.name}</div>
               </div>
@@ -315,9 +455,17 @@ export default function Dashboard() {
       </div>
 
       {hasStatsError && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <AlertTriangle className="icon-sm flex-shrink-0" />
-          Impossible de charger les statistiques. Réessayez dans un instant.
+          <span>Impossible de charger certaines statistiques.</span>
+          <button
+            type="button"
+            onClick={() => { retryAttemptRef.current = 0; refetchAll() }}
+            className="btn btn-ghost btn-sm"
+            style={{ marginLeft: 'auto', fontSize: '10.5px', padding: '4px 8px' }}
+          >
+            Réessayer
+          </button>
         </div>
       )}
 
@@ -325,7 +473,7 @@ export default function Dashboard() {
       <div className="card p-lg" style={{ overflow: 'hidden' }}>
         <div className="flex items-center justify-between mb-lg">
           <h3 className="text-muted uppercase font-semibold" style={{ fontSize: '10px', letterSpacing: '0.1em' }}>Activité récente</h3>
-          <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: '10.5px', padding: '4px 8px' }}>
+          <button type="button" className="btn btn-ghost btn-sm transition-normal" style={{ fontSize: '10.5px', padding: '4px 8px' }}>
             Tout voir <ArrowUpRight className="icon-sm" />
           </button>
         </div>
@@ -344,13 +492,21 @@ export default function Dashboard() {
           ) : hasActivityError ? (
             <div className="flex items-center gap-sm py-sm text-accent-red" style={{ fontSize: '11px', paddingLeft: '20px' }}>
               <AlertTriangle className="icon-sm flex-shrink-0" />
-              Impossible de charger l'activité récente.
+              <span>Impossible de charger l'activité récente.</span>
+              <button
+                type="button"
+                onClick={() => articleHistory.refetch()}
+                className="btn btn-ghost btn-sm"
+                style={{ fontSize: '10px', padding: '2px 6px' }}
+              >
+                Réessayer
+              </button>
             </div>
           ) : recentActivity.length > 0 ? (
             recentActivity.map((activity, index) => (
               <div
                 key={`${activity.article}-${index}`}
-                className="relative flex items-center justify-between gap-md"
+                className="relative flex items-center justify-between gap-md transition-normal"
                 style={{
                   padding: '9px 0 9px 20px',
                   borderBottom: index < recentActivity.length - 1 ? '1px solid var(--border-subtle)' : 'none',
@@ -370,7 +526,7 @@ export default function Dashboard() {
                   }}
                 />
                 <div className="min-w-0" style={{ flex: '1 1 auto', overflow: 'hidden' }}>
-                  <div className="truncate text-secondary font-medium" style={{ fontSize: '12px' }}>{activity.article}</div>
+                  <div className="truncate text-secondary font-medium" style={{ fontSize: '12px' }} title={activity.article}>{activity.article}</div>
                   <div className="truncate mt-xs" style={{ fontSize: '10.5px', color: activity.tone }}>{activity.action}</div>
                 </div>
                 <div className="flex-shrink-0 whitespace-nowrap text-muted" style={{ fontSize: '10px' }}>{activity.time}</div>

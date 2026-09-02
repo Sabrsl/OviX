@@ -3,7 +3,7 @@ Utility functions for reference and source processing.
 
 Provides:
     - check_link_status(url) - Check if a link is accessible
-    - get_archive_url(url) - Get Wayback Machine archive URL
+    - get_archive_url(url) - Get Internet Archive archive URL
     - fetch_url_metadata(url) - Fetch URL metadata (title, site, date)
     - validate_isbn(isbn) - Validate ISBN format
     - find_duplicate_refs(content) - Find duplicate references
@@ -95,7 +95,7 @@ def check_link_status(url: str, session=None, timeout: float = 5.0) -> bool:
 
 def get_archive_url(url: str, session=None, timeout: float = 5.0) -> Optional[str]:
     """
-    Get Wayback Machine archive URL for a given URL.
+    Get Internet Archive archive URL for a given URL.
     
     Args:
         url: Original URL.
@@ -114,7 +114,7 @@ def get_archive_url(url: str, session=None, timeout: float = 5.0) -> Optional[st
             return None
     
     try:
-        # Wayback Machine CDX API
+        # Internet Archive CDX API
         cdx_url = f"https://web.archive.org/cdx/search/cdx?url={url}&output=json&fl=timestamp,original&limit=1"
         response = session.get(cdx_url, timeout=timeout)
         response.raise_for_status()
@@ -246,7 +246,7 @@ def extract_urls_from_refs(content: str) -> List[str]:
         List of URLs found in references.
     """
     ref_pattern = re.compile(r'<ref[^>]*>(.*?)</ref>', re.IGNORECASE | re.DOTALL)
-    url_pattern = re.compile(r'https?://[a-zA-Z0-9\-._~:/?#[\]@!$&\'()*+,;=%]+', re.IGNORECASE)
+    url_pattern = re.compile(r'https?://[a-zA-Z0-9\-._~:/?#[\]@!$&\'()*+,;=%\u0080-\uFFFF]+', re.IGNORECASE)
     
     urls = []
     for match in ref_pattern.finditer(content):

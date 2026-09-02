@@ -1,7 +1,7 @@
 """
 Archive Provider for research and verification.
 
-This service provides access to web archives (Wayback Machine, Archive.org, CommonCrawl, etc.)
+This service provides access to web archives (Internet Archive, Archive.org, CommonCrawl, etc.)
 for content verification and candidate discovery.
 
 Archives are used to:
@@ -22,8 +22,9 @@ import logging
 import urllib.request
 import urllib.error
 import json
+import threading
 from typing import Optional, Dict, Any, List
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 from enum import Enum
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
@@ -189,9 +190,9 @@ class BaseArchiveProvider(ABC):
 
 class WaybackProvider(BaseArchiveProvider):
     """
-    Wayback Machine archive provider.
+    Internet Archive archive provider.
     
-    Uses Internet Archive CDX API and Wayback Machine API.
+    Uses Internet Archive CDX API and Internet Archive API.
     """
     
     CDX_API_URL = "https://web.archive.org/cdx/search/cdx"
@@ -202,7 +203,7 @@ class WaybackProvider(BaseArchiveProvider):
     
     def check_archive(self, url: str) -> ArchiveResult:
         """
-        Check if Wayback Machine has archive for URL with retry logic.
+        Check if Internet Archive has archive for URL with retry logic.
         
         Args:
             url: URL to check
@@ -227,7 +228,10 @@ class WaybackProvider(BaseArchiveProvider):
         # response was not 2xx (e.g. a 302 to an access-restricted page that
         # Wayback still serves as HTTP 200). Without this filter, a snapshot
         # of an error/redirect page can be proposed as if it were the real content.
-        cdx_url = f"{self.CDX_API_URL}?url={clean_url}&output=json&limit=1&filter=statuscode:200"
+        # CRITICAL FIX: URL must be properly encoded to avoid UNSUPPORTED_VALUE errors
+        # when URLs contain special characters like & in query parameters
+        encoded_url = quote(clean_url, safe='')
+        cdx_url = f"{self.CDX_API_URL}?url={encoded_url}&output=json&limit=1&filter=statuscode:200"
         
         # Retry logic for timeout cases (increased to 3 for high-reliability provider)
         retry_config = RetryConfig(
@@ -372,7 +376,7 @@ class WaybackProvider(BaseArchiveProvider):
     
     def get_content_snapshot(self, url: str, archive_date: str = None) -> Optional[str]:
         """
-        Get content snapshot from Wayback Machine.
+        Get content snapshot from Internet Archive.
         
         Args:
             url: Original URL
@@ -419,7 +423,7 @@ class WaybackProvider(BaseArchiveProvider):
     
     def _clean_url(self, url: str) -> str:
         """
-        Clean URL for Wayback Machine API.
+        Clean URL for Internet Archive API.
         
         Args:
             url: URL to clean
@@ -1235,7 +1239,7 @@ class ArchiveProvider:
     - RESEARCH AND VERIFICATION (primary use)
     - AUTOMATIC LINK REPLACEMENT as fallback when no redirect is available (secondary use)
     
-    Coordinates multiple archive services (Wayback Machine, Archive.org, Arquivo.pt, UK Web Archive, etc.)
+    Coordinates multiple archive services (Internet Archive, Archive.org, Arquivo.pt, UK Web Archive, etc.)
     with retry logic and enhanced fallback capabilities.
     """
     
@@ -1251,6 +1255,7 @@ class ArchiveProvider:
         ]
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         self._cache: Dict[str, ArchiveResult] = {}  # Cache for archive check results
+        self._cache_lock = threading.Lock()  # Thread-safe cache access
     
     def check_all_providers(self, url: str) -> List[ArchiveResult]:
         """
@@ -1306,11 +1311,12 @@ class ArchiveProvider:
         Returns:
             ArchiveResult from best provider, or aggregated result
         """
-        # Check cache first
-        if url in self._cache:
-            cached_result = self._cache[url]
-            self._logger.info(f"ARCHIVE_CACHE_HIT | url={url} | availability={cached_result.availability.value}")
-            return cached_result
+        # Check cache first with thread-safe lock
+        with self._cache_lock:
+            if url in self._cache:
+                cached_result = self._cache[url]
+                self._logger.info(f"ARCHIVE_CACHE_HIT | url={url} | availability={cached_result.availability.value}")
+                return cached_result
         
         self._logger.info(f"ARCHIVE_SEARCH | url={url}")
         
@@ -1423,8 +1429,9 @@ class ArchiveProvider:
         if available_results:
             best_result = self._select_best_archive(available_results, url)
             self._logger.info(f"ARCHIVE_SELECTED | provider={best_result.provider} | url={url} | archive_url={best_result.archive_url} | archive_date={best_result.archive_date} | confidence=high")
-            # Cache the result
-            self._cache[url] = best_result
+            # Cache the result with thread-safe lock
+            with self._cache_lock:
+                self._cache[url] = best_result
             return best_result
         
         # All providers failed - determine the correct final status
@@ -1498,8 +1505,9 @@ class ArchiveProvider:
                 provider="ArchiveProvider"
             )
         
-        # Cache the result
-        self._cache[url] = final_result
+        # Cache the result with thread-safe lock
+        with self._cache_lock:
+            self._cache[url] = final_result
         return final_result
     
     def _select_best_archive(self, available_results: List[ArchiveResult], url: str) -> ArchiveResult:

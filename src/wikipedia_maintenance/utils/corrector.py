@@ -545,7 +545,7 @@ class Corrector:
         social_domains = {'twitter.com', 'x.com', 'facebook.com', 'instagram.com', 
                         'tiktok.com', 'linkedin.com', 'youtube.com', 'threads.net'}
         
-        url_pattern = re.compile(r'\*\s*(https?://[a-zA-Z0-9\-._~:/?#[\]@!$&\'()*+,;=%]+[^\s.,])', re.IGNORECASE)
+        url_pattern = re.compile(r'\*\s*(https?://[a-zA-Z0-9\-._~:/?#[\]@!$&\'()*+,;=%\u0080-\uFFFF]+[^\s.,])', re.IGNORECASE)
         social_urls = []
         other_urls = []
         
@@ -651,7 +651,7 @@ class Corrector:
         
         for match in ref_pattern.finditer(content):
             ref_content = match.group(1)
-            url_pattern = re.compile(r'https?://[a-zA-Z0-9\-._~:/?#[\]@!$&\'()*+,;=%]+', re.IGNORECASE)
+            url_pattern = re.compile(r'https?://[a-zA-Z0-9\-._~:/?#[\]@!$&\'()*+,;=%\u0080-\uFFFF]+', re.IGNORECASE)
             for url_match in url_pattern.finditer(ref_content):
                 url = url_match.group()
                 parsed = urlparse(url)

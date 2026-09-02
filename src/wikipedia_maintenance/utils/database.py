@@ -224,6 +224,25 @@ class DatabaseManager:
             VALUES (1, 0, '', '', '', NULL, NULL)
         """)
 
+        # Automation lock table - prevents concurrent automation launches
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS automation_lock (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                locked INTEGER NOT NULL DEFAULT 0,
+                locked_by TEXT,
+                locked_at TIMESTAMP,
+                session_id TEXT,
+                automation_type TEXT DEFAULT 'manual',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Ensure there's exactly one row in automation_lock
+        cursor.execute("""
+            INSERT OR IGNORE INTO automation_lock (id, locked, locked_by, locked_at, session_id, automation_type)
+            VALUES (1, 0, NULL, NULL, NULL, 'manual')
+        """)
+
         # Analysis results table - persistent result storage
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS analysis_results (
@@ -244,6 +263,10 @@ class DatabaseManager:
                 corrected_links_count INTEGER,
                 human_verified INTEGER DEFAULT 0,
                 manual_review_urls TEXT,  -- JSON array of URLs requiring manual review
+                issues_json TEXT,  -- JSON array of detailed issue information
+                normalization_changes_count INTEGER DEFAULT 0,  -- Number of normalization changes applied
+                normalization_ignored_count INTEGER DEFAULT 0,  -- Number of normalization items ignored
+                normalization_reports TEXT,  -- JSON array of normalization reports
                 analysis_date TIMESTAMP NOT NULL,
                 FOREIGN KEY (job_id) REFERENCES analysis_jobs(id) ON DELETE CASCADE
             )
@@ -263,6 +286,25 @@ class DatabaseManager:
             cursor.execute("ALTER TABLE analysis_results ADD COLUMN issues_json TEXT")
             logger.info("Added issues_json column to analysis_results table")
         
+        # Add normalization-related columns if they don't exist (migration)
+        cursor.execute("PRAGMA table_info(analysis_results)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'normalization_changes_count' not in columns:
+            cursor.execute("ALTER TABLE analysis_results ADD COLUMN normalization_changes_count INTEGER DEFAULT 0")
+            logger.info("Added normalization_changes_count column to analysis_results table")
+        
+        cursor.execute("PRAGMA table_info(analysis_results)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'normalization_ignored_count' not in columns:
+            cursor.execute("ALTER TABLE analysis_results ADD COLUMN normalization_ignored_count INTEGER DEFAULT 0")
+            logger.info("Added normalization_ignored_count column to analysis_results table")
+        
+        cursor.execute("PRAGMA table_info(analysis_results)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'normalization_reports' not in columns:
+            cursor.execute("ALTER TABLE analysis_results ADD COLUMN normalization_reports TEXT")
+            logger.info("Added normalization_reports column to analysis_results table")
+        
         # User contributions table - stores cached user contributions
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_contributions (
@@ -278,7 +320,249 @@ class DatabaseManager:
                 UNIQUE(username, revision_id)
             )
         """)
+
+        # Scheduler state table - SINGLE SOURCE OF TRUTH for scheduler state
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS scheduler_state (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                is_active INTEGER NOT NULL DEFAULT 0,
+                is_paused INTEGER NOT NULL DEFAULT 0,
+                daily_published_count INTEGER NOT NULL DEFAULT 0,
+                daily_reset_date TEXT,
+                next_publish_time TEXT,
+                next_pause_start TEXT,
+                next_pause_end TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Ensure there's exactly one row in scheduler_state
+        cursor.execute("""
+            INSERT OR IGNORE INTO scheduler_state (id, is_active, is_paused, daily_published_count, daily_reset_date)
+            VALUES (1, 0, 0, 0, NULL)
+        """)
+
+        # Scheduler queue table - SINGLE SOURCE OF TRUTH for publication queue
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS scheduler_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                article_title TEXT NOT NULL,
+                page_id INTEGER,
+                revision_id INTEGER,
+                corrected_content TEXT,
+                summary TEXT,
+                changes_count INTEGER,
+                original_content TEXT,
+                character_count INTEGER,
+                total_links INTEGER,
+                dead_links_count INTEGER,
+                corrected_links_count INTEGER,
+                mode TEXT NOT NULL,
+                queued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                status TEXT DEFAULT 'queued',
+                priority INTEGER DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                -- State machine fields for crash recovery
+                processing_started_at TIMESTAMP,
+                last_heartbeat TIMESTAMP,
+                validated_at TIMESTAMP,
+                publishing_started_at TIMESTAMP,
+                published_at TIMESTAMP,
+                error_message TEXT,
+                retry_count INTEGER DEFAULT 0,
+                timeout_seconds INTEGER DEFAULT 300
+            )
+        """)
         
+        # Migration: Add state machine fields if they don't exist
+        cursor.execute("PRAGMA table_info(scheduler_queue)")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        new_columns = [
+            'updated_at',
+            'processing_started_at', 'last_heartbeat', 'validated_at',
+            'publishing_started_at', 'published_at', 'error_message',
+            'retry_count', 'timeout_seconds'
+        ]
+        
+        for col in new_columns:
+            if col not in columns:
+                col_type = 'TIMESTAMP' if 'at' in col or col == 'last_heartbeat' else ('INTEGER' if col in ['retry_count', 'timeout_seconds'] else 'TEXT')
+                cursor.execute(f"ALTER TABLE scheduler_queue ADD COLUMN {col} {col_type}")
+                logger.info(f"Added {col} column to scheduler_queue table")
+        
+        # Update status default from 'pending' to 'queued' for new state machine
+        cursor.execute("UPDATE scheduler_queue SET status = 'queued' WHERE status = 'pending'")
+        cursor.execute("UPDATE scheduler_queue SET status = 'stale' WHERE status = 'processing'")
+        logger.info("Migrated scheduler_queue status to new state machine")
+
+        # Scheduler statistics table - SINGLE SOURCE OF TRUTH for statistics
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS scheduler_statistics (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                total_published INTEGER NOT NULL DEFAULT 0,
+                total_analyzed INTEGER NOT NULL DEFAULT 0,
+                total_ignored INTEGER NOT NULL DEFAULT 0,
+                total_errors INTEGER NOT NULL DEFAULT 0,
+                avg_publish_delay REAL DEFAULT 0.0,
+                avg_processing_time REAL DEFAULT 0.0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Ensure there's exactly one row in scheduler_statistics
+        cursor.execute("""
+            INSERT OR IGNORE INTO scheduler_statistics (id, total_published, total_analyzed, total_ignored, total_errors)
+            VALUES (1, 0, 0, 0, 0)
+        """)
+
+        # Scheduler pauses table - track scheduled and executed pauses
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS scheduler_pauses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pause_type TEXT NOT NULL,
+                start_time TEXT NOT NULL,
+                end_time TEXT,
+                duration_seconds INTEGER,
+                executed INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Automation sessions table - SINGLE SOURCE OF TRUTH for automation sessions
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS automation_sessions (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL UNIQUE,
+                status TEXT NOT NULL DEFAULT 'not_started',
+                started_at TIMESTAMP,
+                completed_at TIMESTAMP,
+                current_step TEXT,
+                current_article_index INTEGER DEFAULT 0,
+                total_articles INTEGER DEFAULT 0,
+                articles_processed INTEGER DEFAULT 0,
+                articles_published INTEGER DEFAULT 0,
+                articles_error INTEGER DEFAULT 0,
+                category_name TEXT,
+                max_articles INTEGER DEFAULT 0,
+                mode TEXT DEFAULT 'regex',
+                last_saved_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Migration: Add created_at column if it doesn't exist
+        try:
+            cursor.execute("ALTER TABLE automation_sessions ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+            self.conn.commit()
+            logger.info("Migration: Added created_at column to automation_sessions")
+        except Exception as e:
+            # Column might already exist, which is fine
+            if "duplicate column name" not in str(e).lower():
+                logger.warning(f"Migration warning for created_at: {e}")
+
+        # Automation article states table - track individual article processing
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS automation_article_states (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                article_title TEXT NOT NULL,
+                page_id INTEGER,
+                revision_id INTEGER,
+                status TEXT DEFAULT 'pending',
+                started_at TIMESTAMP,
+                completed_at TIMESTAMP,
+                error_message TEXT,
+                retry_count INTEGER DEFAULT 0,
+                changes_count INTEGER,
+                summary TEXT,
+                progress REAL DEFAULT 0.0,
+                current_step TEXT,
+                elapsed_time_seconds REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES automation_sessions(session_id) ON DELETE CASCADE
+            )
+        """)
+
+        # Automation interruptions table - track interruptions during automation
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS automation_interruptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                timestamp TIMESTAMP NOT NULL,
+                reason TEXT NOT NULL,
+                duration_seconds REAL,
+                resolved_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES automation_sessions(session_id) ON DELETE CASCADE
+            )
+        """)
+
+        # Daily collection log table - track daily article collection for idempotence
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS daily_collection_log (
+                collection_date DATE PRIMARY KEY,
+                articles_collected INTEGER NOT NULL DEFAULT 0,
+                collected_at TIMESTAMP NOT NULL,
+                category TEXT,
+                source_details TEXT
+            )
+        """)
+
+        # DeadLink operations table - SINGLE SOURCE OF TRUTH for DeadLink operations
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS deadlink_operations (
+                id TEXT PRIMARY KEY,  -- UUID
+                article_title TEXT NOT NULL,
+                revision_id INTEGER,
+                operation_id TEXT NOT NULL UNIQUE,  -- UUID de l'opération
+                
+                -- URL et contexte (immutable)
+                url_original TEXT NOT NULL,
+                url_normalized TEXT NOT NULL,  -- URL normalisée pour idempotence
+                context_type TEXT,
+                reference_type TEXT,
+                template_name TEXT,
+                field_name TEXT,
+                
+                -- Métadonnées
+                idempotency_key TEXT UNIQUE,
+                retry_count INTEGER DEFAULT 0,
+                
+                -- Statut final
+                final_status TEXT,  -- Dernier état de la machine à états
+                publication_status TEXT,
+                
+                -- Corrélation
+                issue_id TEXT,
+                correction_id TEXT,
+                publication_job_id TEXT,
+                
+                -- Timestamps clés
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                detected_at TIMESTAMP,
+                published_at TIMESTAMP,
+                
+                FOREIGN KEY (article_title) REFERENCES articles(title)
+            )
+        """)
+
+        # DeadLink operation events table - historique des transitions
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS deadlink_operation_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                operation_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,  -- DETECTED, VALIDATED, REPAIR_CANDIDATE, etc.
+                event_data TEXT,  -- JSON avec détails spécifiques à l'événement
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                
+                FOREIGN KEY (operation_id) REFERENCES deadlink_operations(operation_id)
+            )
+        """)
+
         # Create indexes for better performance
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_articles_title 
@@ -380,7 +664,43 @@ class DatabaseManager:
             CREATE INDEX IF NOT EXISTS idx_analysis_results_analysis_date
             ON analysis_results(analysis_date)
         """)
-        
+
+        # Indexes for deadlink_operations table
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_deadlink_operations_article
+            ON deadlink_operations(article_title)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_deadlink_operations_url
+            ON deadlink_operations(url_original)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_deadlink_operations_normalized_url
+            ON deadlink_operations(url_normalized)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_deadlink_operations_idempotency
+            ON deadlink_operations(idempotency_key)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_deadlink_operations_final_status
+            ON deadlink_operations(final_status)
+        """)
+
+        # Indexes for deadlink_operation_events table
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_deadlink_operation_events_operation
+            ON deadlink_operation_events(operation_id)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_deadlink_operation_events_type
+            ON deadlink_operation_events(event_type)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_deadlink_operation_events_timestamp
+            ON deadlink_operation_events(timestamp)
+        """)
+
         self.conn.commit()
     
     def add_article(self, title: str, page_id: Optional[int] = None,
@@ -1107,7 +1427,10 @@ class DatabaseManager:
                                character_count: Optional[int] = None, total_links: Optional[int] = None,
                                dead_links_count: Optional[int] = None, corrected_links_count: Optional[int] = None,
                                human_verified: bool = False, manual_review_urls: Optional[str] = None,
-                               issues_json: Optional[str] = None, analysis_date: Optional[str] = None) -> bool:
+                               issues_json: Optional[str] = None, analysis_date: Optional[str] = None,
+                               normalization_changes_count: Optional[int] = None,
+                               normalization_ignored_count: Optional[int] = None,
+                               normalization_reports: Optional[str] = None) -> bool:
         """Create or update an analysis result in database.
         
         Uses article_title and revision_id as unique key to prevent duplicates.
@@ -1130,6 +1453,11 @@ class DatabaseManager:
             corrected_links_count: Number of links corrected
             human_verified: Whether human verified the result
             manual_review_urls: JSON array of URLs requiring manual review
+            issues_json: JSON array of detailed issue information
+            analysis_date: Analysis timestamp
+            normalization_changes_count: Number of normalization changes applied
+            normalization_ignored_count: Number of normalization items ignored
+            normalization_reports: JSON array of normalization reports
             
         Returns:
             True if successful, False otherwise
@@ -1142,12 +1470,14 @@ class DatabaseManager:
                 (id, job_id, article_title, page_id, revision_id, status, mode, 
                  changes_count, summary, original_content, corrected_content, 
                  character_count, total_links, dead_links_count, corrected_links_count, 
-                 human_verified, manual_review_urls, issues_json, analysis_date)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 human_verified, manual_review_urls, issues_json, analysis_date,
+                 normalization_changes_count, normalization_ignored_count, normalization_reports)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (f"{article_title}_{revision_id}", job_id, article_title, page_id, revision_id, status, mode,
                   changes_count, summary, original_content, corrected_content,
                   character_count, total_links, dead_links_count, corrected_links_count,
-                  human_verified, manual_review_urls, issues_json, analysis_date or datetime.now().isoformat()))
+                  human_verified, manual_review_urls, issues_json, analysis_date or datetime.now().isoformat(),
+                  normalization_changes_count or 0, normalization_ignored_count or 0, normalization_reports))
             self.conn.commit()
             logger.info(f"Analysis result saved for article {article_title} (revision {revision_id})")
             return True
@@ -1286,6 +1616,1151 @@ class DatabaseManager:
             self.conn.rollback()
             return False
     
+    # Automation lock methods - prevents concurrent automation launches
+    def acquire_automation_lock(self, session_id: str, locked_by: str = "api", 
+                                automation_type: str = "manual") -> bool:
+        """
+        Attempt to acquire the automation lock.
+        
+        Args:
+            session_id: Unique identifier for this automation session
+            locked_by: Who is acquiring the lock (e.g., "api", "user")
+            automation_type: Type of automation (e.g., "manual", "scheduled")
+            
+        Returns:
+            True if lock was acquired, False if already locked
+        """
+        cursor = self.conn.cursor()
+        try:
+            # Check if lock is already held
+            cursor.execute("SELECT locked, locked_at, session_id FROM automation_lock WHERE id = 1")
+            row = cursor.fetchone()
+            
+            if row and row['locked'] == 1:
+                # Check if the existing lock is stale (older than 1 hour)
+                if row['locked_at']:
+                    try:
+                        from datetime import datetime, timedelta
+                        locked_time = datetime.fromisoformat(row['locked_at'])
+                        if datetime.now() - locked_time > timedelta(hours=1):
+                            # Lock is stale, clear it
+                            logger.warning(f"Clearing stale automation lock from session {row['session_id']}")
+                            cursor.execute("""
+                                UPDATE automation_lock 
+                                SET locked = 0, locked_by = NULL, locked_at = NULL, 
+                                    session_id = ?, automation_type = ?, updated_at = CURRENT_TIMESTAMP
+                                WHERE id = 1
+                            """, (session_id, automation_type))
+                            self.conn.commit()
+                        else:
+                            # Lock is still valid
+                            logger.warning(f"Automation lock already held by session {row['session_id']}")
+                            return False
+                    except Exception as e:
+                        logger.error(f"Error checking lock staleness: {e}")
+                        return False
+                else:
+                    logger.warning("Automation lock already held (no timestamp)")
+                    return False
+            
+            # Acquire the lock
+            cursor.execute("""
+                UPDATE automation_lock 
+                SET locked = 1, locked_by = ?, locked_at = CURRENT_TIMESTAMP, 
+                    session_id = ?, automation_type = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = 1
+            """, (locked_by, session_id, automation_type))
+            self.conn.commit()
+            
+            logger.info(f"Automation lock acquired by {locked_by} for session {session_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error acquiring automation lock: {e}", exc_info=True)
+            return False
+    
+    def release_automation_lock(self, session_id: str) -> bool:
+        """
+        Release the automation lock.
+        
+        Args:
+            session_id: Session ID that acquired the lock
+            
+        Returns:
+            True if lock was released, False if session didn't hold the lock
+        """
+        cursor = self.conn.cursor()
+        try:
+            # Verify this session holds the lock
+            cursor.execute("SELECT session_id FROM automation_lock WHERE id = 1")
+            row = cursor.fetchone()
+            
+            if not row or row['session_id'] != session_id:
+                logger.warning(f"Session {session_id} does not hold the automation lock")
+                return False
+            
+            # Release the lock
+            cursor.execute("""
+                UPDATE automation_lock 
+                SET locked = 0, locked_by = NULL, locked_at = NULL, 
+                    session_id = NULL, updated_at = CURRENT_TIMESTAMP
+                WHERE id = 1
+            """)
+            self.conn.commit()
+            
+            logger.info(f"Automation lock released by session {session_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error releasing automation lock: {e}", exc_info=True)
+            return False
+    
+    def get_automation_lock_status(self) -> Dict[str, Any]:
+        """
+        Get the current status of the automation lock.
+        
+        Returns:
+            Dictionary with lock status information
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("SELECT * FROM automation_lock WHERE id = 1")
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+            return {
+                'locked': False,
+                'locked_by': None,
+                'locked_at': None,
+                'session_id': None,
+                'automation_type': None
+            }
+        except Exception as e:
+            logger.error(f"Error getting automation lock status: {e}")
+            return {
+                'locked': False,
+                'error': str(e)
+            }
+
+    # ============================================================================
+    # Scheduler State Methods - SINGLE SOURCE OF TRUTH
+    # ============================================================================
+
+    def get_scheduler_state(self) -> Dict[str, Any]:
+        """
+        Get the current scheduler state from SQLite.
+        
+        Returns:
+            Dictionary with scheduler state
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("SELECT * FROM scheduler_state WHERE id = 1")
+            row = cursor.fetchone()
+            if row:
+                state = dict(row)
+                # Add queue size and statistics
+                state['queue_size'] = self.get_scheduler_queue_size()
+                state['statistics'] = self.get_scheduler_statistics()
+                return state
+            return {
+                'is_active': False,
+                'is_paused': False,
+                'daily_published_count': 0,
+                'daily_reset_date': None,
+                'queue_size': 0,
+                'statistics': {}
+            }
+        except Exception as e:
+            logger.error(f"Error getting scheduler state: {e}")
+            return {
+                'is_active': False,
+                'is_paused': False,
+                'daily_published_count': 0,
+                'queue_size': 0,
+                'statistics': {},
+                'error': str(e)
+            }
+
+    def update_scheduler_state(self, **kwargs) -> bool:
+        """
+        Update scheduler state fields.
+        
+        Args:
+            **kwargs: Fields to update (is_active, is_paused, daily_published_count, etc.)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        cursor = self.conn.cursor()
+        try:
+            valid_fields = ['is_active', 'is_paused', 'daily_published_count', 
+                          'daily_reset_date', 'next_publish_time', 
+                          'next_pause_start', 'next_pause_end']
+            
+            updates = []
+            values = []
+            for key, value in kwargs.items():
+                if key in valid_fields:
+                    updates.append(f"{key} = ?")
+                    values.append(value)
+            
+            if updates:
+                values.append(1)  # id = 1
+                query = f"UPDATE scheduler_state SET {', '.join(updates)}, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                cursor.execute(query, values)
+                self.conn.commit()
+                logger.info(f"Scheduler state updated: {kwargs}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error updating scheduler state: {e}")
+            self.conn.rollback()
+            return False
+
+    def set_scheduler_active(self, is_active: bool) -> bool:
+        """
+        Set scheduler active status.
+        
+        Args:
+            is_active: True to activate, False to stop
+            
+        Returns:
+            True if successful
+        """
+        return self.update_scheduler_state(is_active=1 if is_active else 0)
+
+    def set_scheduler_paused(self, is_paused: bool) -> bool:
+        """
+        Set scheduler paused status.
+        
+        Args:
+            is_paused: True to pause, False to resume
+            
+        Returns:
+            True if successful
+        """
+        return self.update_scheduler_state(is_paused=1 if is_paused else 0)
+
+    def increment_daily_published(self) -> bool:
+        """
+        Increment daily published counter.
+        
+        Returns:
+            True if successful
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                UPDATE scheduler_state 
+                SET daily_published_count = daily_published_count + 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = 1
+            """)
+            self.conn.commit()
+            
+            # Also update total in statistics
+            cursor.execute("""
+                UPDATE scheduler_statistics 
+                SET total_published = total_published + 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = 1
+            """)
+            self.conn.commit()
+            
+            logger.info("Daily published count incremented")
+            return True
+        except Exception as e:
+            logger.error(f"Error incrementing daily published count: {e}")
+            self.conn.rollback()
+            return False
+
+    def reset_daily_counters(self) -> bool:
+        """
+        Reset daily counters if the day has changed.
+        
+        Returns:
+            True if counters were reset, False if not needed
+        """
+        from datetime import date
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("SELECT daily_reset_date FROM scheduler_state WHERE id = 1")
+            row = cursor.fetchone()
+            
+            today = date.today().isoformat()
+            if not row or row['daily_reset_date'] != today:
+                logger.info(f"Resetting daily counters (new day: {today})")
+                cursor.execute("""
+                    UPDATE scheduler_state 
+                    SET daily_published_count = 0,
+                        daily_reset_date = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = 1
+                """, (today,))
+                self.conn.commit()
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error resetting daily counters: {e}")
+            self.conn.rollback()
+            return False
+
+    # ============================================================================
+    # Scheduler Queue Methods - SINGLE SOURCE OF TRUTH
+    # ============================================================================
+
+    # Valid state transitions for queue state machine
+    VALID_QUEUE_TRANSITIONS = {
+        'queued': ['processing', 'error'],
+        'processing': ['validated', 'publishing', 'stale', 'error'],
+        'validated': ['publishing', 'error'],
+        'publishing': ['published', 'stale', 'error', 'retry'],  # Added retry for failed publications
+        'published': [],  # Terminal state - no transitions allowed
+        'stale': ['retry', 'error'],
+        'retry': ['queued'],  # retry is a transient state, immediately goes to queued
+        'error': []  # Terminal state - no transitions allowed
+    }
+
+    def add_to_scheduler_queue(self, article_data: Dict[str, Any]) -> bool:
+        """
+        Add article to publication queue with status 'queued'.
+        
+        Args:
+            article_data: Dictionary with article information
+            
+        Returns:
+            True if successful
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO scheduler_queue (
+                    article_title, page_id, revision_id, corrected_content, 
+                    summary, changes_count, original_content, character_count,
+                    total_links, dead_links_count, corrected_links_count, mode, status, retry_count
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)
+            """, (
+                article_data.get('title'),
+                article_data.get('page_id'),
+                article_data.get('revision_id'),
+                article_data.get('corrected_content'),
+                article_data.get('summary'),
+                article_data.get('changes_count'),
+                article_data.get('original_content'),
+                article_data.get('character_count'),
+                article_data.get('total_links'),
+                article_data.get('dead_links_count'),
+                article_data.get('corrected_links_count'),
+                article_data.get('mode', 'regex'),
+                article_data.get('retry_count', 0)  # Preserve retry count for requeued items
+            ))
+            self.conn.commit()
+            logger.info(f"Added article to queue: {article_data.get('title', 'unknown')} (retry_count={article_data.get('retry_count', 0)})")
+            return True
+        except Exception as e:
+            logger.error(f"Error adding article to queue: {e}")
+            self.conn.rollback()
+            return False
+
+    def pop_from_scheduler_queue(self) -> Optional[Dict[str, Any]]:
+        """
+        Remove and return the next article from queue (FIFO).
+        Transitions status from 'queued' to 'processing' with heartbeat.
+        
+        Returns:
+            Article data or None if queue is empty
+        """
+        from datetime import datetime
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                SELECT * FROM scheduler_queue 
+                WHERE status = 'queued'
+                ORDER BY priority DESC, queued_at ASC
+                LIMIT 1
+            """)
+            row = cursor.fetchone()
+            
+            if row:
+                article_id = row['id']
+                article_data = dict(row)
+                
+                # Mark as processing with heartbeat
+                now = datetime.now().isoformat()
+                cursor.execute("""
+                    UPDATE scheduler_queue 
+                    SET status = 'processing', 
+                        processing_started_at = ?,
+                        last_heartbeat = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (now, now, article_id))
+                self.conn.commit()
+                
+                logger.info(f"Transitioned article to processing: {article_data.get('article_title', 'unknown')}")
+                return article_data
+            return None
+        except Exception as e:
+            logger.error(f"Error popping from queue: {e}")
+            self.conn.rollback()
+            return None
+
+    def get_scheduler_queue_size(self) -> int:
+        """
+        Get the current queue size (count of 'queued' items).
+        
+        Returns:
+            Number of queued articles in queue
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM scheduler_queue 
+                WHERE status = 'queued'
+            """)
+            row = cursor.fetchone()
+            return row['count'] if row else 0
+        except Exception as e:
+            logger.error(f"Error getting queue size: {e}")
+            return 0
+
+    def get_scheduler_queue(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Get articles from queue (queued status only).
+        
+        Args:
+            limit: Maximum number of articles to return
+            
+        Returns:
+            List of article data
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                SELECT * FROM scheduler_queue 
+                WHERE status = 'queued'
+                ORDER BY priority DESC, queued_at ASC
+                LIMIT ?
+            """, (limit,))
+            return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"Error getting queue: {e}")
+            return []
+
+    def mark_queue_item_processed(self, article_id: int, status: str) -> bool:
+        """
+        Mark a queue item as processed (published, rejected, etc).
+        
+        Args:
+            article_id: Queue item ID
+            status: New status (published, rejected, error)
+            
+        Returns:
+            True if successful
+        """
+        from datetime import datetime
+        cursor = self.conn.cursor()
+        try:
+            now = datetime.now().isoformat()
+            if status == 'published':
+                cursor.execute("""
+                    UPDATE scheduler_queue 
+                    SET status = 'published', 
+                        published_at = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (now, article_id))
+            else:
+                cursor.execute("""
+                    UPDATE scheduler_queue 
+                    SET status = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (status, article_id))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Error marking queue item processed: {e}")
+            self.conn.rollback()
+            return False
+
+    def transition_queue_item(self, article_id: int, new_status: str) -> bool:
+        """
+        Transition queue item to new state with timestamp.
+        State machine: queued → processing → validated → publishing → published
+        Also supports: stale → retry, error
+        
+        Args:
+            article_id: Queue item ID
+            new_status: New status (queued, processing, validated, publishing, published, stale, error)
+            
+        Returns:
+            True if successful, False if transition is invalid
+        """
+        from datetime import datetime
+        cursor = self.conn.cursor()
+        try:
+            # Get current status
+            cursor.execute("SELECT status FROM scheduler_queue WHERE id = ?", (article_id,))
+            row = cursor.fetchone()
+            if not row:
+                logger.error(f"Queue item {article_id} not found")
+                return False
+            
+            current_status = row['status']
+            
+            # Validate transition
+            if new_status not in self.VALID_QUEUE_TRANSITIONS.get(current_status, []):
+                logger.error(
+                    f"Invalid state transition: {current_status} → {new_status} "
+                    f"for queue item {article_id}. "
+                    f"Valid transitions from {current_status}: {self.VALID_QUEUE_TRANSITIONS.get(current_status, [])}"
+                )
+                return False
+            
+            now = datetime.now().isoformat()
+            
+            if new_status == 'processing':
+                cursor.execute("""
+                    UPDATE scheduler_queue 
+                    SET status = 'processing', 
+                        processing_started_at = ?,
+                        last_heartbeat = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (now, now, article_id))
+            elif new_status == 'validated':
+                cursor.execute("""
+                    UPDATE scheduler_queue 
+                    SET status = 'validated', 
+                        validated_at = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (now, article_id))
+            elif new_status == 'publishing':
+                cursor.execute("""
+                    UPDATE scheduler_queue 
+                    SET status = 'publishing', 
+                        publishing_started_at = ?,
+                        last_heartbeat = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (now, now, article_id))
+            elif new_status == 'published':
+                cursor.execute("""
+                    UPDATE scheduler_queue 
+                    SET status = 'published', 
+                        published_at = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (now, article_id))
+            elif new_status == 'stale':
+                cursor.execute("""
+                    UPDATE scheduler_queue 
+                    SET status = 'stale',
+                        error_message = COALESCE(error_message, 'Processing timeout'),
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (article_id,))
+            elif new_status == 'retry':
+                cursor.execute("""
+                    UPDATE scheduler_queue 
+                    SET status = 'queued',
+                        retry_count = retry_count + 1,
+                        processing_started_at = NULL,
+                        last_heartbeat = NULL,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (article_id,))
+            else:
+                cursor.execute("""
+                    UPDATE scheduler_queue 
+                    SET status = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (new_status, article_id))
+            
+            self.conn.commit()
+            logger.info(f"Transitioned queue item {article_id}: {current_status} → {new_status}")
+            return True
+        except Exception as e:
+            logger.error(f"Error transitioning queue item: {e}")
+            self.conn.rollback()
+            return False
+
+    def update_queue_heartbeat(self, article_id: int) -> bool:
+        """
+        Update heartbeat timestamp for a processing item.
+        
+        Args:
+            article_id: Queue item ID
+            
+        Returns:
+            True if successful
+        """
+        from datetime import datetime
+        cursor = self.conn.cursor()
+        try:
+            now = datetime.now().isoformat()
+            cursor.execute("""
+                UPDATE scheduler_queue 
+                SET last_heartbeat = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND status IN ('processing', 'publishing')
+            """, (now, article_id))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Error updating heartbeat: {e}")
+            self.conn.rollback()
+            return False
+
+    def detect_stale_queue_items(self, timeout_seconds: int = 300) -> List[Dict[str, Any]]:
+        """
+        Detect queue items that have exceeded their heartbeat timeout.
+        
+        Args:
+            timeout_seconds: Timeout in seconds (default 5 minutes)
+            
+        Returns:
+            List of stale queue items
+        """
+        from datetime import datetime, timedelta
+        cursor = self.conn.cursor()
+        try:
+            timeout_time = datetime.now() - timedelta(seconds=timeout_seconds)
+            cursor.execute("""
+                SELECT * FROM scheduler_queue 
+                WHERE status IN ('processing', 'publishing')
+                AND (last_heartbeat IS NULL OR last_heartbeat < ?)
+            """, (timeout_time.isoformat(),))
+            stale_items = [dict(row) for row in cursor.fetchall()]
+            
+            if stale_items:
+                logger.warning(f"Detected {len(stale_items)} stale queue items")
+            
+            return stale_items
+        except Exception as e:
+            logger.error(f"Error detecting stale queue items: {e}")
+            return []
+
+    def cleanup_stale_queue_items(self, timeout_seconds: int = 300, max_retries: int = 3) -> int:
+        """
+        Mark stale queue items and retry or error them based on retry count.
+        
+        Args:
+            timeout_seconds: Timeout in seconds (default 5 minutes)
+            max_retries: Maximum retry attempts before marking as error
+            
+        Returns:
+            Number of items processed
+        """
+        stale_items = self.detect_stale_queue_items(timeout_seconds)
+        processed = 0
+        
+        for item in stale_items:
+            retry_count = item.get('retry_count', 0)
+            if retry_count < max_retries:
+                self.transition_queue_item(item['id'], 'retry')
+                logger.info(f"Retrying stale item {item['id']} (attempt {retry_count + 1}/{max_retries})")
+            else:
+                self.transition_queue_item(item['id'], 'error')
+                cursor = self.conn.cursor()
+                cursor.execute("""
+                    UPDATE scheduler_queue 
+                    SET error_message = 'Max retries exceeded after timeout',
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (item['id'],))
+                self.conn.commit()
+                logger.error(f"Marked stale item {item['id']} as error (max retries exceeded)")
+            processed += 1
+        
+        return processed
+
+    def clear_scheduler_queue(self) -> bool:
+        """
+        Clear all queued items from queue.
+        
+        Returns:
+            True if successful
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("DELETE FROM scheduler_queue WHERE status = 'queued'")
+            self.conn.commit()
+            logger.info("Scheduler queue cleared")
+            return True
+        except Exception as e:
+            logger.error(f"Error clearing queue: {e}")
+            self.conn.rollback()
+            return False
+
+    # ============================================================================
+    # Scheduler Statistics Methods - SINGLE SOURCE OF TRUTH
+    # ============================================================================
+
+    def get_scheduler_statistics(self) -> Dict[str, Any]:
+        """
+        Get scheduler statistics.
+        
+        Returns:
+            Dictionary with statistics
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("SELECT * FROM scheduler_statistics WHERE id = 1")
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+            return {
+                'total_published': 0,
+                'total_analyzed': 0,
+                'total_ignored': 0,
+                'total_errors': 0,
+                'avg_publish_delay': 0.0,
+                'avg_processing_time': 0.0
+            }
+        except Exception as e:
+            logger.error(f"Error getting scheduler statistics: {e}")
+            return {}
+
+    def update_scheduler_statistics(self, **kwargs) -> bool:
+        """
+        Update scheduler statistics.
+        
+        Args:
+            **kwargs: Statistics fields to update
+            
+        Returns:
+            True if successful
+        """
+        cursor = self.conn.cursor()
+        try:
+            valid_fields = ['total_published', 'total_analyzed', 'total_ignored', 
+                          'total_errors', 'avg_publish_delay', 'avg_processing_time']
+            
+            updates = []
+            values = []
+            for key, value in kwargs.items():
+                if key in valid_fields:
+                    updates.append(f"{key} = ?")
+                    values.append(value)
+            
+            if updates:
+                values.append(1)  # id = 1
+                query = f"UPDATE scheduler_statistics SET {', '.join(updates)}, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                cursor.execute(query, values)
+                self.conn.commit()
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error updating scheduler statistics: {e}")
+            self.conn.rollback()
+            return False
+
+    # ============================================================================
+    # Automation Session Methods - SINGLE SOURCE OF TRUTH
+    # ============================================================================
+
+    def create_automation_session(self, session_id: str, **kwargs) -> bool:
+        """
+        Create a new automation session.
+        
+        Args:
+            session_id: Unique session identifier
+            **kwargs: Session fields (category_name, max_articles, mode, etc.)
+            
+        Returns:
+            True if successful
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO automation_sessions (
+                    session_id, status, category_name, max_articles, mode
+                ) VALUES (?, 'not_started', ?, ?, ?)
+            """, (
+                session_id,
+                kwargs.get('category_name'),
+                kwargs.get('max_articles', 0),
+                kwargs.get('mode', 'regex')
+            ))
+            self.conn.commit()
+            logger.info(f"Created automation session: {session_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error creating automation session: {e}")
+            self.conn.rollback()
+            return False
+
+    def get_automation_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get automation session by ID.
+        
+        Args:
+            session_id: Session identifier
+            
+        Returns:
+            Session data or None if not found
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                SELECT * FROM automation_sessions 
+                WHERE session_id = ?
+            """, (session_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+        except Exception as e:
+            logger.error(f"Error getting automation session: {e}")
+            return None
+
+    def get_latest_automation_session(self) -> Optional[Dict[str, Any]]:
+        """
+        Get the most recent automation session.
+        
+        Returns:
+            Session data or None if no sessions exist
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                SELECT * FROM automation_sessions 
+                ORDER BY created_at DESC 
+                LIMIT 1
+            """)
+            row = cursor.fetchone()
+            return dict(row) if row else None
+        except Exception as e:
+            logger.error(f"Error getting latest automation session: {e}")
+            return None
+
+    def update_automation_session(self, session_id: str, **kwargs) -> bool:
+        """
+        Update automation session fields.
+        
+        Args:
+            session_id: Session identifier
+            **kwargs: Fields to update
+            
+        Returns:
+            True if successful
+        """
+        cursor = self.conn.cursor()
+        try:
+            valid_fields = ['status', 'current_step', 'current_article_index',
+                          'total_articles', 'articles_processed', 'articles_published',
+                          'articles_error', 'mode', 'last_saved_at']
+            
+            updates = []
+            values = []
+            for key, value in kwargs.items():
+                if key in valid_fields:
+                    updates.append(f"{key} = ?")
+                    values.append(value)
+            
+            if updates:
+                values.append(session_id)
+                query = f"UPDATE automation_sessions SET {', '.join(updates)}, updated_at = CURRENT_TIMESTAMP WHERE session_id = ?"
+                cursor.execute(query, values)
+                self.conn.commit()
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error updating automation session: {e}")
+            self.conn.rollback()
+            return False
+
+    def start_automation_session(self, session_id: str) -> bool:
+        """
+        Mark automation session as started.
+        
+        Args:
+            session_id: Session identifier
+            
+        Returns:
+            True if successful
+        """
+        from datetime import datetime
+        return self.update_automation_session(
+            session_id,
+            status='running',
+            started_at=datetime.now().isoformat()
+        )
+
+    def complete_automation_session(self, session_id: str, status: str = 'completed') -> bool:
+        """
+        Mark automation session as completed.
+        
+        Args:
+            session_id: Session identifier
+            status: Final status (completed, failed, interrupted)
+            
+        Returns:
+            True if successful
+        """
+        from datetime import datetime
+        return self.update_automation_session(
+            session_id,
+            status=status,
+            completed_at=datetime.now().isoformat()
+        )
+
+    # ============================================================================
+    # Automation Article States Methods - SINGLE SOURCE OF TRUTH
+    # ============================================================================
+
+    def create_article_state(self, session_id: str, article_title: str, **kwargs) -> bool:
+        """
+        Create article processing state.
+        
+        Args:
+            session_id: Session identifier
+            article_title: Article title
+            **kwargs: Article state fields
+            
+        Returns:
+            True if successful
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO automation_article_states (
+                    session_id, article_title, page_id, revision_id, status
+                ) VALUES (?, ?, ?, ?, 'pending')
+            """, (
+                session_id,
+                article_title,
+                kwargs.get('page_id'),
+                kwargs.get('revision_id')
+            ))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Error creating article state: {e}")
+            self.conn.rollback()
+            return False
+
+    def update_article_state(self, session_id: str, article_title: str, **kwargs) -> bool:
+        """
+        Update article processing state.
+        
+        Args:
+            session_id: Session identifier
+            article_title: Article title
+            **kwargs: Fields to update
+            
+        Returns:
+            True if successful
+        """
+        cursor = self.conn.cursor()
+        try:
+            valid_fields = ['status', 'progress', 'current_step', 'error_message',
+                          'changes_count', 'summary', 'elapsed_time_seconds']
+            
+            updates = []
+            values = []
+            for key, value in kwargs.items():
+                if key in valid_fields:
+                    updates.append(f"{key} = ?")
+                    values.append(value)
+            
+            if updates:
+                values.extend([session_id, article_title])
+                query = f"""
+                    UPDATE automation_article_states 
+                    SET {', '.join(updates)}, updated_at = CURRENT_TIMESTAMP 
+                    WHERE session_id = ? AND article_title = ?
+                """
+                cursor.execute(query, values)
+                self.conn.commit()
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error updating article state: {e}")
+            self.conn.rollback()
+            return False
+
+    def get_article_states(self, session_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all article states for a session.
+        
+        Args:
+            session_id: Session identifier
+            
+        Returns:
+            List of article states
+        """
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                SELECT * FROM automation_article_states 
+                WHERE session_id = ?
+                ORDER BY created_at ASC
+            """, (session_id,))
+            
+            states = []
+            for row in cursor.fetchall():
+                states.append(dict(row))
+            return states
+        except Exception as e:
+            logger.error(f"Error getting article states: {e}")
+            return []
+
+    # ============================================================================
+    # Daily Collection Log Methods - Idempotence for daily article collection
+    # ============================================================================
+
+    def has_collected_today(self) -> bool:
+        """
+        Check if articles have already been collected today.
+        
+        Returns:
+            True if collection already done today
+        """
+        from datetime import datetime, date
+        cursor = self.conn.cursor()
+        try:
+            today = date.today()
+            cursor.execute("""
+                SELECT COUNT(*) FROM daily_collection_log 
+                WHERE collection_date = ?
+            """, (today.isoformat(),))
+            
+            count = cursor.fetchone()[0]
+            return count > 0
+        except Exception as e:
+            logger.error(f"Error checking daily collection: {e}")
+            return False
+
+    def log_daily_collection(self, articles_count: int, category: str = None, source_details: str = None) -> bool:
+        """
+        Log a daily article collection for idempotence.
+        
+        Args:
+            articles_count: Number of articles collected
+            category: Category name (optional)
+            source_details: Additional source details (optional)
+            
+        Returns:
+            True if successful
+        """
+        from datetime import datetime, date
+        cursor = self.conn.cursor()
+        try:
+            today = date.today()
+            cursor.execute("""
+                INSERT OR REPLACE INTO daily_collection_log 
+                (collection_date, articles_collected, collected_at, category, source_details)
+                VALUES (?, ?, ?, ?, ?)
+            """, (today.isoformat(), articles_count, datetime.now().isoformat(), category, source_details))
+            self.conn.commit()
+            logger.info(f"Logged daily collection: {articles_count} articles from {category}")
+            return True
+        except Exception as e:
+            logger.error(f"Error logging daily collection: {e}")
+            self.conn.rollback()
+            return False
+
+    def get_daily_collection_info(self, collection_date: str = None) -> Optional[Dict[str, Any]]:
+        """
+        Get daily collection information.
+        
+        Args:
+            collection_date: Date string (YYYY-MM-DD), defaults to today
+            
+        Returns:
+            Collection info dict or None
+        """
+        from datetime import date
+        cursor = self.conn.cursor()
+        try:
+            if collection_date is None:
+                collection_date = date.today().isoformat()
+                
+            cursor.execute("""
+                SELECT * FROM daily_collection_log 
+                WHERE collection_date = ?
+            """, (collection_date,))
+            
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+            return None
+        except Exception as e:
+            logger.error(f"Error getting daily collection info: {e}")
+            return False
+
+    def cleanup_stale_article_states(self, timeout_minutes: int = 30) -> int:
+        """
+        Clean up stale article states (articles stuck in processing status).
+        
+        Args:
+            timeout_minutes: Timeout in minutes before considering state stale
+            
+        Returns:
+            Number of states cleaned up
+        """
+        from datetime import datetime, timedelta
+        cursor = self.conn.cursor()
+        try:
+            timeout_time = datetime.now() - timedelta(minutes=timeout_minutes)
+            cursor.execute("""
+                UPDATE automation_article_states 
+                SET status = 'error', error_message = 'Processing timeout',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE status IN ('analyzing', 'retrieving', 'correcting')
+                AND updated_at < ?
+            """, (timeout_time.isoformat(),))
+            self.conn.commit()
+            cleaned = cursor.rowcount
+            if cleaned > 0:
+                logger.info(f"Cleaned up {cleaned} stale article states")
+            return cleaned
+        except Exception as e:
+            logger.error(f"Error cleaning up stale article states: {e}")
+            self.conn.rollback()
+            return 0
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("SELECT * FROM automation_lock WHERE id = 1")
+            row = cursor.fetchone()
+            
+            if row:
+                return {
+                    'locked': bool(row['locked']),
+                    'locked_by': row['locked_by'],
+                    'locked_at': row['locked_at'],
+                    'session_id': row['session_id'],
+                    'automation_type': row['automation_type'],
+                    'updated_at': row['updated_at']
+                }
+            else:
+                return {
+                    'locked': False,
+                    'locked_by': None,
+                    'locked_at': None,
+                    'session_id': None,
+                    'automation_type': None,
+                    'updated_at': None
+                }
+        except Exception as e:
+            logger.error(f"Error getting automation lock status: {e}")
+            return {
+                'locked': False,
+                'error': str(e)
+            }
+    
+    def is_automation_locked(self) -> bool:
+        """
+        Check if automation lock is currently held.
+        
+        Returns:
+            True if locked, False otherwise
+        """
+        status = self.get_automation_lock_status()
+        return status.get('locked', False)
+
     def close(self):
         """Close database connection."""
         if self.conn:

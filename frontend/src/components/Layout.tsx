@@ -32,6 +32,7 @@ const navigation = [
       { name: 'Analyzed History', href: '/analysis/history' },
       { name: 'Manual Review', href: '/manual-review' },
       { name: 'Articles to Analyze', href: '/articles/to-analyze' },
+      { name: 'Scheduler', href: '/articles/scheduler' },
     ],
   },
   {
@@ -65,14 +66,17 @@ const navigation = [
 export default function Layout() {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
   const [authStatus, setAuthStatus] = useState<any>(null)
-  const [authLoading, setAuthLoading] = useState(true)
+  const [authLoading, setAuthLoading] = useState(false)
   const [authError, setAuthError] = useState<string | null>(() => localStorage.getItem('wp_auth_error') || null)
   const [authSuccess, setAuthSuccess] = useState<string | null>(null)
+  const [killSwitchError, setKillSwitchError] = useState<string | null>(null)
   const location = useLocation()
 
-  const fetchAuthStatus = async () => {
+  const fetchAuthStatus = async (showLoading = false) => {
     try {
-      setAuthLoading(true)
+      if (showLoading) {
+        setAuthLoading(true)
+      }
       const status = await authApi.getStatus()
       setAuthStatus(status)
       // Only hide error banner if user is now authenticated
@@ -92,8 +96,9 @@ export default function Layout() {
   }
 
   useEffect(() => {
-    // Don't reset auth status on navigation - keep previous state visible during refetch
-    fetchAuthStatus()
+    // Only show loading on initial load, not on navigation
+    const isInitialLoad = authStatus === null
+    fetchAuthStatus(isInitialLoad)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location])
 
@@ -139,9 +144,16 @@ export default function Layout() {
     }
     window.addEventListener('auth:success', onAuthSuccess)
 
+    // Listen for kill switch errors from backend
+    const onKillSwitchError = (event: CustomEvent) => {
+      setKillSwitchError(event.detail.message || 'Erreur de sécurité du kill switch')
+    }
+    window.addEventListener('kill-switch:error', onKillSwitchError as EventListener)
+
     return () => {
       window.removeEventListener('auth:expired', onAuthExpired)
       window.removeEventListener('auth:success', onAuthSuccess)
+      window.removeEventListener('kill-switch:error', onKillSwitchError as EventListener)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -510,6 +522,49 @@ export default function Layout() {
                 transition: 'background-color 0.15s'
               }}
               onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.15)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+            >
+              <X style={{ width: '13px', height: '13px' }} />
+            </button>
+          </div>
+        )}
+
+        {/* Global Kill Switch Error Banner */}
+        {killSwitchError && (
+          <div
+            style={{
+              padding: '10px 24px',
+              backgroundColor: 'rgba(239, 68, 68, 0.15)',
+              borderBottom: '1px solid rgba(239, 68, 68, 0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+              flexShrink: 0
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#ef4444', fontSize: '12.5px' }}>
+              <ShieldAlert style={{ width: '15px', height: '15px', flexShrink: 0 }} />
+              <span>{killSwitchError}</span>
+            </div>
+            <button
+              onClick={() => setKillSwitchError(null)}
+              aria-label="Fermer"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '20px',
+                height: '20px',
+                background: 'none',
+                border: 'none',
+                color: '#ef4444',
+                cursor: 'pointer',
+                borderRadius: '4px',
+                flexShrink: 0,
+                transition: 'background-color 0.15s'
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.15)' }}
               onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
             >
               <X style={{ width: '13px', height: '13px' }} />

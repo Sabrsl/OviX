@@ -34,7 +34,8 @@ class SafeURLReplacer:
     """
     
     # Fixed regex to properly exclude template delimiters |{}[] that cause malformed URLs
-    URL_PATTERN = re.compile(r'https?://[a-zA-Z0-9\-._~:/?#@!$&\'()*+,;=%]+', re.IGNORECASE)
+    # Also supports Unicode characters in domain names (e.g., ü, é, ö) for internationalized domains
+    URL_PATTERN = re.compile(r'https?://[a-zA-Z0-9\-._~:/?#@!$&\'()*+,;=%\u0080-\uFFFF]+', re.IGNORECASE)
     
     def __init__(self):
         """Initialize safe URL replacer."""

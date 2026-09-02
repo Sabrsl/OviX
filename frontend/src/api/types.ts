@@ -197,8 +197,9 @@ export interface AnalysisJob {
   started_at?: string
   completed_at?: string
   error?: string
-  progress?: AnalysisProgress
+  progress?: number
   message?: string
+  results?: any
 }
 
 export interface AnalysisProgress {
@@ -230,6 +231,9 @@ export interface AnalysisResult {
     medium_severity?: number
     low_severity?: number
   }
+  normalization_changes_count?: number
+  normalization_ignored_count?: number
+  normalization_reports?: string
 }
 
 export interface IssueInfo {

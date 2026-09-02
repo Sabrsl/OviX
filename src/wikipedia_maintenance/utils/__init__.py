@@ -18,7 +18,8 @@ from .performance_optimizer import (
 )
 from .kill_switch_manager import KillSwitchManager, KillSwitchState, KillSwitchTrigger, get_kill_switch_manager
 from .talk_page_monitor import TalkPageMonitor, TalkPageCommand, TalkPageCommandHandler
-from .kill_switch_templates import get_discussion_page_template, get_emergency_stop_instructions
+from .kill_switch_templates import get_discussion_page_template, get_emergency_stop_instructions, get_secure_discussion_page_template
+from .talk_page_tokens import TalkPageTokenManager, TalkPageToken, TokenType, TokenStatus, get_token_manager
 
 __all__ = [
     'DatabaseManager',
@@ -65,5 +66,11 @@ __all__ = [
     'TalkPageCommand',
     'TalkPageCommandHandler',
     'get_discussion_page_template',
-    'get_emergency_stop_instructions'
+    'get_emergency_stop_instructions',
+    'get_secure_discussion_page_template',
+    'TalkPageTokenManager',
+    'TalkPageToken',
+    'TokenType',
+    'TokenStatus',
+    'get_token_manager'
 ]

@@ -6,6 +6,8 @@ temporary failures and permanently dead links.
 """
 
 import logging
+import random
+import ssl
 import time
 import urllib.request
 import urllib.error
@@ -14,18 +16,22 @@ from urllib.parse import urlparse
 from enum import Enum
 from dataclasses import dataclass
 from pathlib import Path
+from functools import lru_cache
 
 from .api_throttler import get_global_throttler, get_link_check_throttler
 
 logger = logging.getLogger(__name__)
 
 
-def _load_academic_publisher_domains() -> set:
+@lru_cache(maxsize=1)
+def _load_academic_publisher_domains() -> frozenset:
     """
     Load academic publisher domains from configuration file.
-    
+
+    Cached at module level to avoid repeated file I/O - loads once per process.
+
     Returns:
-        Set of academic publisher domain names
+        Frozen set of academic publisher domain names (immutable for cache safety)
     """
     try:
         config_path = Path(__file__).parent.parent.parent.parent / "config" / "academic_domains.yaml"
@@ -34,24 +40,23 @@ def _load_academic_publisher_domains() -> set:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
                 if config and 'academic_publisher_domains' in config:
-                    domains = set(config['academic_publisher_domains'])
+                    domains = frozenset(config['academic_publisher_domains'])
                     logger.info(f"Loaded {len(domains)} academic publisher domains from config file")
                     return domains
     except Exception as e:
         logger.warning(f"Failed to load academic domains from config: {e}")
-    
-    # Fallback to empty set if config fails
-    return set()
+
+    return frozenset()
 
 
 class LinkStatus(Enum):
     """Status of a link check."""
-    HEALTHY = "healthy"  # Link is accessible (2xx/3xx)
-    DEAD = "dead"  # Link is permanently dead (404/410)
-    TEMPORARY_ERROR = "temporary_error"  # Temporary failure (5xx, timeout, DNS)
-    RATE_LIMITED = "rate_limited"  # Rate limited (429)
+    HEALTHY = "healthy"              # Link is accessible (2xx/3xx)
+    DEAD = "dead"                    # Link is permanently dead (404/410/DNS/SSL expired)
+    TEMPORARY_ERROR = "temporary_error"  # Temporary failure (5xx, timeout, DNS transient)
+    RATE_LIMITED = "rate_limited"    # Rate limited (429)
     REVIEW_REQUIRED = "review_required"  # Ambiguous status (400/401/403/etc)
-    UNKNOWN = "unknown"  # Unable to determine
+    UNKNOWN = "unknown"              # Unable to determine
 
 
 @dataclass
@@ -88,15 +93,43 @@ class LinkChecker:
     """
 
     DEFAULT_TIMEOUT = 10
+
     # Only codes that definitively indicate the resource no longer exists.
     # 403 is intentionally NOT here: it usually means access restrictions
     # (geo-blocking, auth wall, anti-bot) rather than a genuinely dead
-    # resource, so it belongs in REVIEW_REQUIRED, not PERMANENTLY_DEAD.
-    PERMANENTLY_DEAD_CODES = {404, 410}
-    REVIEW_REQUIRED_CODES = {400, 401, 403, 498}
-    TEMPORARY_ERROR_CODES = {500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527, 528, 529, 408}
+    # resource, so it belongs in REVIEW_REQUIRED, not here.
+    PERMANENTLY_DEAD_CODES = frozenset({404, 410})
+
+    # 498 = "Invalid Token" (non-standard, used by some CDNs/APIs e.g. Esri)
+    # kept here rather than in TEMPORARY_ERROR because it signals an
+    # auth/config problem, not server unavailability.
+    REVIEW_REQUIRED_CODES = frozenset({400, 401, 403, 498})
+
+    TEMPORARY_ERROR_CODES = frozenset(
+        {408, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527, 528, 529}
+    )
+
+    # Windows WSA DNS error codes that indicate transient DNS failures
+    # These should NOT be treated as permanently dead links
+    DNS_TRANSIENT_ERRORS = frozenset({
+        11001,  # HOST_NOT_FOUND (can be transient)
+        11002,  # TRY_AGAIN (definitely transient - DNS server busy)
+        11003,  # NO_RECOVERY (can be transient DNS server issue)
+        11004,  # NO_DATA (can be transient)
+    })
+
     # Realistic browser User-Agent to reduce anti-bot detection for academic publishers
-    USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+    USER_AGENT = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+    )
+
+    # Statuses that already carry a final, trustworthy verdict and should
+    # stop the retry loop immediately.
+    _TERMINAL_STATUSES = frozenset(
+        {LinkStatus.HEALTHY, LinkStatus.DEAD, LinkStatus.RATE_LIMITED,
+         LinkStatus.REVIEW_REQUIRED, LinkStatus.UNKNOWN}
+    )
 
     def __init__(self, timeout: int = None, max_retries: int = 3):
         self.timeout = timeout or self.DEFAULT_TIMEOUT
@@ -106,147 +139,137 @@ class LinkChecker:
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         # Load academic publisher domains from config file
         self.academic_publisher_domains = _load_academic_publisher_domains()
+        # Explicit SSL context, built once per checker instance.
+        self._ssl_context = ssl.create_default_context()
 
-    def _is_academic_publisher(self, url: str) -> bool:
+    def _is_academic_publisher(self, domain: str) -> bool:
         """
-        Check if URL belongs to an academic publisher known to block automated requests.
-        
-        Academic publishers systematically block bots with 403 regardless of User-Agent
-        due to advanced fingerprinting. These 403s are false positives - the content
-        likely exists but is behind anti-bot protection.
-        
+        Check if a (lowercased) domain belongs to an academic publisher known
+        to block automated requests.
+
+        Academic publishers systematically block bots with 403 regardless of
+        User-Agent due to advanced fingerprinting. These 403s are false
+        positives - the content likely exists but is behind anti-bot
+        protection.
+
         Args:
-            url: URL to check
-            
+            domain: lowercased netloc, e.g. "www.sciencedirect.com"
+
         Returns:
-            True if domain is in academic publisher whitelist
+            True if domain (or its parent domain) is in the whitelist.
         """
-        from urllib.parse import urlparse
-        parsed = urlparse(url)
-        domain = parsed.netloc.lower()
-        
-        # Check exact domain match
         if domain in self.academic_publisher_domains:
             return True
-        
-        # Check subdomain match (e.g., www.sciencedirect.com)
         for publisher_domain in self.academic_publisher_domains:
             if domain == f"www.{publisher_domain}" or domain.endswith(f".{publisher_domain}"):
                 return True
-        
         return False
 
     def check_link(self, url: str) -> LinkCheckResult:
-        """Check if a link is accessible with retry logic."""
+        """Check if a link is accessible, retrying on temporary failures."""
         start_time = time.time()
-        retry_count = 0
+        last_result: Optional[LinkCheckResult] = None
 
         self.api_throttler.wait_if_needed()
 
         try:
             for attempt in range(self.max_retries):
                 result = self._attempt_check(url, attempt)
+                last_result = result
 
-                if result.status in [LinkStatus.HEALTHY, LinkStatus.DEAD, LinkStatus.RATE_LIMITED]:
-                    result.check_duration = time.time() - start_time
+                if result.status in self._TERMINAL_STATUSES:
                     result.retry_count = attempt + 1
+                    result.check_duration = time.time() - start_time
                     return result
 
-                if result.status == LinkStatus.TEMPORARY_ERROR and attempt < self.max_retries - 1:
-                    wait_time = 2 ** attempt
+                # Only TEMPORARY_ERROR falls through to here.
+                if attempt < self.max_retries - 1:
+                    # Exponential backoff with jitter to avoid thundering
+                    # herd when many URLs hit transient errors together.
+                    wait_time = (2 ** attempt) + random.uniform(0, 0.5)
                     time.sleep(wait_time)
-                    retry_count = attempt + 1
                     continue
 
-                result.check_duration = time.time() - start_time
                 result.retry_count = attempt + 1
+                result.check_duration = time.time() - start_time
                 return result
 
+            # Exhausted retries without a terminal result (defensive fallback;
+            # should not normally be reached given the loop above).
             return LinkCheckResult(
                 url=url,
                 status=LinkStatus.UNKNOWN,
-                retry_count=retry_count,
+                error_type=last_result.error_type if last_result else None,
+                retry_count=self.max_retries,
                 check_duration=time.time() - start_time,
                 confidence=0.0
             )
 
-        except Exception:
+        except Exception as e:
+            self._logger.exception(f"UNEXPECTED_CHECK_FAILURE | url={url}")
             return LinkCheckResult(
                 url=url,
                 status=LinkStatus.UNKNOWN,
-                error_type="UNEXPECTED_ERROR",
-                retry_count=retry_count,
+                error_type=f"UNEXPECTED_{type(e).__name__}",
+                retry_count=0,
                 check_duration=time.time() - start_time,
                 confidence=0.0
             )
 
-    # ------------------------------------------------------------------
-    # FIX: the previous version had a single try/except wrapping only the
-    # first HEAD request (with an inline GET fallback for 403/405 nested
-    # inside that except), followed - OUTSIDE any try block - by the
-    # status-code classification, followed by three more `except`
-    # clauses that didn't belong to any open `try`. That is a Python
-    # SyntaxError: the module cannot be imported as-is.
-    #
-    # This version keeps the same intent (HEAD first, fall back to GET
-    # once on 403/405, classify by status code, handle URLError/timeouts
-    # as TEMPORARY_ERROR) but as a single coherent try/except with the
-    # status-code classification factored into a shared helper so the
-    # success path and the HTTPError-without-fallback path don't
-    # duplicate the same elif chain.
-    # ------------------------------------------------------------------
+    def _request(self, url: str, method: str):
+        """Build and send a single HTTP request, returning the open response."""
+        req = urllib.request.Request(
+            url,
+            headers={
+                'User-Agent': self.USER_AGENT,
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+            },
+            method=method
+        )
+        return urllib.request.urlopen(req, timeout=self.timeout, context=self._ssl_context)
 
     def _attempt_check(self, url: str, attempt: int) -> LinkCheckResult:
-        """Attempt a single check of the URL."""
-        context = urllib.request.ssl.create_default_context()
+        """Attempt a single check of the URL: HEAD first, GET fallback on 403/405."""
+        domain = urlparse(url).netloc.lower()
         used_get_fallback = False
-
-        def _request(method: str):
-            req = urllib.request.Request(
-                url,
-                headers={
-                    'User-Agent': self.USER_AGENT,
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
-                    'Accept-Encoding': 'gzip, deflate, br',
-                    'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1',
-                },
-                method=method
-            )
-            return urllib.request.urlopen(req, timeout=self.timeout, context=context)
+        response = None
 
         try:
-            response = _request('HEAD')
+            try:
+                response = self._request(url, 'HEAD')
+            except urllib.error.HTTPError as e:
+                status_code = e.code if hasattr(e, 'code') else None
 
-        except urllib.error.HTTPError as e:
-            status_code = e.code if hasattr(e, 'code') else None
+                # Some servers reject/misbehave on HEAD even for a valid URL
+                # (405 Method Not Allowed) or gate it behind anti-bot rules
+                # that a GET clears (403). Try once with GET before giving up.
+                if status_code in (403, 405):
+                    try:
+                        response = self._request(url, 'GET')
+                        used_get_fallback = True
+                    except urllib.error.HTTPError as get_error:
+                        return self._classify_error(url, get_error, attempt, domain)
+                    except urllib.error.URLError as get_error:
+                        return self._classify_error(url, get_error, attempt, domain)
+                else:
+                    return self._classify_error(url, e, attempt, domain)
+            except urllib.error.URLError as e:
+                return self._classify_error(url, e, attempt, domain)
 
-            # Some servers reject/misbehave on HEAD even for a valid URL
-            # (405 Method Not Allowed) or gate it behind anti-bot rules
-            # that a GET clears (403). Try once with GET before giving up.
-            if status_code in (403, 405):
-                try:
-                    response = _request('GET')
-                    used_get_fallback = True
-                except urllib.error.HTTPError as get_error:
-                    return self._classify_http_error(url, get_error, attempt)
-                except urllib.error.URLError as get_error:
-                    return self._classify_url_error(url, get_error, attempt)
-                except Exception as get_error:
-                    return LinkCheckResult(
-                        url=url,
-                        status=LinkStatus.UNKNOWN,
-                        error_type=f"UNEXPECTED_{type(get_error).__name__}",
-                        retry_count=attempt,
-                        check_duration=0.0,
-                        confidence=0.0
-                    )
-            else:
-                return self._classify_http_error(url, e, attempt)
+            # We reach here only with a live response object (HEAD, or the
+            # GET fallback, succeeded).
+            status_code = response.getcode()
+            final_url = response.url
 
-        except urllib.error.URLError as e:
-            return self._classify_url_error(url, e, attempt)
+            self.api_throttler.report_success()
+            if used_get_fallback:
+                self._logger.info(f"GET_FALLBACK_USED | url={url} | reason=HEAD_failed")
+
+            return self._classify_status_code(url, status_code, final_url, attempt, domain)
 
         except Exception as e:
             return LinkCheckResult(
@@ -254,142 +277,121 @@ class LinkChecker:
                 status=LinkStatus.UNKNOWN,
                 error_type=f"UNEXPECTED_{type(e).__name__}",
                 retry_count=attempt,
-                check_duration=0.0,
                 confidence=0.0
             )
+        finally:
+            if response is not None:
+                response.close()
 
-        # We reach here only with a live response object (HEAD, or the
-        # GET fallback, succeeded).
-        status_code = response.getcode()
-        final_url = response.url
+    def _classify_error(
+        self, url: str, e: Exception, attempt: int, domain: str
+    ) -> LinkCheckResult:
+        """
+        Dispatch any raised exception (HTTPError or URLError) to the
+        appropriate classifier. Single entry point so HEAD and GET failure
+        paths share identical logic.
+        """
+        if isinstance(e, urllib.error.HTTPError):
+            return self._classify_http_status(
+                url,
+                status_code=e.code if hasattr(e, 'code') else None,
+                final_url=None,
+                attempt=attempt,
+                domain=domain,
+            )
+        return self._classify_url_error(url, e, attempt)
 
-        self.api_throttler.report_success()
+    def _classify_status_code(
+        self, url: str, status_code: int, final_url: Optional[str], attempt: int, domain: str
+    ) -> LinkCheckResult:
+        """Classify a successfully-obtained HTTP status code (2xx-3xx path)."""
+        return self._classify_http_status(url, status_code, final_url, attempt, domain)
 
-        if used_get_fallback:
-            self._logger.info(f"GET_FALLBACK_USED | url={url} | reason=HEAD_failed")
+    def _classify_http_status(
+        self, url: str, status_code: Optional[int], final_url: Optional[str],
+        attempt: int, domain: str
+    ) -> LinkCheckResult:
+        """
+        Single source of truth for turning an HTTP status code into a
+        LinkCheckResult. Used for both the success path (HEAD/GET returned
+        normally) and the HTTPError path (status_code came from the raised
+        exception).
+        """
+        common = dict(url=url, http_status_code=status_code, final_url=final_url, retry_count=attempt)
 
-        return self._classify_status_code(url, status_code, final_url, attempt)
+        if status_code is None:
+            return LinkCheckResult(status=LinkStatus.UNKNOWN, error_type="NO_STATUS_CODE",
+                                    confidence=0.0, **common)
 
-    def _classify_status_code(self, url: str, status_code: int,
-                               final_url: Optional[str], attempt: int) -> LinkCheckResult:
-        """Classify a successfully-obtained HTTP status code."""
         if 200 <= status_code < 400:
-            return LinkCheckResult(
-                url=url, status=LinkStatus.HEALTHY, http_status_code=status_code,
-                final_url=final_url, retry_count=attempt, check_duration=0.0, confidence=1.0
-            )
-        elif status_code in self.PERMANENTLY_DEAD_CODES:
-            return LinkCheckResult(
-                url=url, status=LinkStatus.DEAD, http_status_code=status_code,
-                final_url=final_url, error_type=f"HTTP_{status_code}",
-                retry_count=attempt, check_duration=0.0, confidence=1.0
-            )
-        elif status_code in self.REVIEW_REQUIRED_CODES:
-            # Special handling for 403 from academic publishers
-            if status_code == 403 and self._is_academic_publisher(url):
-                self._logger.info(f"ACADEMIC_PUBLISHER_403 | url={url} | classified_as=TEMPORARY_ERROR")
-                return LinkCheckResult(
-                    url=url, status=LinkStatus.TEMPORARY_ERROR, http_status_code=status_code,
-                    final_url=final_url, error_type="HTTP_403_ACADEMIC_PUBLISHER",
-                    retry_count=attempt, check_duration=0.0, confidence=0.6
-                )
-            return LinkCheckResult(
-                url=url, status=LinkStatus.REVIEW_REQUIRED, http_status_code=status_code,
-                final_url=final_url, error_type=f"HTTP_{status_code}",
-                retry_count=attempt, check_duration=0.0, confidence=0.0
-            )
-        elif status_code in self.TEMPORARY_ERROR_CODES:
-            return LinkCheckResult(
-                url=url, status=LinkStatus.TEMPORARY_ERROR, http_status_code=status_code,
-                final_url=final_url, error_type=f"HTTP_{status_code}",
-                retry_count=attempt, check_duration=0.0, confidence=0.8
-            )
-        elif status_code == 429:
-            self.api_throttler.report_429()
-            return LinkCheckResult(
-                url=url, status=LinkStatus.RATE_LIMITED, http_status_code=status_code,
-                final_url=final_url, error_type="RATE_LIMITED",
-                retry_count=attempt, check_duration=0.0, confidence=1.0
-            )
-        else:
-            return LinkCheckResult(
-                url=url, status=LinkStatus.UNKNOWN, http_status_code=status_code,
-                final_url=final_url, error_type=f"HTTP_{status_code}",
-                retry_count=attempt, check_duration=0.0, confidence=0.5
-            )
-
-    def _classify_http_error(self, url: str, e: urllib.error.HTTPError, attempt: int) -> LinkCheckResult:
-        """Classify an HTTPError raised by urlopen (no final_url available)."""
-        status_code = e.code if hasattr(e, 'code') else None
+            return LinkCheckResult(status=LinkStatus.HEALTHY, confidence=1.0, **common)
 
         if status_code == 429:
             self.api_throttler.report_429()
-            return LinkCheckResult(
-                url=url, status=LinkStatus.RATE_LIMITED, http_status_code=status_code,
-                error_type="RATE_LIMITED", retry_count=attempt, check_duration=0.0, confidence=1.0
-            )
-        elif status_code in self.PERMANENTLY_DEAD_CODES:
-            return LinkCheckResult(
-                url=url, status=LinkStatus.DEAD, http_status_code=status_code,
-                error_type=f"HTTP_{status_code}", retry_count=attempt, check_duration=0.0, confidence=1.0
-            )
-        elif status_code in self.REVIEW_REQUIRED_CODES:
-            # Special handling for 403 from academic publishers
-            if status_code == 403 and self._is_academic_publisher(url):
+            return LinkCheckResult(status=LinkStatus.RATE_LIMITED, error_type="RATE_LIMITED",
+                                    confidence=1.0, **common)
+
+        if status_code in self.PERMANENTLY_DEAD_CODES:
+            return LinkCheckResult(status=LinkStatus.DEAD, error_type=f"HTTP_{status_code}",
+                                    confidence=1.0, **common)
+
+        if status_code in self.REVIEW_REQUIRED_CODES:
+            if status_code == 403 and self._is_academic_publisher(domain):
                 self._logger.info(f"ACADEMIC_PUBLISHER_403 | url={url} | classified_as=TEMPORARY_ERROR")
-                return LinkCheckResult(
-                    url=url, status=LinkStatus.TEMPORARY_ERROR, http_status_code=status_code,
-                    error_type="HTTP_403_ACADEMIC_PUBLISHER", retry_count=attempt, check_duration=0.0, confidence=0.6
-                )
-            return LinkCheckResult(
-                url=url, status=LinkStatus.REVIEW_REQUIRED, http_status_code=status_code,
-                error_type=f"HTTP_{status_code}", retry_count=attempt, check_duration=0.0, confidence=0.0
-            )
-        elif status_code in self.TEMPORARY_ERROR_CODES:
-            return LinkCheckResult(
-                url=url, status=LinkStatus.TEMPORARY_ERROR, http_status_code=status_code,
-                error_type=f"HTTP_{status_code}", retry_count=attempt, check_duration=0.0, confidence=0.8
-            )
-        else:
-            return LinkCheckResult(
-                url=url, status=LinkStatus.UNKNOWN, http_status_code=status_code,
-                error_type=f"HTTP_{status_code}", retry_count=attempt, check_duration=0.0, confidence=0.5
-            )
+                return LinkCheckResult(status=LinkStatus.TEMPORARY_ERROR,
+                                        error_type="HTTP_403_ACADEMIC_PUBLISHER",
+                                        confidence=0.6, **common)
+            return LinkCheckResult(status=LinkStatus.REVIEW_REQUIRED, error_type=f"HTTP_{status_code}",
+                                    confidence=0.0, **common)
+
+        if status_code in self.TEMPORARY_ERROR_CODES:
+            return LinkCheckResult(status=LinkStatus.TEMPORARY_ERROR, error_type=f"HTTP_{status_code}",
+                                    confidence=0.8, **common)
+
+        return LinkCheckResult(status=LinkStatus.UNKNOWN, error_type=f"HTTP_{status_code}",
+                                confidence=0.5, **common)
 
     def _classify_url_error(self, url: str, e: urllib.error.URLError, attempt: int) -> LinkCheckResult:
         """Classify a URLError (DNS failure, connection refused, timeout, ...)."""
         reason = e.reason
         reason_text = str(reason)
+        reason_lower = reason_text.lower()
 
-        # A timeout/connection-refused OSError is often carried as
-        # e.reason (an exception instance) rather than a plain string.
-        is_timeout_like = isinstance(reason, TimeoutError) or 'timed out' in reason_text.lower()
+        is_timeout_like = isinstance(reason, TimeoutError) or 'timed out' in reason_lower
         is_connection_issue = isinstance(reason, (ConnectionRefusedError, ConnectionResetError))
-        
-        # DNS failure (domain doesn't exist) or SSL certificate expired = DEAD (permanent)
-        is_dns_failure = 'getaddrinfo failed' in reason_text or 'nodename nor servname provided' in reason_text.lower()
-        is_ssl_expired = 'certificate has expired' in reason_text.lower() or 'certificate verify failed' in reason_text.lower()
+        is_dns_failure = 'getaddrinfo failed' in reason_text or 'nodename nor servname provided' in reason_lower
+        is_ssl_expired = 'certificate has expired' in reason_lower
+        is_ssl_verify_failed = 'certificate verify failed' in reason_lower
 
-        if is_dns_failure or is_ssl_expired:
-            return LinkCheckResult(
-                url=url, status=LinkStatus.DEAD,
-                error_type=f"URL_ERROR_{reason_text}", retry_count=attempt,
-                check_duration=0.0, confidence=0.9
-            )
-        elif is_timeout_like:
-            return LinkCheckResult(
-                url=url, status=LinkStatus.TEMPORARY_ERROR, error_type="TIMEOUT",
-                retry_count=attempt, check_duration=0.0, confidence=0.8
-            )
-        elif is_connection_issue:
-            return LinkCheckResult(
-                url=url, status=LinkStatus.TEMPORARY_ERROR,
-                error_type=type(reason).__name__, retry_count=attempt,
-                check_duration=0.0, confidence=0.8
-            )
-        else:
-            return LinkCheckResult(
-                url=url, status=LinkStatus.TEMPORARY_ERROR,
-                error_type=f"URL_ERROR_{reason_text}", retry_count=attempt,
-                check_duration=0.0, confidence=0.6
-            )
+        common = dict(url=url, retry_count=attempt)
+
+        if is_dns_failure:
+            # Check if this is a transient DNS error (Windows WSA error codes)
+            errno = getattr(reason, 'errno', None)
+            if errno in self.DNS_TRANSIENT_ERRORS:
+                self._logger.warning(f"DNS_TRANSIENT_ERROR | url={url} | errno={errno} | reason={reason_text}")
+                return LinkCheckResult(status=LinkStatus.TEMPORARY_ERROR,
+                                        error_type=f"DNS_TRANSIENT_{errno}",
+                                        confidence=0.0, **common)
+            # Non-transient DNS failure: treat as permanently dead
+            return LinkCheckResult(status=LinkStatus.DEAD, error_type=f"URL_ERROR_{reason_text}",
+                                    confidence=0.9, **common)
+        if is_ssl_expired:
+            # SSL certificate expired: permanently dead
+            return LinkCheckResult(status=LinkStatus.DEAD, error_type=f"URL_ERROR_{reason_text}",
+                                    confidence=0.9, **common)
+        if is_ssl_verify_failed:
+            # SSL certificate verification failed (chain/authority issue, not expired)
+            # This is often a misconfiguration, the site may still be accessible
+            # Treat as REVIEW_REQUIRED rather than DEAD to avoid false positives
+            self._logger.warning(f"SSL_VERIFY_FAILED | url={url} | reason={reason_text} | classified_as=REVIEW_REQUIRED")
+            return LinkCheckResult(status=LinkStatus.REVIEW_REQUIRED, error_type="SSL_VERIFY_FAILED",
+                                    confidence=0.7, **common)
+        if is_timeout_like:
+            return LinkCheckResult(status=LinkStatus.TEMPORARY_ERROR, error_type="TIMEOUT",
+                                    confidence=0.8, **common)
+        if is_connection_issue:
+            return LinkCheckResult(status=LinkStatus.TEMPORARY_ERROR, error_type=type(reason).__name__,
+                                    confidence=0.8, **common)
+        return LinkCheckResult(status=LinkStatus.TEMPORARY_ERROR, error_type=f"URL_ERROR_{reason_text}",
+                                confidence=0.6, **common)

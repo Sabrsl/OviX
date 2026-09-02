@@ -50,6 +50,8 @@ export default function ReadyToPublish() {
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<FilterType>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 20
 
   const loadReadyToPublish = useCallback(async (isInitial = false) => {
     if (isInitial) setLoading(true)
@@ -57,15 +59,10 @@ export default function ReadyToPublish() {
     setError(null)
 
     try {
-      const [analyzedResponse, publishedResponse, pendingQueueResponse] = await Promise.all([
-        articlesApi.getArticleHistory(100),
+      const [analyzedResponse, publishedResponse] = await Promise.all([
+        articlesApi.getArticleHistory(500),  // Augmenter la limite pour récupérer plus d'articles
         historyApi.getPublishedHistory(),
-        articlesApi.getPendingSchedulerQueue(),
       ])
-
-      const pendingQueueTitles = new Set(
-        (pendingQueueResponse.articles || []).map((item: any) => item.article_title || item.title)
-      )
 
       const publishedTitles = new Set(
         (publishedResponse.items || []).map((item: any) => item.title)
@@ -74,10 +71,10 @@ export default function ReadyToPublish() {
       const readyToPublish: ReadyToPublishItem[] = analyzedResponse
         .filter((item: any) => {
           const title = item.title || item.article_title
-          const isPublished = publishedTitles.has(item.title)
-          const isInSchedulerQueue = pendingQueueTitles.has(title)
+          const isPublished = publishedTitles.has(title)
           const hasValidCorrections = item.corrected_links_count > 0
-          return !isPublished && !isInSchedulerQueue && hasValidCorrections
+          const isReadyStatus = item.status === 'analyzed' || item.status === 'pending'
+          return !isPublished && hasValidCorrections && isReadyStatus
         })
         .map((item: any) => ({
           title: item.title || item.article_title,
@@ -124,14 +121,27 @@ export default function ReadyToPublish() {
     })
   }, [articles, filter, searchQuery])
 
+  const paginatedArticles = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = startIndex + itemsPerPage
+    return filteredArticles.slice(startIndex, endIndex)
+  }, [filteredArticles, currentPage, itemsPerPage])
+
+  const totalPages = Math.ceil(filteredArticles.length / itemsPerPage)
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filter, searchQuery])
+
   const stats = useMemo(
     () => ({
-      total: articles.length,
-      verified: articles.filter((a) => a.human_verified).length,
-      unverified: articles.filter((a) => !a.human_verified).length,
-      corrections: articles.reduce((sum, a) => sum + a.corrected_links_count, 0),
+      total: filteredArticles.length,
+      verified: filteredArticles.filter((a) => a.human_verified).length,
+      unverified: filteredArticles.filter((a) => !a.human_verified).length,
+      corrections: filteredArticles.reduce((sum, a) => sum + a.corrected_links_count, 0),
     }),
-    [articles]
+    [filteredArticles]
   )
 
   const handleViewDetails = (title: string) => {
@@ -361,7 +371,7 @@ export default function ReadyToPublish() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {filteredArticles.map((article, index) => (
+          {paginatedArticles.map((article, index) => (
             <ArticleRow
               key={article.title || index}
               article={article}
@@ -372,6 +382,125 @@ export default function ReadyToPublish() {
               onPublish={() => handlePublish(article.title)}
             />
           ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {filteredArticles.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', padding: '12px 0', borderTop: `1px solid ${COLORS.border}` }}>
+          <div style={{ fontSize: '12px', color: COLORS.textSecondary }}>
+            Affichage de {(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, filteredArticles.length)} sur {filteredArticles.length} articles
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: currentPage === 1 ? COLORS.bgInput : COLORS.bgSubtle,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: '6px',
+                color: currentPage === 1 ? COLORS.textMuted : COLORS.textSecondary,
+                fontSize: '12px',
+                fontWeight: 500,
+                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                opacity: currentPage === 1 ? 0.5 : 1,
+                transition: 'background-color 0.15s, color 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                if (currentPage !== 1) {
+                  e.currentTarget.style.backgroundColor = '#1f1f1f'
+                  e.currentTarget.style.color = COLORS.textPrimary
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (currentPage !== 1) {
+                  e.currentTarget.style.backgroundColor = COLORS.bgSubtle
+                  e.currentTarget.style.color = COLORS.textSecondary
+                }
+              }}
+            >
+              Précédent
+            </button>
+
+            <div style={{ display: 'flex', gap: '4px' }}>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum
+                if (totalPages <= 5) {
+                  pageNum = i + 1
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i
+                } else {
+                  pageNum = currentPage - 2 + i
+                }
+
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    style={{
+                      padding: '6px 10px',
+                      backgroundColor: currentPage === pageNum ? COLORS.accent : COLORS.bgInput,
+                      border: `1px solid ${currentPage === pageNum ? COLORS.accent : COLORS.border}`,
+                      borderRadius: '6px',
+                      color: currentPage === pageNum ? '#ffffff' : COLORS.textSecondary,
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      transition: 'background-color 0.15s, color 0.15s',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (currentPage !== pageNum) {
+                        e.currentTarget.style.backgroundColor = '#1f1f1f'
+                        e.currentTarget.style.color = COLORS.textPrimary
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (currentPage !== pageNum) {
+                        e.currentTarget.style.backgroundColor = COLORS.bgInput
+                        e.currentTarget.style.color = COLORS.textSecondary
+                      }
+                    }}
+                  >
+                    {pageNum}
+                  </button>
+                )
+              })}
+            </div>
+
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: currentPage === totalPages ? COLORS.bgInput : COLORS.bgSubtle,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: '6px',
+                color: currentPage === totalPages ? COLORS.textMuted : COLORS.textSecondary,
+                fontSize: '12px',
+                fontWeight: 500,
+                cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                opacity: currentPage === totalPages ? 0.5 : 1,
+                transition: 'background-color 0.15s, color 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                if (currentPage !== totalPages) {
+                  e.currentTarget.style.backgroundColor = '#1f1f1f'
+                  e.currentTarget.style.color = COLORS.textPrimary
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (currentPage !== totalPages) {
+                  e.currentTarget.style.backgroundColor = COLORS.bgSubtle
+                  e.currentTarget.style.color = COLORS.textSecondary
+                }
+              }}
+            >
+              Suivant
+            </button>
+          </div>
         </div>
       )}
 
@@ -439,8 +568,8 @@ function StatCard({
   )
 }
 
-function ModeBadge({ mode }: { mode: string }) {
-  const label = (mode || 'unknown').toUpperCase()
+function CorrectionTypeBadge({ mode }: { mode: string }) {
+  const label = mode === 'ia' ? 'IA' : mode === 'regex' ? 'Règles' : 'Règles'
   return (
     <span
       style={{
@@ -554,7 +683,7 @@ function ArticleRow({
           >
             {article.title}
           </div>
-          <ModeBadge mode={article.mode} />
+          <CorrectionTypeBadge mode={article.mode} />
         </div>
         <div style={{ display: 'flex', gap: '13px', fontSize: '12px', color: '#666666', flexWrap: 'wrap' }}>
           <span>Analysé : <span style={{ color: '#a0a0a0' }}>{formatDate(article.analysis_date)}</span></span>

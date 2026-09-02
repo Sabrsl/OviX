@@ -188,5 +188,13 @@ export const articlesApi = {
   async syncPublishedArticles(): Promise<{ success: boolean; synced_count: number; message: string }> {
     const response = await apiClient.post('/api/articles/sync-published')
     return response.data
+  },
+
+  /**
+   * Update article summary
+   */
+  async updateArticleSummary(title: string, summary: string): Promise<{ success: boolean; article_title: string; summary: string }> {
+    const response = await apiClient.put(`/api/articles/results/${encodeURIComponent(title)}/summary`, { summary })
+    return response.data
   }
 }

@@ -1,0 +1,558 @@
+# Case Normalization Reference Data
+# Ce fichier contient toutes les données de référence pour la normalisation de la casse
+# Modifiable facilement sans toucher au code source
+#
+# IMPORTANT — règle de sécurité pour tout mainteneur :
+# N'ajoutez JAMAIS d'entrée d'une seule lettre ou d'un seul chiffre dans
+# `acronyms`, `official_names` ou `preserved_expressions`. Le code applique
+# une correspondance par mot entier (\b...\b), mais une entrée à 1 caractère
+# reste risquée (ambiguïté, faux positifs sur ponctuation/diacritiques).
+# Minimum recommandé : 2 caractères.
+
+# Sigles et acronymes connus à préserver (toujours en majuscules)
+# NOTE: Cette section contient uniquement de vrais acronymes (sigles abrégés).
+# Les noms complets d'universités et institutions (ex: Harvard, Stanford) doivent être
+# dans `official_names` pour être préservés avec leur casse officielle.
+acronyms:
+  # Organisations internationales
+  - ONU
+  - USA
+  - UK
+  - UE
+  - OTAN
+  - UNESCO
+  - UNICEF
+  - WHO
+  - WTO
+  - NGO
+  - NATO
+  - OMS
+  - OMC
+  - FMI
+  - UNHCR
+  - UNRWA
+  - OIT
+  - AIEA
+  # Organisations internationales (complément)
+  - ONG
+  - UA
+  - CEDEAO
+  - COMESA
+  - BAD
+  - PNUD
+  - UNODC
+  - HCR
+  - CICR
+  - OIM
+  - OPEP
+  - OCDE
+  - G7
+  - G20
+  - BRICS
+  - CIJ
+  - OIF
+
+  # Gouvernements et agences
+  - NASA
+  - FBI
+  - CIA
+  - KGB
+  - SNCF
+  - RATP
+  - EDF
+  - GDF
+  - AFP
+  - INA
+  - CNRS
+  - INSERM
+  - CEA
+  - INRA
+  - IRD
+  - CNAM
+  - ENS
+  - IEP
+  - EPHE
+  - EPFL
+  - DGSE
+  - CNIL
+  - INSEE
+  - MMC
+  # Maghreb / Afrique du Nord — institutions et médias (fréquent dans tes articles)
+  - APS           # Algérie Presse Service
+  - ENTV
+  - RTA
+  - ANP
+  - DGSN
+  - ONS           # Office National des Statistiques (Algérie) — vu dans ton log
+  - CNRC
+  - ANDI
+  - ONDA
+  - MDN
+  - APN           # Assemblée Populaire Nationale
+  - FLN
+  - RND
+  - MAP           # Maghreb Arabe Presse (Maroc)
+  - SNRT
+  - RTM
+  - 2M
+  - ONCF
+  - OCP
+  - ONEE
+  - BAM           # Bank Al-Maghrib
+  - TAP           # Tunis Afrique Presse
+  - ERTT
+  - INS           # Institut National de la Statistique (Tunisie)
+  # Maghreb / Afrique du Nord — institutions politiques et économiques
+  - UMA           # Union du Maghreb Arabe
+  - CEN-SAD       # Communauté des États Sahélo-Sahariens
+  - UM5           # Université Mohammed V (Maroc)
+  - USTHB         # Université des Sciences et de la Technologie Houari Boumediene (Algérie)
+  - UCAD          # Université Cheikh Anta Diop (Sénégal)
+  - UCA           # Université Cadi Ayyad (Maroc)
+  - USMS          # Université Sultan Moulay Slimane (Maroc)
+  - EST           # École Supérieure de Technologie (Maroc)
+  - OFPPT         # Office de la Formation Professionnelle et de la Promotion du Travail (Maroc)
+  - ANSEJ         # Agence Nationale de Soutien à l'Emploi des Jeunes (Algérie)
+  - CNAC          # Caisse Nationale d'Assurance Chômage (Algérie)
+  - CASNOS        # Caisse Nationale des Assurances Sociales (Algérie)
+  - CNSSM         # Caisse Nationale de Sécurité Sociale (Maroc)
+  - CNOPS         # Caisse Nationale des Organismes de Prévoyance Sociale (Maroc)
+  - AGD           # Administration Générale des Douanes (Maroc)
+  - DGAD          # Direction Générale des Affaires Générales (plusieurs pays)
+  # Gouvernements et agences (complément)
+  - DST
+  - DGSI
+  - GIGN
+  - RAID
+  - ANSSI
+  - CGT
+  - MEDEF
+  - INED
+  - IFOP
+  - BVA
+  - IPSOS
+  - ADEME
+  - ANRT
+  - ARCOM
+  - CSA
+
+  # Universités et institutions académiques (vrais acronymes uniquement)
+  - MIT
+
+  # Médias et presse
+  - BBC
+  - CNN
+  - NBC
+  - ABC
+  - CBS
+  - ITV
+  - TF1
+  - M6
+  - FR3
+  - ARTE
+  - ZDF
+  - RAI
+  - TVE
+  - RTVE
+  - SRF
+  - RTBF
+  - RTS
+  # Médias et presse (complément)
+  - AP            # Associated Press (sigle court, à utiliser si tu ne veux pas le nom complet)
+  - DPA
+  - EFE
+  - ANSA
+  - TASS
+  - RT
+  - CBC
+  - PBS
+  - RTL
+  - RMC
+  - LCI
+  - CBBC
+  - NRK
+  - SVT
+  - DR            # Danmarks Radio
+
+  # Sports
+  - NBA
+  - NFL
+  - MLB
+  - NHL
+  - FIFA
+  - UEFA
+  - IOC
+  - FIA
+  - CIO
+  # Sports (complément)
+  - CAF           # Confédération Africaine de Football
+  - CAN
+  - JO
+  - ATP
+  - WTA
+  - UCI
+
+  # Économie et finance
+  - GDP
+  - GNP
+  - CPI
+  - HDI
+  - Gini
+  - R&D
+  - PIB
+  # Économie et finance (complément)
+  - BCE
+  - FED
+  - PNB
+  - TVA
+  - RGPD
+  - ISO
+  - NASDAQ
+  - NYSE
+  - LBO
+  - OPA
+  - OPCVM
+
+  # Technologie
+  - API
+  - URL
+  - HTTP
+  - HTTPS
+  - HTML
+  - CSS
+  - JS
+  - XML
+  - JSON
+  - SQL
+  - AI
+  - ML
+  - NLP
+  - CV
+  - IA
+  - PDF
+  - USB
+  - GPS
+  - CPU
+  - GPU
+  # Technologie (complément)
+  - SEO
+  - CMS
+  - IDE
+  - SDK
+  - CDN
+  - VPN
+  - IoT
+  - LLM
+  - GPT
+  - RAM
+  - ROM
+  - SSD
+  - HDD
+  - RSS
+  - IP
+  - DNS
+  - FTP
+  - SSH
+  - TLS
+  - SSL
+  # Diplômes et institutions académiques françaises (complément)
+  - CNU
+  - CAPES
+  - CNAF
+  - HCERES
+  - CROUS
+  - IUT
+  - BTS
+  - DUT
+  - HEC
+  - ESSEC
+  - ESCP
+  - INALCO
+  - EHESS
+
+# Noms d'entreprises et organisations avec leur casse officielle
+# Ces noms seront préservés tels quels lors de la normalisation
+# Règle : chaque entrée doit faire au moins 2 caractères (voir note en tête de fichier)
+official_names:
+  # Français
+  - Le Monde
+  - Le Figaro
+  - Libération
+  - France Info
+  - France Bleu
+  - France Musique
+  - France Culture
+  - Radio France
+  - RFI
+  - TV5 Monde
+  - Arte
+  - BFM TV
+  - CNews
+  - L'Humanité
+  - La Croix
+  - Ouest-France
+  - Le Parisien
+  - 20 Minutes
+  - Métro
+  - Direct Matin
+  - France 24
+  - Le Point
+  - L'Express
+  - L'Obs
+  - Marianne
+  - Challenges
+  - Les Échos
+
+  # Médias maghrébins
+  - El Watan
+  - El Khabar
+  - Echorouk
+  - Le Matin
+  - L'Opinion
+  - Aujourd'hui le Maroc
+  - Le Soir Échos
+  - Al Massae
+  - Assabah
+  - Akhbar Al Youm
+  - Jeune Afrique
+  - Jeune Afrique Economie
+  - The Africa Report
+  - Maghreb Arab Press
+  - Middle East Online
+
+  # International
+  - The New York Times
+  - The Washington Post
+  - The Guardian
+  - The Times
+  - Financial Times
+  - The Economist
+  - Wall Street Journal
+  - Bloomberg
+  - Reuters
+  - Associated Press
+  - Agence France-Presse
+  - Getty Images
+
+  # Technologie
+  - Google
+  - Apple
+  - Microsoft
+  - Amazon
+  - Facebook
+  - Meta
+  - Twitter
+  - LinkedIn
+  - Instagram
+  - TikTok
+  - Snapchat
+  - WhatsApp
+  - YouTube
+  - Netflix
+  - Spotify
+  - Deezer
+  - Adobe
+  - IBM
+  - Oracle
+  - Salesforce
+  - SAP
+  - Intel
+  - AMD
+  - NVIDIA
+
+  - Wikipedia
+  - Wikipédia
+  - Wikimedia Foundation
+  - Wikimedia Commons
+  - Wikidata
+  - Wikisource
+  - Wikibooks
+  - Wikiversity
+  - Wikinews
+  - Wikiquote
+  - Wiktionary
+  - Wikivoyage
+  - Wikispecies
+
+  # Édition et médias
+  - AlloCiné
+  - IMDb
+  - SensCritique
+  - RateYourMusic
+  - Discogs
+  - MusicBrainz
+  - Last.fm
+  - Bandcamp
+  - SoundCloud
+
+  # Scientifique et académique
+  - Nature
+  - Science
+  - The Lancet
+  - Cell
+  - PubMed
+  - arXiv
+  - JSTOR
+  - ORCID
+  - Scopus
+  - Web of Science
+
+  # Universités et institutions académiques (noms complets avec casse officielle)
+  - Harvard
+  - Yale
+  - Stanford
+  - Oxford
+  - Cambridge
+  - Caltech
+  - UCLA
+  - NYU
+  - Fox News
+  - Sciences Po
+  - Sky News
+
+  # Universités maghrébines
+  - Université Mohammed V
+  - Université Hassan II
+  - Université Ibn Tofail
+  - Université Cadi Ayyad
+  - Université Sidi Mohamed Ben Abdellah
+  - Université des Sciences et de la Technologie Houari Boumediene
+  - Université Mouloud Mammeri
+  - Université M'hamed Bougara
+  - Université Abou Bekr Belkaïd
+  - Université Cheikh Anta Diop
+  - Université Felix Houphouet-Boigny
+  - Université de Lagos
+  - University of Cape Town
+  - University of the Witwatersrand
+  - Stellenbosch University
+
+  # Réseaux sociaux — cas particuliers à 1 caractère gérés en expressions complètes
+  - X (Twitter)
+  - X (réseau social)
+
+# Particules françaises qui restent en minuscules (sauf en début de chaîne)
+particles:
+  - de
+  - du
+  - des
+  - la
+  - le
+  - les
+  - van
+  - von
+  - der
+  - den
+  - ten
+  - ter
+  - da
+  - di
+  - del
+  - della
+  - dei
+  - van de
+  - van den
+  - van der
+  - von de
+  - von den
+  - von der
+
+# Mots composés et expressions courantes à préserver
+preserved_expressions:
+  - États-Unis
+  - Royaume-Uni
+  - Pays-Bas
+  - Nouvelle-Zélande
+  - Costa Rica
+  - Sierra Leone
+  - Côte d'Ivoire
+  - République tchèque
+  - Afrique du Sud
+  - Amérique latine
+  - Moyen-Orient
+  - Proche-Orient
+  - Asie centrale
+  - Europe de l'Est
+  - Amérique du Nord
+  - Amérique du Sud
+  - Corée du Sud
+  - Corée du Nord
+  - Émirats arabes unis
+  - Arabie saoudite
+
+# Domaines internet vers noms de sites officiels (utilisé pour le paramètre site=)
+# Note : les doublons sémantiques (ex. lefigaro.fr / lefigaro.com) sont volontaires
+# — chaque variante de domaine réellement rencontrée doit être mappée explicitement.
+domain_to_site_name:
+  music.apple.com: [[Apple Music]]
+  apps.apple.com: [[App Store]]
+  podcasts.apple.com: [[Apple Podcasts]]
+  www.apple.com: [[Apple Inc.]]
+  apple.com: [[Apple Inc.]]
+  www.youtube.com: [[YouTube]]
+  youtube.com: [[YouTube]]
+  youtu.be: [[YouTube]]
+  www.lemonde.fr: [[Le Monde]]
+  lemonde.fr: [[Le Monde]]
+  www.lefigaro.fr: [[Le Figaro]]
+  lefigaro.fr: [[Le Figaro]]
+  www.lefigaro.com: [[Le Figaro]]
+  www.liberation.fr: [[Libération (journal)]]
+  liberation.fr: [[Libération (journal)]]
+  www.franceinfo.fr: [[Franceinfo]]
+  francetvinfo.fr: [[Franceinfo]]
+  www.francetvinfo.fr: [[Franceinfo]]
+  www.francebleu.fr: [[Ici (radio network)]]
+  www.francemusique.fr: [[France Musique]]
+  www.franceculture.fr: [[France Culture]]
+  www.bbc.com: [[BBC]]
+  www.bbc.co.uk: [[BBC]]
+  bbc.co.uk: [[BBC]]
+  www.theguardian.com: [[The Guardian]]
+  theguardian.com: [[The Guardian]]
+  www.nytimes.com: [[The New York Times]]
+  nytimes.com: [[The New York Times]]
+  en.wikipedia.org: [[Wikipedia]]
+  fr.wikipedia.org: [[Wikipédia]]
+  www.spotify.com: [[Spotify]]
+  open.spotify.com: [[Spotify]]
+  www.deezer.com: [[Deezer]]
+  www.imdb.com: [[IMDb]]
+  imdb.com: [[IMDb]]
+  www.allocine.fr: [[AlloCiné]]
+  allocine.fr: [[AlloCiné]]
+  www.instagram.com: [[Instagram]]
+  twitter.com: [[X (social network)]]
+  x.com: [[X (social network)]]
+  www.facebook.com: [[Facebook]]
+  www.lefilmfrancais.com: [[Le Film français]]
+  www.rfi.fr: [[Radio France Internationale]]
+  rfi.fr: [[Radio France Internationale]]
+  www.france24.com: [[France 24]]
+  france24.com: [[France 24]]
+  www.tv5monde.com: [[TV5Monde]]
+  tv5monde.com: [[TV5Monde]]
+  www.arte.tv: [[Arte (TV)]]
+  arte.tv: [[Arte (TV)]]
+  webtv.un.org: [[United Nations]]
+  web.archive.org: [[Internet Archive]]
+  wikiwix.com: [[Wikiwix]]
+  arquivo.pt: [[Arquivo.pt]]
+  # Algérie
+  www.elwatan.com: [[El Watan]]
+  elkhabar.com: [[El Khabar]]
+  echouroukonline.com: [[Echorouk]]
+  lemonde.dz: [[Le Monde d'Algérie]]
+  # Maroc
+  lematin.ma: [[Le Matin]]
+  lopinion.ma: [[L'Opinion]]
+  aujourdhui.ma: [[Aujourd'hui le Maroc]]
+  lesoir-echos.ma: [[Le Soir Échos]]
+  almassae.press: [[Al Massae]]
+  assabah.ma: [[Assabah]]
+  akhbaralyoum.com: [[Akhbar Al Youm]]
+  # International africain
+  jeuneafrique.com: [[Jeune Afrique]]
+  theafricareport.com: [[The Africa Report]]
+  maghress.com: [[Maghreb Press]]
+  middle-east-online.com: [[Middle East Online]]

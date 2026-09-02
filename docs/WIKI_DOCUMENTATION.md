@@ -13,7 +13,7 @@ OviX combine plusieurs mécanismes complémentaires :
 * vérification parallèle des liens ;
 * classification des erreurs (permanentes / temporaires / ambiguës) ;
 * recherche de redirections ;
-* recherche dans les services d'archivage multiples (Wayback Machine, CommonCrawl, Arquivo.pt) ;
+* recherche dans les services d'archivage multiples (Internet Archive, CommonCrawl, Arquivo.pt) ;
 * vérification de la correspondance de contenu ;
 * validation stricte des propositions de remplacement par système de preuves ;
 * remplacement ciblé des URLs (et non global) ;
@@ -91,7 +91,7 @@ Chaque lien est classé afin de distinguer les liens réellement morts des erreu
 Exemples documentés : les réponses 404 et 410, ainsi que les erreurs DNS ou SSL, sont classées ''DEAD''. Les {{Lang|en|timeouts}}, les erreurs 5xx et certains 403 sur des domaines académiques sont classés ''TEMPORARY_ERROR'' afin de limiter les faux positifs.
 
 === Réparation multi-stratégie ===
-Pour un lien classé ''DEAD'', OviX tente d'abord de trouver une redirection. Si celle-ci ne peut être validée, le système recherche en second recours une version archivée de la ressource via plusieurs services d'archivage (Wayback Machine, CommonCrawl, Arquivo.pt) avec fallback automatique entre providers.
+Pour un lien classé ''DEAD'', OviX tente d'abord de trouver une redirection. Si celle-ci ne peut être validée, le système recherche en second recours une version archivée de la ressource via plusieurs services d'archivage (Internet Archive, CommonCrawl, Arquivo.pt) avec fallback automatique entre providers.
 
 === Validation par preuves ===
 Le système utilise un mécanisme de validation basé sur trois types de preuves indépendantes :
@@ -128,7 +128,7 @@ OviX utilise une architecture moderne composée de :
 * '''Frontend React''' : Interface utilisateur avec pages spécialisées (ReadyToPublish, SystemKillSwitch, AnalysisResults, etc.)
 * '''Backend FastAPI''' : API RESTful avec routes complètes (analysis, articles, auth, config, system, stats, etc.)
 * '''Base de données SQLite''' : Stockage persistant avec migrations
-* '''Multi-archivage''' : Fallback automatique entre Wayback Machine, CommonCrawl, Arquivo.pt
+* '''Multi-archivage''' : Fallback automatique entre Internet Archive, CommonCrawl, Arquivo.pt
 
 {{Note|L'interface Streamlit mentionnée dans certaines sections historiques n'est plus maintenue. L'architecture actuelle utilise exclusivement React + FastAPI.}}
 
@@ -208,7 +208,7 @@ Lorsque '''les 3 preuves sont validées**, la réparation peut être classée RE
 Lorsque la redirection n'est pas suffisamment fiable, OviX recourt à un mécanisme de secours basé sur les services d'archivage multiples, comprenant notamment :
 
 * validation syntaxique de l'URL ;
-* recherche d'une archive disponible sur plusieurs providers (Wayback Machine, CommonCrawl, Arquivo.pt) ;
+* recherche d'une archive disponible sur plusieurs providers (Internet Archive, CommonCrawl, Arquivo.pt) ;
 * nouvelle vérification de l'URL originale pour éviter les faux positifs ;
 * vérification de l'accessibilité de l'archive avec retry et exponential backoff ;
 * détection d'une éventuelle page d'erreur archivée (soft-404) ;
@@ -779,7 +779,7 @@ Pass 2: Sequential Repair
     │   ├─ RedirectFinder.find_redirect()
     │   ├─ ContentVerifier.verify_same_resource()
     │   ├─ Multi-ArchiveProvider.verify_content_match()
-    │   │   ├─ Wayback Machine
+    │   │   ├─ Internet Archive
     │   │   ├─ CommonCrawl
     │   │   └─ Arquivo.pt
     │   ├─ LinkValidator.validate_repair() (Proof-based)
@@ -1127,10 +1127,10 @@ def _attempt_archive_fallback(url, url_position, result, match):
 
 Le système supporte plusieurs providers d'archives :
 
-1. **Wayback Machine** (archive.org) - Provider principal
-2. **CommonCrawl** - Archives web massives
-3. **Arquivo.pt** - Archives portugaises
-4. **Archive.today** - Archives instantanées
+1. **Internet Archive** (archive.org) - Provider principal
+2. CommonCrawl - Archives web massives
+3. Arquivo.pt - Archives portugaises
+4. Archive.today - Archives instantanées
 
 Le système effectue un **fallback automatique** entre providers si l'un échoue temporairement (503, 502, 429).
 
@@ -1390,7 +1390,7 @@ services:
 
 ```bash
 # Cloner le dépôt
-git clone https://github.com/yourusername/OviX.git
+git clone https://github.com/Sabrsl/OviX.git
 cd OviX
 
 # Installer les dépendances Python
@@ -1480,9 +1480,9 @@ Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
 ## Contact
 
 - **Auteur** : Sabrsl
-- **Projet** : https://github.com/yourusername/OviX
-- **Issues** : https://github.com/yourusername/OviX/issues
-- **Documentation** : https://github.com/yourusername/OviX/wiki
+- **Projet** : https://github.com/Sabrsl/OviX
+- **Issues** : https://github.com/Sabrsl/OviX/issues
+- **Documentation** : https://github.com/Sabrsl/OviX/wiki
 
 ---
 

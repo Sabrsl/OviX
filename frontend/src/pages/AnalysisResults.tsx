@@ -285,15 +285,53 @@ export default function AnalysisResults() {
     }
   }, [job?.status, results, resultsLoading, resultsFetchFailed, jobId, fetchResults])
 
-  // Poll while the job is active (pending, running, or paused) — not just "running".
+  // Use SSE streaming for real-time status updates instead of polling
   useEffect(() => {
+    if (!autoRefresh || !jobId) return
+
     const status = job?.status
     const isActive = status === 'running' || status === 'pending'
-    if (!autoRefresh || !jobId || !isActive) return
+    const isCompleted = status === 'completed' || status === 'failed'
 
-    const interval = setInterval(() => fetchJobStatus({ silent: true }), 2000)
-    return () => clearInterval(interval)
-  }, [autoRefresh, jobId, job?.status, fetchJobStatus])
+    // If already completed, don't start streaming
+    if (isCompleted) return
+
+    // If not active and not completed, don't start streaming
+    if (!isActive && status) return
+
+    const cleanup = analysisApi.streamAnalysisStatus(
+      jobId,
+      (statusUpdate) => {
+        setJob(prevJob => {
+          const wasCompletedWithResults = prevJob?.status === 'completed'
+          const regressing =
+            wasCompletedWithResults &&
+            statusUpdate.status !== 'completed' &&
+            (statusUpdate.status === 'running' || statusUpdate.status === 'pending')
+          return regressing ? prevJob : statusUpdate
+        })
+        setError(null)
+
+        if (statusUpdate.status === 'completed') {
+          setAutoRefresh(false)
+          fetchResults(requestIdRef.current)
+        }
+      },
+      () => {
+        // On complete
+        setLoading(false)
+        setRefreshing(false)
+      },
+      (error) => {
+        // On error
+        setError(error)
+        setLoading(false)
+        setRefreshing(false)
+      }
+    )
+
+    return cleanup
+  }, [autoRefresh, jobId, job?.status, fetchResults])
 
   const cancelJob = async () => {
     if (!jobId || actionPending) return

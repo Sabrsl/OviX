@@ -34,6 +34,7 @@ load_dotenv()
 from ..analyzers.base import Issue
 from .edit_summaries import get_random_summary, get_summary
 from .api_throttler import get_global_throttler
+from .talk_page_monitor import TalkPageMonitor
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ class Correction:
     corrected_snippet: Optional[str] = None
     start: Optional[int] = None
     end: Optional[int] = None
+    operation_id: Optional[str] = None  # Phase 2: Corrélation avec Issue
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -57,6 +59,7 @@ class Correction:
             'corrected_snippet': self.corrected_snippet,
             'start': self.start,
             'end': self.end,
+            'operation_id': self.operation_id,  # Phase 2: Corrélation
         }
 
 
@@ -197,6 +200,7 @@ class Corrector:
                         original_snippet=actual_text,
                         start=start,
                         end=end,
+                        operation_id=issue.operation_id  # Phase 2: Corrélation
                     )
                 )
                 return False
@@ -212,6 +216,7 @@ class Corrector:
                         original_snippet=self.current_content[start:end],
                         start=start,
                         end=end,
+                        operation_id=issue.operation_id  # Phase 2: Corrélation
                     )
                 )
                 return False
@@ -240,6 +245,7 @@ class Corrector:
             corrected_snippet=issue.suggested_text,
             start=start,
             end=end,
+            operation_id=issue.operation_id  # Phase 2: Corrélation
         )
         self.corrections.append(correction)
 
@@ -262,11 +268,11 @@ class Corrector:
                 issue.suggested_text,
                 1  # only first occurrence
             )
-            correction = Correction(issue=issue, applied=True)
+            correction = Correction(issue=issue, applied=True, operation_id=issue.operation_id)  # Phase 2: Corrélation
             self.corrections.append(correction)
             return True
         else:
-            correction = Correction(issue=issue, applied=False)
+            correction = Correction(issue=issue, applied=False, operation_id=issue.operation_id)  # Phase 2: Corrélation
             self.corrections.append(correction)
             return False
 
@@ -452,7 +458,7 @@ class Publisher:
         
         # P0 CRITICAL FIX: Add conflict detection by revision ID
         self.require_revision_check = True  # Check revision ID before publish
-        
+
         # Note: Wikipedia API client integration temporarily disabled due to circular import
         # Will be re-enabled after refactoring
         self.wikipedia_client = None
@@ -501,12 +507,12 @@ class Publisher:
         """Load credentials from secure credential manager (environment variables only)."""
         if self.password is not None:
             return
-        
+
         # Use secure credential manager
         try:
             from .secure_credentials import get_credential_manager
             cred_manager = get_credential_manager(allow_env_only=True)
-            
+
             username, password = cred_manager.get_wikipedia_credentials()
             if username and password:
                 self.username = username
@@ -518,22 +524,95 @@ class Publisher:
             else:
                 logger.warning("Wikipedia credentials not found in environment variables")
                 logger.warning("Please set WIKIPEDIA_USERNAME and WIKIPEDIA_PASSWORD environment variables")
-                
+
         except ImportError:
             logger.warning("Secure credential manager not available, falling back to environment variables")
             # Fallback to direct environment variable access
             import os
             env_username = os.environ.get('WIKIPEDIA_USERNAME')
             env_password = os.environ.get('WIKIPEDIA_PASSWORD')
-            
+
             if env_username and env_password:
                 self.username = env_username
                 self.password = env_password
                 masked_username = "*" * (len(env_username) - 3) + env_username[-3:] if len(env_username) > 3 else "***"
-                logger.info(f"Loaded credentials from environment variables for user: {masked_username}")
+                logger.info(f"Loaded credentials from environment for user: {masked_username}")
             else:
                 logger.warning("Wikipedia credentials not found in environment variables")
-    
+
+    def _check_talk_page_for_stop(self) -> bool:
+        """
+        Check bot's talk page for STOP command before publishing.
+
+        Returns True if STOP command detected (should abort publication).
+        FAIL-SAFE: Returns True on error to block publication if check fails.
+        """
+        logger.info("Checking talk page for STOP command before publication")
+
+        try:
+            # Use the bot's username (OviXCore) not the authenticated user's username
+            bot_username = "OviXCore"
+            talk_page_monitor = TalkPageMonitor(bot_username=bot_username)
+        except Exception as e:
+            logger.error(f"Failed to create talk page monitor: {e} — blocking publication (fail-safe)")
+            import traceback
+            logger.error(traceback.format_exc())
+            return True  # FAIL-SAFE: block publication on error
+
+        try:
+            # Get talk page title (use bot's username)
+            talk_page_title = f"Discussion utilisateur:{bot_username}"
+            logger.info(f"Checking talk page: {talk_page_title}")
+
+            # Use Wikipedia API to get page content with modern format
+            params = {
+                'action': 'query',
+                'prop': 'revisions',
+                'titles': talk_page_title,
+                'rvprop': 'content',
+                'rvslots': 'main',       # Modern format, avoids ambiguous '*' key
+                'format': 'json',
+                'formatversion': '2'      # More predictable JSON structure
+            }
+
+            response = self.session.get(self.api_url, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            # Extract page content with modern API format
+            pages = data.get('query', {}).get('pages', [])
+            page_content = None
+
+            for page in pages:
+                if page.get('missing'):
+                    logger.info("Talk page does not exist — treating as no STOP command")
+                    continue
+                revisions = page.get('revisions', [])
+                if revisions:
+                    slot = revisions[0].get('slots', {}).get('main', {})
+                    page_content = slot.get('content')
+
+            if page_content is None:
+                logger.info("No content retrieved from talk page (page might not exist or be empty)")
+                return False  # No content = no command = OK to publish
+
+            logger.info(f"Retrieved talk page content (length: {len(page_content)} chars)")
+            should_stop, reason = talk_page_monitor.should_stop(page_content)
+            logger.info(f"Talk page check result: should_stop={should_stop}, reason={reason}")
+
+            if should_stop:
+                logger.warning(f"🛑 STOP command detected on talk page: {reason}")
+                return True
+
+            logger.info("No STOP command detected on talk page")
+            return False
+
+        except Exception as e:
+            logger.error(f"Error checking talk page for STOP command: {e} — blocking publication (fail-safe)")
+            import traceback
+            logger.error(traceback.format_exc())
+            return True  # FAIL-SAFE: block publication on error
+
     def _validate_diff_size(self, original_content: str, new_content: str) -> tuple[bool, str]:
         """
         P0 CRITICAL FIX: Validate that the diff size is within safe limits.
@@ -844,6 +923,11 @@ class Publisher:
         logger.info(f"Page: {page_title}")
         logger.info(f"Dry run: {self.dry_run}")
         logger.info(f"Authenticated: {self._authenticated}")
+
+        # P0 CRITICAL FIX: Check Wikipedia talk page for STOP command BEFORE ANY edit
+        if self._check_talk_page_for_stop():
+            logger.error("Publication blocked by STOP command on talk page")
+            return False, "Publication blocked: STOP command detected on talk page"
 
         # P0 CRITICAL FIX: FINAL Kill Switch verification BEFORE ANY edit
         # This is the authoritative check - overrides scheduler, workers, queue, everything

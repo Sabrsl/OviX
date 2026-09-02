@@ -40,6 +40,10 @@ interface ArticleInfo {
   dead_links_count?: number
   corrected_links_count?: number
   human_verified?: boolean
+  summary?: string
+  normalization_changes_count?: number
+  normalization_ignored_count?: number
+  normalization_reports?: string
 }
 
 interface ArticleListItem {
@@ -103,10 +107,11 @@ function InfoCard({ children, title }: { children: React.ReactNode; title: strin
   )
 }
 
-function StatPill({ label, value, accent, statusColor }: { label: string; value: React.ReactNode; accent?: boolean; statusColor?: 'green' | 'blue' | 'amber' }) {
+function StatPill({ label, value, accent, statusColor }: { label: string; value: React.ReactNode; accent?: boolean; statusColor?: 'green' | 'blue' | 'amber' | 'purple' }) {
   const colorClass = statusColor === 'green' ? 'text-green-500' :
                       statusColor === 'blue' ? 'text-blue-500' :
                       statusColor === 'amber' ? 'text-amber-500' :
+                      statusColor === 'purple' ? 'text-purple-500' :
                       accent ? 'text-blue-500' : 'text-neutral-100'
   return (
     <div>
@@ -199,6 +204,33 @@ export default function ArticleDetail() {
   const [editedContent, setEditedContent] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
 
+  // Edit summary for publication
+  const [editSummary, setEditSummary] = useState('Correction de liens morts via OVIX')
+  const [isEditingSummary, setIsEditingSummary] = useState(false)
+  const [tempSummary, setTempSummary] = useState('')
+
+  const handleStartEditSummary = () => {
+    setTempSummary(editSummary)
+    setIsEditingSummary(true)
+  }
+
+  const handleSaveSummary = async () => {
+    if (!articleTitle) return
+    try {
+      await articlesApi.updateArticleSummary(articleTitle, tempSummary)
+      setEditSummary(tempSummary)
+      setIsEditingSummary(false)
+    } catch (err) {
+      console.error('Failed to save summary:', err)
+      alert('Erreur lors de l\'enregistrement du résumé')
+    }
+  }
+
+  const handleCancelSummary = () => {
+    setTempSummary(editSummary)
+    setIsEditingSummary(false)
+  }
+
   const requestIdRef = useRef(0)
 
   useEffect(() => {
@@ -277,7 +309,12 @@ export default function ArticleDetail() {
             dead_links_count: data.dead_links_count,
             corrected_links_count: data.corrected_links_count,
             human_verified: data.human_verified,
+            summary: data.summary,
+            normalization_changes_count: data.normalization_changes_count,
+            normalization_ignored_count: data.normalization_ignored_count,
+            normalization_reports: data.normalization_reports,
           })
+          setEditSummary(data.summary || 'Correction de liens morts via OVIX')
           return
         }
       }
@@ -292,6 +329,8 @@ export default function ArticleDetail() {
           analysis_date: new Date().toISOString(),
           mode: 'unknown',
           changes_count: 0,
+          normalization_changes_count: 0,
+          normalization_ignored_count: 0,
         })
         return
       }
@@ -336,7 +375,11 @@ export default function ArticleDetail() {
           dead_links_count: result.dead_links_count,
           corrected_links_count: result.corrected_links_count,
           human_verified: result.human_verified,
+          normalization_changes_count: result.normalization_changes_count,
+          normalization_ignored_count: result.normalization_ignored_count,
+          normalization_reports: result.normalization_reports,
         })
+        setEditSummary(result.summary || 'Correction de liens morts via OVIX')
       } else {
         setArticle({
           title,
@@ -345,7 +388,11 @@ export default function ArticleDetail() {
           mode: result.mode || 'unknown',
           changes_count: result.changes_count || 0,
           character_count: result.character_count || 0,
+          normalization_changes_count: result.normalization_changes_count,
+          normalization_ignored_count: result.normalization_ignored_count,
+          normalization_reports: result.normalization_reports,
         })
+        setEditSummary(result.summary || 'Correction de liens morts via OVIX')
       }
     } catch (err) {
       console.error('Failed to fetch from AnalyzedTracker:', err)
@@ -355,6 +402,8 @@ export default function ArticleDetail() {
         analysis_date: new Date().toISOString(),
         mode: 'unknown',
         changes_count: 0,
+        normalization_changes_count: 0,
+        normalization_ignored_count: 0,
       })
     }
   }, [])
@@ -428,7 +477,11 @@ export default function ArticleDetail() {
             mode: 'api',
             changes_count: results.successful_repairs || 0,
             character_count: content.length,
+            normalization_changes_count: results.normalization_changes_count,
+            normalization_ignored_count: results.normalization_ignored_count,
+            normalization_reports: results.normalization_reports,
           })
+          setEditSummary((results as any).summary || 'Correction de liens morts via OVIX')
         } catch (err) {
           console.error('Failed to fetch analysis results:', err)
           await fetchFromAnalyzedTracker(articleTitle)
@@ -451,12 +504,11 @@ export default function ArticleDetail() {
       setActionError(null)
       setPublishing(true)
       try {
-        const summary = 'Correction de liens morts via OVIX'
         await publicationApi.validatePublication({
           article_title: articleTitle,
           corrected_content: correctedContent,
           original_content: originalContent,
-          summary,
+          summary: editSummary,
           dry_run: true,
         })
         alert('Dry-run effectué avec succès')
@@ -481,12 +533,11 @@ export default function ArticleDetail() {
     setActionError(null)
     setPublishing(true)
     try {
-      const summary = 'Correction de liens morts via OVIX'
       const result = await publicationApi.publish({
         article_title: articleTitle,
         corrected_content: correctedContent,
         original_content: originalContent,
-        summary,
+        summary: editSummary,
         dry_run: false,
       })
 
@@ -796,6 +847,12 @@ export default function ArticleDetail() {
                   </button>
                 </div>
               )}
+              {article.normalization_changes_count !== undefined && article.normalization_changes_count !== null && article.normalization_changes_count > 0 && (
+                <div className="flex items-center gap-1 text-[11px] text-purple-500">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  {article.normalization_changes_count} normalisations appliquées
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -842,7 +899,7 @@ export default function ArticleDetail() {
 
       {/* Article Info */}
       <InfoCard title="Informations">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {(characterCount > 0 || originalContent.length > 0) && (
             <StatPill label="Caractères" value={formatCharacterCount(displayedCharCount)} accent />
           )}
@@ -852,10 +909,63 @@ export default function ArticleDetail() {
             'amber'
           } />
           <StatPill label="Date d'analyse" value={formatDate(article.analysis_date)} />
-          <StatPill label="Mode" value={article.mode || 'API'} />
-          <StatPill label="Modifications" value={article.changes_count ?? 0} />
+          <StatPill label="Type de correction" value={article.mode === 'ia' ? 'IA' : article.mode === 'regex' ? 'Règles' : article.mode || 'Règles'} />
+          <StatPill label="Modifications" value={article.corrected_links_count ?? 0} />
+          {article.normalization_changes_count !== undefined && article.normalization_changes_count !== null && article.normalization_changes_count > 0 && (
+            <StatPill label="Normalisations" value={article.normalization_changes_count} statusColor="purple" />
+          )}
+          {article.normalization_ignored_count !== undefined && article.normalization_ignored_count !== null && article.normalization_ignored_count > 0 && (
+            <StatPill label="Normalisations ignorées" value={article.normalization_ignored_count} statusColor="amber" />
+          )}
         </div>
       </InfoCard>
+
+      {/* Normalization Details */}
+      {article.normalization_reports && (
+        <InfoCard title="Détails des normalisations">
+          <div className="max-h-[300px] overflow-auto rounded-md border border-neutral-800 bg-black p-4 text-xs">
+            {(() => {
+              try {
+                const reports = JSON.parse(article.normalization_reports)
+                return reports.map((report: any, index: number) => (
+                  <div key={index} className="mb-4 last:mb-0">
+                    <div className="mb-2 font-medium text-purple-400">
+                      {report.template_name}
+                    </div>
+                    {report.parameter_changes && Object.keys(report.parameter_changes).length > 0 && (
+                      <div className="mb-2">
+                        <div className="mb-1 text-neutral-500">Paramètres modifiés:</div>
+                        {Object.entries(report.parameter_changes).map(([param, changes]: [string, any]) => {
+                          const [before, after] = Array.isArray(changes) ? changes : [changes, changes]
+                          return (
+                            <div key={param} className="mb-1 text-neutral-300">
+                              <span className="text-red-400">{before}</span>
+                              <span className="mx-1 text-neutral-500">→</span>
+                              <span className="text-green-400">{after}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {report.ignored_occurrences && report.ignored_occurrences.length > 0 && (
+                      <div>
+                        <div className="mb-1 text-neutral-500">Paramètres ignorés:</div>
+                        {report.ignored_occurrences.map(([param, reason]: [string, string], idx: number) => (
+                          <div key={idx} className="mb-1 text-neutral-400">
+                            {param}: <span className="text-neutral-500">{reason}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))
+              } catch (e) {
+                return <div className="text-red-400">Erreur lors de l'affichage des rapports de normalisation</div>
+              }
+            })()}
+          </div>
+        </InfoCard>
+      )}
 
       {/* Manual wikicode edit — unlocked in place, no navigation away */}
       {isEditing && (
@@ -919,6 +1029,59 @@ export default function ArticleDetail() {
           />
         </InfoCard>
       )}
+
+      {/* Edit Summary */}
+      <InfoCard title="Résumé d'édition (envoyé sur Wikipédia)">
+        <div className="relative">
+          {!isEditingSummary ? (
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 rounded-md border border-neutral-800 bg-black p-4 text-xs text-neutral-300">
+                {editSummary || "Correction de liens morts via OVIX"}
+              </div>
+              <button
+                type="button"
+                onClick={handleStartEditSummary}
+                disabled={publishing}
+                className="shrink-0 rounded-md border border-neutral-800 bg-neutral-800 p-2 text-neutral-400 transition-colors hover:bg-neutral-700 hover:text-neutral-200 disabled:cursor-not-allowed disabled:opacity-50"
+                title="Modifier le résumé"
+              >
+                <Edit className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <textarea
+                value={tempSummary}
+                onChange={(e) => setTempSummary(e.target.value)}
+                disabled={publishing}
+                placeholder="Correction de liens morts via OVIX"
+                className="w-full rounded-md border border-neutral-800 bg-black p-4 text-xs text-neutral-300 outline-none focus:border-blue-600 disabled:opacity-60 resize-y"
+                rows={3}
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={handleCancelSummary}
+                  disabled={publishing}
+                  className="flex items-center gap-1.5 rounded-md border border-neutral-800 bg-neutral-800 px-3 py-1.5 text-[11px] text-neutral-200 transition-colors hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveSummary}
+                  disabled={publishing}
+                  className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  Enregistrer
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </InfoCard>
 
       {/* Actions */}
       <InfoCard title="Actions">

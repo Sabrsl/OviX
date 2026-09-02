@@ -24,11 +24,16 @@ rate_limiting:
 analysis:
   enabled_analyzers:
     - DeadLinkAnalyzer
+  enable_dead_link_analyzer: true
+  enable_http_links_analyzer: false  # Controlled by https_verification.enabled
   min_severity: all
   disabled_issue_types: []
   issue_overrides: {}
   parallel: false
   analyzer_timeout: 60.0
+  enable_case_normalization: true
+  enable_ner_title_normalization: true  # Requires spaCy + fr_core_news_sm model
+  normalize_with_ai: false  # Enable AI-assisted normalization using Gemini (only if enable_case_normalization is true)
 
 # Database configuration
 database:
@@ -134,3 +139,15 @@ timeouts:
   https_verification: 10.0
   wayback_cdx: 5.0
   archive_org: 10.0
+
+# AI/LLM configuration for Gemini
+ai:
+  gemini:
+    api_key: "your-gemini-api-key"  # Get from https://makersuite.google.com/app/apikey
+    project_id: "your-project-id"  # Google Cloud project ID
+    model: "gemini-1.5-flash"  # Model to use: gemini-1.5-flash, gemini-1.5-pro, etc.
+    limit: 10000  # Character limit for AI processing
+
+# API URLs configuration
+api_urls:
+  gemini: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"

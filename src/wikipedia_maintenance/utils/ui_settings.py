@@ -20,6 +20,8 @@ class UISettings:
     # Analyzer toggles
     enabled_analyzers: Dict[str, bool] = field(default_factory=lambda: {
         "DeadLinkAnalyzer": True,
+        "HttpLinksAnalyzer": False,  # Controlled by https_verification.enabled in config
+        "ReferenceEnricherAnalyzer": False,  # Controlled by reference_enricher_analyzer.enabled in config
     })
     
     # UI preferences
@@ -29,6 +31,9 @@ class UISettings:
     
     # Analysis preferences
     min_severity_filter: str = "all"  # all, low, medium, high
+    
+    # Reference processing preferences
+    enable_case_normalization: bool = False  # Normalisation des majuscules dans les références
     
     def get_enabled_analyzers(self) -> List[str]:
         """Get list of enabled analyzer names."""
@@ -72,7 +77,44 @@ class UISettingsManager:
             enabled_analyzers = {
                 "DeadLinkAnalyzer": True,
             }
-            logger.info("Dead Linker mode: only DeadLinkAnalyzer enabled")
+            
+            # Check if https_verification is enabled for HttpLinksAnalyzer
+            try:
+                from .config import load_config
+                config = load_config()
+                if hasattr(config, 'https_verification') and hasattr(config.https_verification, 'enabled'):
+                    if config.https_verification.enabled:
+                        enabled_analyzers["HttpLinksAnalyzer"] = True
+                        logger.info("HttpLinksAnalyzer enabled via https_verification.enabled")
+                    else:
+                        enabled_analyzers["HttpLinksAnalyzer"] = False
+                        logger.info("HttpLinksAnalyzer disabled via https_verification.enabled")
+                else:
+                    enabled_analyzers["HttpLinksAnalyzer"] = False
+                    logger.info("HttpsVerification config not found, HttpLinksAnalyzer disabled")
+            except Exception as e:
+                logger.warning(f"Failed to load https_verification config: {e}")
+                enabled_analyzers["HttpLinksAnalyzer"] = False
+            
+            # Check if reference_enricher_analyzer is enabled
+            try:
+                from .config import load_config
+                config = load_config()
+                if hasattr(config, 'reference_enricher_analyzer') and hasattr(config.reference_enricher_analyzer, 'enabled'):
+                    if config.reference_enricher_analyzer.enabled:
+                        enabled_analyzers["ReferenceEnricherAnalyzer"] = True
+                        logger.info("ReferenceEnricherAnalyzer enabled via reference_enricher_analyzer.enabled")
+                    else:
+                        enabled_analyzers["ReferenceEnricherAnalyzer"] = False
+                        logger.info("ReferenceEnricherAnalyzer disabled via reference_enricher_analyzer.enabled")
+                else:
+                    enabled_analyzers["ReferenceEnricherAnalyzer"] = False
+                    logger.info("ReferenceEnricherAnalyzer config not found, disabled")
+            except Exception as e:
+                logger.warning(f"Failed to load reference_enricher_analyzer config: {e}")
+                enabled_analyzers["ReferenceEnricherAnalyzer"] = False
+            
+            logger.info(f"Dead Linker mode: enabled analyzers = {list(enabled_analyzers.keys())}")
             self.db.set_setting("enabled_analyzers", json.dumps(enabled_analyzers))
             
             # Load UI preferences
@@ -80,13 +122,15 @@ class UISettingsManager:
             auto_expand_groups = self.db.get_setting("auto_expand_groups", "true") == "true"
             show_diff_by_default = self.db.get_setting("show_diff_by_default", "true") == "true"
             min_severity_filter = self.db.get_setting("min_severity_filter", "all")
+            enable_case_normalization = self.db.get_setting("enable_case_normalization", "false") == "true"
             
             return UISettings(
                 enabled_analyzers=enabled_analyzers,
                 compact_mode=compact_mode,
                 auto_expand_groups=auto_expand_groups,
                 show_diff_by_default=show_diff_by_default,
-                min_severity_filter=min_severity_filter
+                min_severity_filter=min_severity_filter,
+                enable_case_normalization=enable_case_normalization
             )
         except Exception as e:
             logger.warning(f"Failed to load settings from database: {e}")
@@ -104,6 +148,7 @@ class UISettingsManager:
             self.db.set_setting("auto_expand_groups", str(self.settings.auto_expand_groups).lower())
             self.db.set_setting("show_diff_by_default", str(self.settings.show_diff_by_default).lower())
             self.db.set_setting("min_severity_filter", self.settings.min_severity_filter)
+            self.db.set_setting("enable_case_normalization", str(self.settings.enable_case_normalization).lower())
             
             logger.debug("Settings saved to database")
         except Exception as e:

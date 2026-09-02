@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 
 
 # Deterministic command markers (NO natural language interpretation)
-# Accept both HTML comments and MediaWiki templates for user-friendliness
-COMMAND_PATTERN = re.compile(r'(?:<!--\s*BOT-CONTROL:\s*(STOP|RESUME)\s*-->|{{!\s*BOT-CONTROL:\s*(STOP|RESUME)\s*}})', re.IGNORECASE)
+# Accept HTML comments, MediaWiki templates, and plain text for user-friendliness
+COMMAND_PATTERN = re.compile(r'(?:<!--\s*BOT-CONTROL:\s*(STOP|RESUME)\s*-->|{{!\s*BOT-CONTROL:\s*(STOP|RESUME)\s*}}|^BOT-CONTROL:\s*(STOP|RESUME)\s*$)', re.IGNORECASE | re.MULTILINE)
 
 
 @dataclass
@@ -65,7 +65,16 @@ class TalkPageMonitor:
         commands = []
         
         for match in COMMAND_PATTERN.finditer(page_content):
-            command = match.group(1).upper()
+            # Get the command from whichever group matched (group 1, 2, or 3)
+            command = None
+            for i in range(1, 4):
+                if match.group(i):
+                    command = match.group(i).upper()
+                    break
+
+            if not command:
+                continue
+
             marker = match.group(0)
             position = match.start()
             
@@ -104,13 +113,16 @@ class TalkPageMonitor:
     def should_stop(self, page_content: str) -> Tuple[bool, Optional[str]]:
         """
         Check if the bot should stop based on talk page commands.
-        
+
         Args:
             page_content: Raw wikitext content of talk page
-            
+
         Returns:
             (should_stop, reason) tuple
         """
+        if not page_content or not isinstance(page_content, str):
+            return False, None
+
         latest_command = self.get_latest_command(page_content)
         
         if latest_command is None:
@@ -163,6 +175,10 @@ class TalkPageCommandHandler:
         """
         Process talk page content and update kill switch accordingly.
         
+        SECURITY: Only STOP commands are processed from Wikipedia.
+        RESUME commands are ignored for security - resume must go through
+        authenticated dashboard endpoint with explicit confirmation.
+        
         Args:
             page_content: Raw wikitext content of talk page
             user: User who made the edit (if known)
@@ -180,14 +196,14 @@ class TalkPageCommandHandler:
                 )
                 logger.warning(f"🛑 Kill switch enabled via talk page by {user}")
             else:
-                # Only disable if there's an explicit RESUME command
+                # SECURITY: Ignore RESUME commands from Wikipedia for safety
+                # Resume must go through authenticated dashboard endpoint
                 latest_command = self.monitor.get_latest_command(page_content)
                 if latest_command and latest_command.command == "RESUME":
-                    self.kill_switch_manager.disable(
-                        reason="Resume command from talk page",
-                        requested_by=user
+                    logger.warning(
+                        f"⚠️ RESUME command detected on talk page by {user} - IGNORED for security. "
+                        f"Resume must be done via authenticated dashboard endpoint with confirmation."
                     )
-                    logger.info(f"✅ Kill switch disabled via talk page by {user}")
         
         except Exception as e:
             logger.error(f"Failed to process talk page commands: {e}")

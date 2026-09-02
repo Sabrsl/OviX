@@ -10,10 +10,15 @@ import uuid
 import json
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 import pywikibot
+
+# Phase 2: Database and tracking imports
+from wikipedia_maintenance.utils.database import DatabaseManager
+from wikipedia_maintenance.utils.tracking_service import TrackingService
 
 logger = logging.getLogger(__name__)
 
@@ -134,9 +139,13 @@ def update_analysis_job(job_id: str, **kwargs):
     """Update analysis job status (persistent, stored in database)."""
     db = get_database()
     success = db.update_analysis_job(job_id, **kwargs)
-    
+
     if not success:
-        logger.warning(f"Failed to update job {job_id}")
+        logger.error(f"Failed to update job {job_id} with kwargs: {kwargs}")
+        return False
+
+    logger.info(f"Updated job {job_id} successfully with status: {kwargs.get('status')}")
+    return True
 
 
 def get_analysis_job(job_id: str) -> Optional[Dict[str, Any]]:
@@ -210,7 +219,7 @@ def _run_blocking_analysis(
     job = get_analysis_job(analysis_id)
     if job and job.get("status") in ["cancelled", "paused"]:
         logger.info(f"Analysis {analysis_id} was cancelled or paused before starting")
-        return None, None
+        return None, (None, None, None, None, None)
     
     # Update job status
     update_analysis_job(
@@ -225,7 +234,7 @@ def _run_blocking_analysis(
     job = get_analysis_job(analysis_id)
     if job and job.get("status") in ["cancelled", "paused"]:
         logger.info(f"Analysis {analysis_id} was cancelled or paused during content retrieval")
-        return None, None
+        return None, (None, None, None, None, None)
     
     update_analysis_job(
         analysis_id,
@@ -255,7 +264,7 @@ def _run_blocking_analysis(
     job = get_analysis_job(analysis_id)
     if job and job.get("status") in ["cancelled", "paused"]:
         logger.info(f"Analysis {analysis_id} was cancelled or paused before running analysis")
-        return None, None
+        return None, (None, None, None, None, None)
     
     update_analysis_job(
         analysis_id,
@@ -264,27 +273,204 @@ def _run_blocking_analysis(
     )
     
     if mode == "ai":
-        # AI mode - this is async, so we'll handle it separately
-        return original_content, None
+        # AI mode using LIA for typographic correction and dead link analysis
+        from wikipedia_maintenance.utils.config import load_config
+        from wikipedia_maintenance.utils.publisher import Corrector
+        
+        config = load_config()
+        
+        # Apply case normalization if enabled (BEFORE AI analysis)
+        # Note: In AI mode, case normalization is handled by LIA's main prompt, not by CaseNormalizer's specific AI prompt
+        # In regex mode, we also disable CaseNormalizer's specific AI to use only classical normalization
+        content = original_content
+        if hasattr(config, 'analysis') and hasattr(config.analysis, 'enable_case_normalization'):
+            if config.analysis.enable_case_normalization:
+                from wikipedia_maintenance.utils.case_normalizer import CaseNormalizer
+                enable_ner = getattr(config.analysis, 'enable_ner_title_normalization', False)
+                # Disable CaseNormalizer's specific AI normalization - LIA's main prompt handles case normalization in AI mode
+                # In regex mode, we use only classical normalization (no AI)
+                normalize_with_ai = False  # Always false - LIA main prompt handles case normalization in AI mode
+                normalizer = CaseNormalizer(
+                    enabled=config.analysis.enable_case_normalization,
+                    enable_ner_title_normalization=enable_ner,
+                    normalize_with_ai=normalize_with_ai
+                )
+                normalization_result = normalizer.normalize_text(content)
+                if normalization_result.total_changes > 0:
+                    logger.info(f"Case normalization applied: {normalization_result.total_changes} changes")
+                    content = normalization_result.normalized_text
+                else:
+                    logger.info("Case normalization: no changes needed")
+            else:
+                normalization_result = None
+        else:
+            normalization_result = None
+        
+        # Apply AI typographic correction using LIA
+        try:
+            from wikipedia_maintenance.utils.gemini_client import GeminiClient
+            
+            # Get AI parameters from config or use defaults
+            ai_provider = ai_provider or "gemini"
+            ai_limit = ai_character_limit or 10000
+            gemini_api_key = gemini_api_key or None
+            gemini_project_id = gemini_project_id or None
+            
+            if ai_provider == "gemini" and gemini_api_key:
+                lia_client = GeminiClient(
+                    api_key=gemini_api_key,
+                    project_id=gemini_project_id,
+                    model="gemini-flash-lite-latest",
+                    limit=ai_limit
+                )
+                
+                # Check length
+                ok, nb_caracteres = lia_client.verifier_longueur(content)
+                if ok:
+                    # Apply LIA correction
+                    corrected_content, corrections = lia_client.corriger_article(
+                        content,
+                        page_title=article_title,
+                        page_id=page.pageid if page else 0,
+                        revision_id=page.latest_revision_id if page else 0
+                    )
+                    
+                    if corrected_content != content:
+                        logger.info(f"LIA correction applied: {len(corrections)} corrections")
+                        content = corrected_content
+                    else:
+                        logger.info("LIA correction: no changes needed")
+                else:
+                    logger.warning(f"Content too long for LIA: {nb_caracteres} characters")
+            else:
+                logger.warning("AI mode requested but Gemini not configured")
+                
+        except Exception as e:
+            logger.error(f"LIA correction failed: {e}")
+            # Continue with dead link analysis even if LIA fails
+        
+        # Apply dead link analysis (still needed in AI mode)
+        if hasattr(config, 'analysis') and hasattr(config.analysis, 'enable_dead_link_analyzer'):
+            if config.analysis.enable_dead_link_analyzer:
+                from wikipedia_maintenance.analyzers import DeadLinkAnalyzer
+                
+                # Phase 2: Initialize tracking service for correlation
+                tracking_service = None
+                try:
+                    db_manager = DatabaseManager()
+                    tracking_service = TrackingService(db_manager)
+                    logger.info("Phase 2: TrackingService initialized for DeadLinkAnalyzer")
+                except Exception as e:
+                    logger.warning(f"Phase 2: Failed to initialize TrackingService: {e}")
+                
+                analyzer = DeadLinkAnalyzer(tracking_service=tracking_service)
+                issues = analyzer.analyze(content)
+                logger.info(f"Dead link analysis in AI mode: {len(issues)} issues found")
+            else:
+                issues = []
+                logger.info("DeadLinkAnalyzer disabled in config")
+        else:
+            issues = []
+            logger.info("DeadLinkAnalyzer setting not found, defaulting to enabled")
+        
+        # Apply ReferenceEnricherAnalyzer if enabled (enriches healthy references)
+        if hasattr(config, 'reference_enricher_analyzer') and config.reference_enricher_analyzer.enabled:
+            from wikipedia_maintenance.analyzers import ReferenceEnricherAnalyzer
+            try:
+                enricher = ReferenceEnricherAnalyzer()
+                enrichment_issues = enricher.analyze(content)
+                # Combine issues from both analyzers
+                issues.extend(enrichment_issues)
+                logger.info(f"ReferenceEnricherAnalyzer applied in AI mode: {len(enrichment_issues)} enrichments")
+            except Exception as e:
+                logger.warning(f"ReferenceEnricherAnalyzer failed in AI mode: {e}")
+        else:
+            logger.info("ReferenceEnricherAnalyzer disabled in config (AI mode)")
+        
+        return content, (issues, content, page.pageid if page else 0, page.latest_revision_id if page else 0, normalization_result)
     else:
         # Regex mode using DeadLinkAnalyzer (blocking CPU/IO)
         from wikipedia_maintenance.analyzers import DeadLinkAnalyzer
         from wikipedia_maintenance.utils.publisher import Corrector
+        from wikipedia_maintenance.utils.config import load_config
+
+        # Load config to check analyzer settings
+        config = load_config()
+
+        # Apply case normalization if enabled (BEFORE dead link analysis)
+        # Note: In AI mode, case normalization is handled by LIA's main prompt, not by CaseNormalizer's specific AI prompt
+        # In regex mode, we also disable CaseNormalizer's specific AI to use only classical normalization
+        content = original_content
+        if hasattr(config, 'analysis') and hasattr(config.analysis, 'enable_case_normalization'):
+            if config.analysis.enable_case_normalization:
+                from wikipedia_maintenance.utils.case_normalizer import CaseNormalizer
+                enable_ner = getattr(config.analysis, 'enable_ner_title_normalization', False)
+                # Disable CaseNormalizer's specific AI normalization - LIA's main prompt handles case normalization in AI mode
+                # In regex mode, we use only classical normalization (no AI)
+                normalize_with_ai = False  # Always false - LIA main prompt handles case normalization in AI mode
+                normalizer = CaseNormalizer(
+                    enabled=config.analysis.enable_case_normalization,
+                    enable_ner_title_normalization=enable_ner,
+                    normalize_with_ai=normalize_with_ai
+                )
+                normalization_result = normalizer.normalize_text(content)
+                if normalization_result.total_changes > 0:
+                    logger.info(f"Case normalization applied: {normalization_result.total_changes} changes")
+                    content = normalization_result.normalized_text
+                else:
+                    logger.info("Case normalization: no changes needed")
+            else:
+                normalization_result = None
+        else:
+            normalization_result = None
+
+        # Check if DeadLinkAnalyzer is enabled in config
+        if hasattr(config, 'analysis') and hasattr(config.analysis, 'enable_dead_link_analyzer'):
+            if not config.analysis.enable_dead_link_analyzer:
+                logger.info("DeadLinkAnalyzer disabled in config, skipping analysis")
+                return original_content, ([], content, page.pageid, page.latest_revision_id, normalization_result)
+            else:
+                logger.info("DeadLinkAnalyzer enabled in config, proceeding with analysis")
+        else:
+            logger.info("DeadLinkAnalyzer setting not found in config, defaulting to enabled")
+
+        # Phase 2: Initialize tracking service for correlation
+        tracking_service = None
+        try:
+            db_manager = DatabaseManager()
+            tracking_service = TrackingService(db_manager)
+            logger.info("Phase 2: TrackingService initialized for DeadLinkAnalyzer")
+        except Exception as e:
+            logger.warning(f"Phase 2: Failed to initialize TrackingService: {e}")
+
+        analyzer = DeadLinkAnalyzer(tracking_service=tracking_service)
+        issues = analyzer.analyze(content)  # Blocking CPU/IO
         
-        analyzer = DeadLinkAnalyzer()
-        issues = analyzer.analyze(original_content)  # Blocking CPU/IO
+        # Apply ReferenceEnricherAnalyzer if enabled (enriches healthy references)
+        if hasattr(config, 'reference_enricher_analyzer') and config.reference_enricher_analyzer.enabled:
+            from wikipedia_maintenance.analyzers import ReferenceEnricherAnalyzer
+            try:
+                enricher = ReferenceEnricherAnalyzer()
+                enrichment_issues = enricher.analyze(content)
+                # Combine issues from both analyzers
+                issues.extend(enrichment_issues)
+                logger.info(f"ReferenceEnricherAnalyzer applied: {len(enrichment_issues)} enrichments")
+            except Exception as e:
+                logger.warning(f"ReferenceEnricherAnalyzer failed: {e}")
+        else:
+            logger.info("ReferenceEnricherAnalyzer disabled in config")
         
         # Check for cancellation or pause after analysis
         job = get_analysis_job(analysis_id)
         if job and job.get("status") in ["cancelled", "paused"]:
             logger.info(f"Analysis {analysis_id} was cancelled or paused after analysis")
-            return None, None
+            return None, (None, None, None, None, normalization_result)
         
         # Generate corrected content (blocking CPU)
-        corrector = Corrector(original_content)
+        corrector = Corrector(content)
         corrected_content = corrector.apply_corrections(issues)
         
-        return original_content, (issues, corrected_content, page.pageid, page.latest_revision_id)
+        return original_content, (issues, corrected_content, page.pageid, page.latest_revision_id, normalization_result)
 
 
 async def run_analysis_worker(
@@ -327,7 +513,7 @@ async def run_analysis_worker(
         
         # Handle AI mode separately (already async)
         if mode == "ai":
-            issues, corrected_content, page_id, revision_id = analysis_result
+            issues, corrected_content, page_id, revision_id, normalization_result = analysis_result
             corrected_content = await run_ai_analysis(
                 original_content,
                 ai_provider,
@@ -338,7 +524,7 @@ async def run_analysis_worker(
             )
         else:
             # Unpack regex mode results
-            issues, corrected_content, page_id, revision_id = analysis_result
+            issues, corrected_content, page_id, revision_id, normalization_result = analysis_result
         
         # Convert issues to response format and collect manual review URLs
         issue_infos = []
@@ -381,19 +567,33 @@ async def run_analysis_worker(
         # Count dead links (issues with dead link type)
         dead_links_count = len([i for i in issues if 'dead' in i.issue_type.lower()])
 
-        # Count corrected links (issues with suggested text)
-        corrected_links_count = len([i for i in issues if i.suggested_text and 'dead' in i.issue_type.lower()])
+        # Count corrected links (issues with suggested text AND actual repair applied)
+        # Only count issues that represent actual repairs, not informational/diagnostic issues
+        valid_repair_statuses = [
+            'REPAIR_APPLIED', 'SAFE_REPLACEMENT', 'ARCHIVE_ONLY_REPAIR', 'ENRICHMENT_APPLIED', 'BARE_URL_ENRICHMENT_APPLIED'
+        ]
+        
+        corrected_links_count = len([
+            i for i in issues 
+            if i.suggested_text 
+            and ('dead' in i.issue_type.lower() or 'reference_enrichment' in i.issue_type.lower())
+            and i.extra 
+            and i.extra.get('repair_status') in valid_repair_statuses
+        ])
         
         # Track analysis with final status
         analyzed_tracker = get_analyzed_tracker()
         if analyzed_tracker:
             from wikipedia_maintenance.utils.analyzed_tracker import AnalysisStatus
 
+            # If no issues found, mark as IGNORED instead of PENDING
+            final_status = AnalysisStatus.IGNORED if len(issues) == 0 else AnalysisStatus.PENDING
+
             analyzed_tracker.record_analysis(
                 title=article_title,
                 page_id=page_id if page_id else 0,
                 revision_id=revision_id if revision_id else 0,
-                status=AnalysisStatus.PENDING,
+                status=final_status,
                 mode=mode,
                 original_content=original_content,
                 corrected_content=corrected_content,
@@ -435,6 +635,25 @@ async def run_analysis_worker(
         manual_review_urls_json = json.dumps(manual_review_urls) if manual_review_urls else None
         issues_json = json.dumps([issue.dict() for issue in issue_infos]) if issue_infos else None
         
+        # Prepare normalization data
+        normalization_changes_count = 0
+        normalization_ignored_count = 0
+        normalization_reports_json = None
+        
+        if normalization_result:
+            normalization_changes_count = normalization_result.total_changes
+            normalization_ignored_count = normalization_result.total_ignored
+            # Convert normalization reports to JSON
+            if normalization_result.reports:
+                reports_data = []
+                for report in normalization_result.reports:
+                    reports_data.append({
+                        'template_name': report.template_name,
+                        'parameter_changes': report.parameter_changes,
+                        'ignored_occurrences': report.ignored_occurrences
+                    })
+                normalization_reports_json = json.dumps(reports_data)
+        
         db.create_analysis_result(
             result_id=f"{article_title}_{revision_id if revision_id else 0}",
             job_id=analysis_id,
@@ -454,7 +673,10 @@ async def run_analysis_worker(
             human_verified=False,
             manual_review_urls=manual_review_urls_json,
             issues_json=issues_json,
-            analysis_date=datetime.now().isoformat()
+            analysis_date=datetime.now().isoformat(),
+            normalization_changes_count=normalization_changes_count,
+            normalization_ignored_count=normalization_ignored_count,
+            normalization_reports=normalization_reports_json
         )
 
         # Note: Batch job tracking simplified for database persistence
@@ -492,6 +714,34 @@ async def run_analysis_worker(
             completed_at=datetime.now().isoformat(),
             error=str(e)
         )
+        
+        # Also store failed analysis in analysis_results table for frontend visibility
+        try:
+            db = get_database()
+            db.create_analysis_result(
+                result_id=f"{article_title}_error",
+                job_id=analysis_id,
+                article_title=article_title,
+                page_id=0,
+                revision_id=0,
+                status="error",
+                mode=mode,
+                changes_count=0,
+                summary=friendly_message,
+                original_content=None,
+                corrected_content=None,
+                character_count=0,
+                total_links=0,
+                dead_links_count=0,
+                corrected_links_count=0,
+                human_verified=False,
+                manual_review_urls=None,
+                issues_json=None,
+                analysis_date=datetime.now().isoformat()
+            )
+            logger.info(f"Stored failed analysis result for {article_title} in database")
+        except Exception as db_error:
+            logger.error(f"Failed to store error result in database: {db_error}")
 
 
 async def run_ai_analysis(
@@ -712,7 +962,63 @@ async def get_analysis_status(job_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get analysis status: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
+
+
+@router.get("/{job_id}/stream")
+async def stream_analysis_status(job_id: str):
+    """
+    Stream analysis job status using Server-Sent Events.
+
+    This endpoint provides real-time updates for the analysis job status,
+    allowing the UI to receive progress updates without polling.
+    """
+    async def event_stream():
+        job = get_analysis_job(job_id)
+        if not job:
+            yield f"data: {json.dumps({'error': 'Analysis job not found'})}\n\n"
+            return
+
+        # Send initial status
+        yield f"data: {json.dumps({'status': job['status'], 'message': job['message'], 'progress': job.get('progress', 0.0)})}\n\n"
+
+        # If already completed or failed, send final status and close
+        if job['status'] in ['completed', 'failed']:
+            yield f"data: {json.dumps({'status': job['status'], 'message': job['message'], 'progress': job.get('progress', 0.0), 'error': job.get('error')})}\n\n"
+            return
+
+        # Wait for status changes
+        last_status = job['status']
+        max_wait = 600  # 10 minutes max for analysis
+        start_time = asyncio.get_event_loop().time()
+
+        while asyncio.get_event_loop().time() - start_time < max_wait:
+            await asyncio.sleep(2)  # Check every 2 seconds
+
+            current_job = get_analysis_job(job_id)
+            if not current_job:
+                yield f"data: {json.dumps({'error': 'Analysis job not found'})}\n\n"
+                return
+
+            if current_job['status'] != last_status:
+                last_status = current_job['status']
+                yield f"data: {json.dumps({'status': current_job['status'], 'message': current_job['message'], 'progress': current_job.get('progress', 0.0), 'error': current_job.get('error')})}\n\n"
+
+                # Close stream if completed or failed
+                if current_job['status'] in ['completed', 'failed']:
+                    break
+
+        # Timeout
+        yield f"data: {json.dumps({'error': 'Timeout waiting for analysis'})}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 
 @router.post("/{job_id}/cancel")

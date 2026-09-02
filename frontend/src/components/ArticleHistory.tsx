@@ -16,7 +16,7 @@ interface ArticleHistoryProps {
 export function ArticleHistory({ onArticleClick, limit = 50 }: ArticleHistoryProps) {
   const [history, setHistory] = useState<ArticleHistoryItem[]>([])
   const [publishedHistory, setPublishedHistory] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {

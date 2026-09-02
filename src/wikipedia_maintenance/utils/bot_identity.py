@@ -36,7 +36,7 @@ class BotIdentity:
     operator_name: str = "Sysoperator"
     operator_contact: str = "https://fr.wikipedia.org/wiki/Discussion_utilisateur:Sysoperator"
     bot_discussion: str = "https://fr.wikipedia.org/wiki/Discussion_utilisateur:SynsOperatorBot"
-    repository: str = "https://github.com/yourusername/syns_operator_bot"
+    repository: str = "https://github.com/Sabrsl/OviX"
     use_bot_user_agent: bool = False  # IMPORTANT: Default to human User-Agent without bot approval
     
     def get_user_agent(self, purpose: str = "") -> str:
@@ -134,7 +134,7 @@ class BotIdentityManager:
             ),
             repository=os.environ.get(
                 self.ENV_REPOSITORY,
-                "https://github.com/yourusername/syns_operator_bot"
+                "https://github.com/Sabrsl/OviX"
             ),
             use_bot_user_agent=use_bot_user_agent
         )

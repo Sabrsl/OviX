@@ -46,6 +46,7 @@ class Issue:
         - rule_reference: URL or identifier of the Wikipedia rule being violated.
         - fix_options: a list of alternative suggested fixes (each a string).
         - extra: any additional structured data.
+        - operation_id: unique identifier for tracking and correlation (Phase 1).
 
     The original fields (issue_type, description, position, original_text,
     suggested_text, severity) remain unchanged.
@@ -65,6 +66,7 @@ class Issue:
     rule_reference: Optional[str] = None
     fix_options: Optional[List[str]] = None
     extra: Optional[Dict[str, Any]] = None
+    operation_id: Optional[str] = None  # Phase 1: Tracking correlation
 
     def __post_init__(self):
         """Normalise severity to a string and ensure confidence is clamped."""
@@ -91,6 +93,7 @@ class Issue:
             'rule_reference': self.rule_reference,
             'fix_options': self.fix_options,
             'extra': self.extra,
+            'operation_id': self.operation_id,  # Phase 1: Tracking correlation
         }
         # Remove keys with None to keep the dict clean (optional)
         return {k: v for k, v in result.items() if v is not None}

@@ -56,21 +56,37 @@ class TimingManager:
         self._load_config()
     
     def _load_config(self) -> None:
-        """Load publication delay settings from config.yaml."""
+        """Load publication delay and working hours settings from config.yaml."""
         try:
             config_file = Path(__file__).parent.parent.parent.parent / "config" / "config.yaml"
             if config_file.exists():
                 with open(config_file, 'r', encoding='utf-8') as f:
                     config = yaml.safe_load(f)
-                    if config and 'publication_delays' in config:
-                        delay_config = config['publication_delays']
-                        if 'min_delay_minutes' in delay_config:
-                            self.MIN_DELAY_MINUTES = delay_config['min_delay_minutes']
-                        if 'max_delay_minutes' in delay_config:
-                            self.MAX_DELAY_MINUTES = delay_config['max_delay_minutes']
-                        logger.info(f"Loaded publication delay config: min={self.MIN_DELAY_MINUTES}min, max={self.MAX_DELAY_MINUTES}min")
+                    if config:
+                        # Load publication delays
+                        if 'publication_delays' in config:
+                            delay_config = config['publication_delays']
+                            if 'min_delay_minutes' in delay_config:
+                                self.MIN_DELAY_MINUTES = delay_config['min_delay_minutes']
+                            if 'max_delay_minutes' in delay_config:
+                                self.MAX_DELAY_MINUTES = delay_config['max_delay_minutes']
+                            logger.info(f"Loaded publication delay config: min={self.MIN_DELAY_MINUTES}min, max={self.MAX_DELAY_MINUTES}min")
+                        
+                        # P2 FIX: Load working hours from config
+                        if 'working_hours' in config:
+                            hours_config = config['working_hours']
+                            if 'start_hour' in hours_config:
+                                self.WORKING_HOUR_START = hours_config['start_hour']
+                            if 'end_hour' in hours_config:
+                                self.WORKING_HOUR_END = hours_config['end_hour']
+                            logger.info(f"Loaded working hours config: {self.WORKING_HOUR_START}:00 - {self.WORKING_HOUR_END}:00")
+                        
+                        # Load daily limit from config
+                        if 'daily_limit' in config:
+                            self.MAX_DAILY_PUBLICATIONS = config['daily_limit']
+                            logger.info(f"Loaded daily limit config: {self.MAX_DAILY_PUBLICATIONS} publications/day")
         except Exception as e:
-            logger.warning(f"Failed to load publication delay config: {e}")
+            logger.warning(f"Failed to load timing config: {e}")
     
     def generate_random_delay(self) -> timedelta:
         """

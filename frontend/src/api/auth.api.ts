@@ -36,5 +36,13 @@ export const authApi = {
   async getAccount(): Promise<{ success: boolean; account?: any }> {
     const response = await apiClient.get('/api/auth/account')
     return response.data
+  },
+
+  /**
+   * Validate current session
+   */
+  async validateSession(): Promise<{ valid: boolean; authenticated: boolean; username?: string; message: string }> {
+    const response = await quickApiClient.get('/api/auth/validate')
+    return response.data
   }
 }

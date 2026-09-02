@@ -36,7 +36,13 @@ PROJECT_ROOT = current_path.parent.parent.parent
 os.environ['PROJECT_ROOT'] = str(PROJECT_ROOT.absolute())
 
 # Load environment variables
-load_dotenv()
+env_path = PROJECT_ROOT / '.env'
+if env_path.exists():
+    load_dotenv(env_path)
+    print(f"Loaded environment variables from {env_path}")
+else:
+    print(f".env file not found at {env_path}, trying default location")
+    load_dotenv()  # Try default location
 
 # Configure paths
 os.environ['PYWIKIBOT_DIR'] = str(PROJECT_ROOT)
@@ -61,8 +67,8 @@ from wikipedia_maintenance.utils.kill_switch_manager import get_kill_switch_mana
 from wikipedia_maintenance.utils.published_tracker import PublishedTracker
 from wikipedia_maintenance.utils.analyzed_tracker import get_analyzed_tracker
 from wikipedia_maintenance.utils.database import DatabaseManager
-from wikipedia_maintenance.orchestrator.scheduler_state import StateManager
-from wikipedia_maintenance.utils.automation_state import AutomationStateManager
+from wikipedia_maintenance.orchestrator.scheduler_state_sqlite import SQLiteStateManager
+from wikipedia_maintenance.utils.automation_state_sqlite import SQLiteAutomationStateManager
 from wikipedia_maintenance.utils.config import Config
 
 # Global service instances
@@ -76,7 +82,7 @@ _scheduler = None
 _automation_state_manager = None
 _config = None
 _automation_orchestrator = None  # Active automation orchestrator instance
-_automation_launch_lock = False  # Prevent concurrent automation launches
+# _automation_launch_lock removed - now using database lock for distributed safety
 
 
 @asynccontextmanager
@@ -128,8 +134,8 @@ async def lifespan(app: FastAPI):
             _analyzed_tracker = None
 
         try:
-            _scheduler_state_manager = StateManager()
-            logger.info("Scheduler state manager initialized")
+            _scheduler_state_manager = SQLiteStateManager(_database_manager)
+            logger.info("Scheduler state manager initialized (SQLite)")
         except Exception as e:
             logger.error(f"Could not initialize scheduler state manager: {e}", exc_info=True)
             _scheduler_state_manager = None
@@ -137,18 +143,28 @@ async def lifespan(app: FastAPI):
         try:
             from wikipedia_maintenance.orchestrator.scheduler import Scheduler, SchedulerConfig
             from wikipedia_maintenance.utils.publisher import Publisher
+            import pywikibot
 
             # Initialize publisher
             publisher = Publisher()
+
+            # Initialize pywikibot site for scheduler
+            try:
+                site = pywikibot.Site('fr', 'wikipedia')
+                logger.info("Pywikibot site initialized for scheduler")
+            except Exception as e:
+                logger.warning(f"Could not initialize pywikibot site: {e}")
+                site = None
 
             # Initialize scheduler config
             scheduler_config = SchedulerConfig(
                 state_file=str(PROJECT_ROOT / "data" / "scheduler_state.json"),
                 dry_run=True,  # Default to dry-run mode
                 daily_limit=30,
-                stop_on_empty_queue=True,
+                stop_on_empty_queue=False,  # Don't stop on empty queue - will transfer articles
                 category=None,  # Will be set via API
-                articles_to_process=10  # Default for manual runs
+                articles_to_process=10,  # Default for manual runs
+                site=site  # Pass pywikibot site
             )
 
             # Initialize scheduler
@@ -156,16 +172,18 @@ async def lifespan(app: FastAPI):
                 config=scheduler_config,
                 publisher=publisher,
                 published_tracker=_published_tracker,
-                analyzed_tracker=_analyzed_tracker
+                analyzed_tracker=_analyzed_tracker,
+                kill_switch_manager=_kill_switch_manager,
+                database=_database_manager
             )
-            logger.info("Scheduler initialized")
+            logger.info("Scheduler initialized (with database, kill switch, and site)")
         except Exception as e:
             logger.error(f"Could not initialize scheduler: {e}", exc_info=True)
             _scheduler = None
         
         try:
-            _automation_state_manager = AutomationStateManager()
-            logger.info("Automation state manager initialized")
+            _automation_state_manager = SQLiteAutomationStateManager(_database_manager)
+            logger.info("Automation state manager initialized (SQLite)")
         except Exception as e:
             logger.error(f"Could not initialize automation state manager: {e}", exc_info=True)
             _automation_state_manager = None
@@ -199,10 +217,11 @@ app = FastAPI(
 )
 
 # Configure CORS
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173,http://localhost:*").split(",")
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -267,17 +286,13 @@ def set_automation_orchestrator(orchestrator):
     logger.info("Automation orchestrator set globally")
 
 
-def get_automation_launch_lock():
-    """Dependency to get automation launch lock status."""
-    global _automation_launch_lock
-    return _automation_launch_lock
-
-
-def set_automation_launch_lock(locked: bool):
-    """Set the automation launch lock."""
-    global _automation_launch_lock
-    _automation_launch_lock = locked
-    logger.info(f"Automation launch lock set to: {locked}")
+def get_automation_lock():
+    """Dependency to get database automation lock manager."""
+    global _database_manager
+    if _database_manager is None:
+        logger.warning("Database manager not available for automation lock")
+        return None
+    return _database_manager
 
 
 def get_published_tracker():
@@ -411,7 +426,8 @@ from backend.api.routes import (
     manual_review,
     migration,
     stats_v2,
-    stats_compare
+    stats_compare,
+    article_scheduler
 )
 
 # Register routes
@@ -429,6 +445,7 @@ app.include_router(manual_review.router, prefix="/api", tags=["Manual Review"])
 app.include_router(migration.router, prefix="/api/migration", tags=["Migration"])
 app.include_router(stats_v2.router, tags=["Stats-V2"])
 app.include_router(stats_compare.router, tags=["Stats-Comparison"])
+app.include_router(article_scheduler.router, prefix="/api/article-scheduler", tags=["Article Scheduler"])
 
 
 # ============================================================================

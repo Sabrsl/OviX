@@ -23,7 +23,7 @@ export function ArticleStatusCard({
   onPublish
 }: ArticleStatusCardProps) {
   const [status, setStatus] = useState<ArticleStatus | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {

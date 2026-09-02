@@ -23,6 +23,10 @@ project_root = Path(__file__).parent
 os.environ['PYWIKIBOT_DIR'] = str(project_root)
 sys.path.insert(0, str(project_root))
 
+# Phase 2: Database and tracking imports
+from wikipedia_maintenance.utils.database import DatabaseManager
+from wikipedia_maintenance.utils.tracking_service import TrackingService
+
 # Configure logging to show in Streamlit terminal and write to file
 log_dir = Path("logs")
 log_dir.mkdir(exist_ok=True)
@@ -301,7 +305,16 @@ def analyze_article(article):
                 return analyze_article_with_lia(article)
             else:
                 # Use regex analysis
-                analyzer = DeadLinkAnalyzer()
+                # Phase 2: Initialize tracking service for correlation
+                tracking_service = None
+                try:
+                    db_manager = DatabaseManager()
+                    tracking_service = TrackingService(db_manager)
+                    logging.info("Phase 2: TrackingService initialized for DeadLinkAnalyzer")
+                except Exception as e:
+                    logging.warning(f"Phase 2: Failed to initialize TrackingService: {e}")
+                
+                analyzer = DeadLinkAnalyzer(tracking_service=tracking_service)
                 issues = analyzer.analyze(article.content, article.title)
                 st.session_state.issues[article.title] = issues
                 st.session_state.article_status[article.title] = "analyzed"

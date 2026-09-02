@@ -130,6 +130,7 @@ tmp/
 # Runtime data and cache
 # -----------------------------------------------------
 data/api_cache/
+data/*.json
 apicache/
 apicache-py3/
 data/scheduler_state.json
@@ -141,6 +142,13 @@ analyzed_articles.json
 data/automation_reports/
 *.json.bak
 .cache/
+
+# Backend data
+backend/data/api_cache/
+backend/data/*.json
+backend/data/automation_reports/
+backend/tests/test_results/
+backend/tests/*.json
 
 # -----------------------------------------------------
 # Config files with sensitive data

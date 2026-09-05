@@ -13,7 +13,7 @@ interface ArticleToAnalyze {
   source_details: string
   priority: 'low' | 'medium' | 'high'
   added_at: string
-  status: 'pending' | 'analyzing' | 'analyzed'
+  status: 'pending' | 'analyzing' | 'analyzed' | 'error'
 }
 
 export default function ArticlesToAnalyze() {
@@ -57,21 +57,10 @@ export default function ArticlesToAnalyze() {
       // Set total count from database
       setTotalCount(countResponse.total)
 
-      const publishedTitles = new Set(
-        publishedResponse.items?.map((item: any) => item.title) || []
-      )
-
-      const analyzedTitles = new Set(
-        analyzedResponse.map((item: any) => item.title || item.article_title) || []
-      )
-
-      // Filter out articles that are already published or analyzed
-      const nonPublishedAndNonAnalyzedArticles = articlesResponse.articles.filter(
-        (article: any) => !publishedTitles.has(article.title) && !analyzedTitles.has(article.title)
-      )
-
+      // Don't filter articles - show all articles from the database
+      // The database status should be the source of truth for all pages
       // Sort by added date, most recent first
-      const sortedArticles = nonPublishedAndNonAnalyzedArticles.sort((a: any, b: any) => {
+      const sortedArticles = articlesResponse.articles.sort((a: any, b: any) => {
         const dateA = new Date(a.added_at || 0).getTime()
         const dateB = new Date(b.added_at || 0).getTime()
         return dateB - dateA // Descending order (most recent first)
@@ -192,6 +181,7 @@ export default function ArticlesToAnalyze() {
       case 'pending': return <Clock style={{ width: '16px', height: '16px', color: '#f59e0b' }} />
       case 'analyzing': return <Search style={{ width: '16px', height: '16px', color: '#3b82f6' }} />
       case 'analyzed': return <CheckCircle style={{ width: '16px', height: '16px', color: '#10b981' }} />
+      case 'error': return <AlertTriangle style={{ width: '16px', height: '16px', color: '#ef4444' }} />
       default: return <Clock style={{ width: '16px', height: '16px', color: '#666666' }} />
     }
   }
@@ -201,6 +191,7 @@ export default function ArticlesToAnalyze() {
       case 'pending': return 'En attente'
       case 'analyzing': return 'En cours'
       case 'analyzed': return 'Analysé'
+      case 'error': return 'Erreur'
       default: return status
     }
   }
@@ -209,8 +200,8 @@ export default function ArticlesToAnalyze() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#f5f5f5' }}>Articles à analyser</h2>
-          <p style={{ color: '#a0a0a0', marginTop: '4px' }}>File d'attente persistante pour l'analyse</p>
+          <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#f5f5f5' }}>File d'analyse</h2>
+          <p style={{ color: '#a0a0a0', marginTop: '4px' }}>Articles en attente d'analyse</p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
@@ -278,7 +269,7 @@ export default function ArticlesToAnalyze() {
       </div>
 
       {/* Statistics */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px' }}>
         <div style={{ backgroundColor: '#161616', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '16px' }}>
           <div style={{ fontSize: '12px', color: '#666666', marginBottom: '4px' }}>Total (base)</div>
           <div style={{ fontSize: '24px', fontWeight: 600, color: '#f5f5f5' }}>{totalCount}</div>
@@ -294,6 +285,10 @@ export default function ArticlesToAnalyze() {
         <div style={{ backgroundColor: '#161616', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '16px' }}>
           <div style={{ fontSize: '12px', color: '#666666', marginBottom: '4px' }}>En cours</div>
           <div style={{ fontSize: '24px', fontWeight: 600, color: '#3b82f6' }}>{articles.filter(a => a.status === 'analyzing').length}</div>
+        </div>
+        <div style={{ backgroundColor: '#161616', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#666666', marginBottom: '4px' }}>Erreur</div>
+          <div style={{ fontSize: '24px', fontWeight: 600, color: '#ef4444' }}>{articles.filter(a => a.status === 'error').length}</div>
         </div>
       </div>
 
@@ -426,6 +421,24 @@ export default function ArticlesToAnalyze() {
                     }}
                   >
                     {isAnalyzing ? 'Analyse en cours...' : 'Analyser'}
+                  </button>
+                )}
+                {article.status === 'error' && (
+                  <button
+                    onClick={() => handleAnalyzeArticle(article.title)}
+                    disabled={isAnalyzing}
+                    style={{
+                      padding: '6px 12px',
+                      backgroundColor: isAnalyzing ? '#666666' : '#f59e0b',
+                      border: 'none',
+                      borderRadius: '4px',
+                      color: '#ffffff',
+                      fontSize: '12px',
+                      cursor: isAnalyzing ? 'not-allowed' : 'pointer',
+                      opacity: isAnalyzing ? 0.5 : 1
+                    }}
+                  >
+                    {isAnalyzing ? 'Analyse en cours...' : 'Réessayer'}
                   </button>
                 )}
                 <button

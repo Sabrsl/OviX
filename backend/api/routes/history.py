@@ -255,6 +255,81 @@ async def get_published_history(
         raise HTTPException(status_code=500, detail=f"Failed to get history: {str(e)}")
 
 
+@router.get("/ready-to-publish", response_model=AnalyzedResponse)
+async def get_ready_to_publish(
+    limit: int = 500,
+    offset: int = 0,
+    database = Depends(get_database)
+):
+    """
+    Get articles ready to publish (analyzed with valid corrections, not yet published).
+    
+    This endpoint specifically returns articles that:
+    - Have corrected_links_count > 0 (valid corrections)
+    - Are not already published (status != 'published')
+    - Are ready for publication
+    """
+    try:
+        if not database:
+            return AnalyzedResponse(success=True, items=[], count=0)
+        
+        cursor = database.conn.cursor()
+        
+        # Get articles with valid corrections that are not published
+        query = """
+            SELECT article_title, page_id, revision_id, analysis_date, status, mode,
+                   changes_count, summary, job_id, character_count, total_links,
+                   dead_links_count, corrected_links_count, human_verified
+            FROM analysis_results
+            WHERE corrected_links_count > 0
+            AND status != 'published'
+            ORDER BY analysis_date DESC
+            LIMIT ? OFFSET ?
+        """
+        
+        cursor.execute(query, (limit, offset))
+        rows = cursor.fetchall()
+        
+        analyzed_items = []
+        for row in rows:
+            row_dict = dict(row)
+            # Handle encoding issues for special characters
+            title = row_dict.get('article_title', '')
+            if isinstance(title, str):
+                title = title.encode('utf-8', errors='ignore').decode('utf-8', errors='ignore')
+            
+            summary = row_dict.get('summary')
+            if summary and isinstance(summary, str):
+                summary = summary.encode('utf-8', errors='ignore').decode('utf-8', errors='ignore')
+            
+            analyzed_items.append(AnalyzedItem(
+                title=title,
+                page_id=row_dict.get('page_id', 0),
+                revision_id=row_dict.get('revision_id', 0),
+                analysis_date=row_dict.get('analysis_date', ''),
+                status=row_dict.get('status', 'unknown'),
+                mode=row_dict.get('mode', 'unknown'),
+                changes_count=row_dict.get('changes_count'),
+                summary=summary,
+                job_id=row_dict.get('job_id'),
+                character_count=row_dict.get('character_count', 0),
+                total_links=row_dict.get('total_links', 0),
+                dead_links_count=row_dict.get('dead_links_count', 0),
+                corrected_links_count=row_dict.get('corrected_links_count', 0),
+                human_verified=row_dict.get('human_verified')
+            ))
+        
+        return AnalyzedResponse(
+            success=True,
+            items=analyzed_items,
+            count=len(analyzed_items)
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to get ready to publish articles: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get ready to publish articles: {str(e)}")
+
+
 @router.get("/analyzed", response_model=AnalyzedResponse)
 async def get_analyzed_history(
     limit: int = 100,

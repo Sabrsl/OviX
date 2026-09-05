@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Union, Set
 from dataclasses import dataclass, field, fields, asdict
 from copy import deepcopy
+from .typography_xml_analyzer_config import TypographyXMLAnalyzerConfig
 
 logger = logging.getLogger(__name__)
 
@@ -252,6 +253,9 @@ class TypographyConfig:
     check_centuries: bool = True
     check_units: bool = True
     check_section_titles: bool = True
+    # XML-based analyzer configuration
+    use_xml_rules: bool = False
+    xml_rules_path: Optional[str] = None
 
 
 @dataclass
@@ -347,6 +351,7 @@ class Config:
     references: ReferencesConfig = field(default_factory=ReferencesConfig)
     https_verification: HttpsVerificationConfig = field(default_factory=HttpsVerificationConfig)
     reference_enricher_analyzer: ReferenceEnricherAnalyzerConfig = field(default_factory=ReferenceEnricherAnalyzerConfig)
+    typography_xml_analyzer: 'TypographyXMLAnalyzerConfig' = field(default_factory=lambda: TypographyXMLAnalyzerConfig())
     works_list: WorksListConfig = field(default_factory=WorksListConfig)
     structure: StructureConfig = field(default_factory=StructureConfig)
     # Profile name (optional)

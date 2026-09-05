@@ -1377,25 +1377,31 @@ def _render_dashboard_statistics():
         scheduler_stats = {
             'queue_size': 0,
             'published_today': 0,
-            'total_published': 0
+            'total_published': 0,
+            'analyzed_with_corrections': 0
         }
         
         # Try to get scheduler from sidebar reference
         if 'scheduler_instance_ref' in st.session_state and st.session_state.scheduler_instance_ref:
             scheduler = st.session_state.scheduler_instance_ref[0]
-            if scheduler and hasattr(scheduler, 'state_manager'):
-                state = scheduler.state_manager.get_state()
-                scheduler_stats['queue_size'] = len(state.queue)
-                scheduler_stats['published_today'] = state.daily_published_count
-                scheduler_stats['total_published'] = state.statistics.get('total_published', 0)
+            if scheduler and hasattr(scheduler, 'database'):
+                # Use database methods to get accurate statistics
+                scheduler_stats['queue_size'] = scheduler.database.get_scheduler_queue_size()
+                state = scheduler.database.get_scheduler_state()
+                scheduler_stats['published_today'] = state.get('daily_published_count', 0)
+                stats = scheduler.database.get_scheduler_statistics()
+                scheduler_stats['total_published'] = stats.get('total_published', 0)
+                scheduler_stats['analyzed_with_corrections'] = stats.get('analyzed_with_corrections', 0)
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric("File d'attente", scheduler_stats['queue_size'])
         with col2:
             st.metric("Publiés aujourd'hui", scheduler_stats['published_today'])
         with col3:
             st.metric("Total publié", scheduler_stats['total_published'])
+        with col4:
+            st.metric("Analysés avec corrections", scheduler_stats['analyzed_with_corrections'])
         
         st.divider()
         

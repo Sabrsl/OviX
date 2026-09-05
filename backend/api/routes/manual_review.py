@@ -187,6 +187,160 @@ async def get_manual_review_from_analyzed(db = Depends(get_database)):
         return []
 
 
+@router.get("/published-uncorrected-dead-links")
+async def get_published_uncorrected_dead_links(db = Depends(get_database)):
+    """
+    Get published articles with uncorrected dead links.
+    
+    Returns articles where:
+    - status = 'published'
+    - dead_links_count > 0 (at least one dead link)
+    - dead_links_count > corrected_links_count (at least 1 uncorrected dead link)
+    """
+    try:
+        if not db:
+            logger.warning("Database not available, returning empty list")
+            return []
+
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            SELECT article_title, dead_links_count, corrected_links_count, 
+                   analysis_date, issues_json, status
+            FROM analysis_results
+            WHERE status = 'published' 
+              AND dead_links_count > 0
+              AND dead_links_count > corrected_links_count
+            ORDER BY analysis_date DESC
+        """)
+        
+        rows = cursor.fetchall()
+        
+        articles = []
+        for row in rows:
+            article_title = row[0]
+            dead_links_count = row[1]
+            corrected_links_count = row[2]
+            analysis_date = row[3]
+            issues_json = row[4]
+            status = row[5]
+            
+            # Calculate uncorrected count
+            uncorrected_count = dead_links_count - corrected_links_count
+            
+            # Parse issues if available
+            issues = []
+            if issues_json:
+                try:
+                    import json
+                    issues_data = json.loads(issues_json)
+                    issues = issues_data if isinstance(issues_data, list) else []
+                except json.JSONDecodeError:
+                    logger.warning(f"Failed to parse issues_json for {article_title}")
+            
+            articles.append({
+                "article_title": article_title,
+                "dead_links_count": dead_links_count,
+                "corrected_links_count": corrected_links_count,
+                "uncorrected_count": uncorrected_count,
+                "analysis_date": analysis_date,
+                "status": status,
+                "issues_count": len(issues),
+                "issues": issues[:10]  # Return first 10 issues for preview
+            })
+        
+        logger.info(f"Returning {len(articles)} published articles with uncorrected dead links")
+        return {
+            "success": True,
+            "count": len(articles),
+            "articles": articles
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get published uncorrected dead links: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+            "count": 0,
+            "articles": []
+        }
+
+
+@router.get("/analyzed-uncorrected-dead-links")
+async def get_analyzed_uncorrected_dead_links(db = Depends(get_database)):
+    """
+    Get all analyzed articles with uncorrected dead links (any status).
+    
+    Returns articles where:
+    - dead_links_count > 0 (at least one dead link)
+    - dead_links_count > corrected_links_count (at least 1 uncorrected dead link)
+    """
+    try:
+        if not db:
+            logger.warning("Database not available, returning empty list")
+            return []
+
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            SELECT article_title, dead_links_count, corrected_links_count, 
+                   analysis_date, issues_json, status
+            FROM analysis_results
+            WHERE dead_links_count > 0
+              AND dead_links_count > corrected_links_count
+            ORDER BY analysis_date DESC
+        """)
+        
+        rows = cursor.fetchall()
+        
+        articles = []
+        for row in rows:
+            article_title = row[0]
+            dead_links_count = row[1]
+            corrected_links_count = row[2]
+            analysis_date = row[3]
+            issues_json = row[4]
+            status = row[5]
+            
+            # Calculate uncorrected count
+            uncorrected_count = dead_links_count - corrected_links_count
+            
+            # Parse issues if available
+            issues = []
+            if issues_json:
+                try:
+                    import json
+                    issues_data = json.loads(issues_json)
+                    issues = issues_data if isinstance(issues_data, list) else []
+                except json.JSONDecodeError:
+                    logger.warning(f"Failed to parse issues_json for {article_title}")
+            
+            articles.append({
+                "article_title": article_title,
+                "dead_links_count": dead_links_count,
+                "corrected_links_count": corrected_links_count,
+                "uncorrected_count": uncorrected_count,
+                "analysis_date": analysis_date,
+                "status": status,
+                "issues_count": len(issues),
+                "issues": issues[:10]  # Return first 10 issues for preview
+            })
+        
+        logger.info(f"Returning {len(articles)} analyzed articles with uncorrected dead links")
+        return {
+            "success": True,
+            "count": len(articles),
+            "articles": articles
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get analyzed uncorrected dead links: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+            "count": 0,
+            "articles": []
+        }
+
+
 @router.get("/manual-review", response_model=List[ManualReviewItem])
 async def get_manual_review_items(
     status: Optional[str] = None,
@@ -304,3 +458,123 @@ async def delete_manual_review_item(item_id: str, db = Depends(get_database)):
     except Exception as e:
         logger.error(f"Failed to delete item {item_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to delete item: {str(e)}")
+
+
+@router.get("/article/{article_title}/dead-links")
+async def get_article_dead_links(article_title: str, db = Depends(get_database)):
+    """
+    Get detailed dead links information for a specific article.
+    
+    Returns the article details with dead links information including:
+    - Article metadata
+    - Dead links count
+    - Corrected links count
+    - Uncorrected count
+    - Analysis date
+    - Issues with dead link details
+    """
+    try:
+        if not db:
+            logger.warning("Database not available")
+            return {
+                "success": False,
+                "error": "Database not available",
+                "article": None
+            }
+
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            SELECT article_title, dead_links_count, corrected_links_count, 
+                   analysis_date, issues_json, status
+            FROM analysis_results
+            WHERE article_title = ?
+        """, (article_title,))
+        
+        row = cursor.fetchone()
+        
+        if not row:
+            return {
+                "success": False,
+                "error": f"Article '{article_title}' not found",
+                "article": None
+            }
+        
+        article_title = row[0]
+        dead_links_count = row[1]
+        corrected_links_count = row[2]
+        analysis_date = row[3]
+        issues_json = row[4]
+        status = row[5]
+        
+        # Calculate uncorrected count
+        uncorrected_count = dead_links_count - corrected_links_count
+        
+        # Parse issues to extract dead links
+        issues = []
+        dead_links = []
+        if issues_json:
+            try:
+                import json
+                issues_data = json.loads(issues_json)
+                issues = issues_data if isinstance(issues_data, list) else []
+                
+                # Extract dead links from issues - check multiple possible structures
+                for issue in issues:
+                    if isinstance(issue, dict):
+                        # Check for dead_link type
+                        if issue.get('type') == 'dead_link':
+                            dead_links.append({
+                                "url": issue.get('url', issue.get('link', '')),
+                                "status": issue.get('status', 'broken'),
+                                "error_message": issue.get('error_message', issue.get('message', '')),
+                                "reference": issue.get('reference', issue.get('context', '')),
+                                "line_number": issue.get('line_number', issue.get('line', ''))
+                            })
+                        # Check for url field (general link issues)
+                        elif 'url' in issue:
+                            dead_links.append({
+                                "url": issue.get('url', ''),
+                                "status": issue.get('status', 'broken'),
+                                "error_message": issue.get('error_message', issue.get('message', '')),
+                                "reference": issue.get('reference', issue.get('context', '')),
+                                "line_number": issue.get('line_number', issue.get('line', ''))
+                            })
+                        # Check for link field
+                        elif 'link' in issue:
+                            dead_links.append({
+                                "url": issue.get('link', ''),
+                                "status": issue.get('status', 'broken'),
+                                "error_message": issue.get('error_message', issue.get('message', '')),
+                                "reference": issue.get('reference', issue.get('context', '')),
+                                "line_number": issue.get('line_number', issue.get('line', ''))
+                            })
+                
+                logger.info(f"Extracted {len(dead_links)} dead links from {len(issues)} issues for article {article_title}")
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse issues_json for {article_title}: {e}")
+        
+        article = {
+            "article_title": article_title,
+            "dead_links_count": dead_links_count,
+            "corrected_links_count": corrected_links_count,
+            "uncorrected_count": uncorrected_count,
+            "analysis_date": analysis_date,
+            "status": status,
+            "issues_count": len(issues),
+            "issues": issues,
+            "dead_links": dead_links
+        }
+        
+        logger.info(f"Returning dead links details for article: {article_title}")
+        return {
+            "success": True,
+            "article": article
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get article dead links: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+            "article": None
+        }

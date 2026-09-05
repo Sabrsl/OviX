@@ -433,6 +433,11 @@ class DeadLinkAnalyzer(BaseAnalyzer):
         
         if série or collection:
             # Normalize for comparison (case-insensitive, remove brackets)
+            # Handle site_value being a list (defensive programming)
+            if isinstance(site_value, list):
+                site_value = str(site_value[0]) if site_value else None
+            if not site_value:
+                return None
             site_clean = site_value.strip().lower().replace('[[', '').replace(']]', '')
             
             if série:

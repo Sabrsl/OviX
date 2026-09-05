@@ -62,7 +62,7 @@ export default function UserContributions() {
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
         <button
-          onClick={() => navigate('/analysis/new')}
+          onClick={() => navigate('/articles/retrieval')}
           style={{
             padding: '8px 12px',
             backgroundColor: '#1a1a1a',

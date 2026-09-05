@@ -306,6 +306,16 @@ def _run_blocking_analysis(
         else:
             normalization_result = None
         
+        # Apply XML-based typography corrections if enabled (safe integration)
+        try:
+            from wikipedia_maintenance.utils.typography_xml_integration import apply_xml_corrections_safely
+            content, xml_corrections_count, xml_was_applied = apply_xml_corrections_safely(content)
+            if xml_was_applied:
+                logger.info(f"XML typography corrections applied: {xml_corrections_count} corrections")
+        except Exception as e:
+            logger.warning(f"XML typography corrections failed (non-critical): {e}")
+            # Continue without XML corrections - don't break the existing flow
+        
         # Apply AI typographic correction using LIA
         try:
             from wikipedia_maintenance.utils.gemini_client import GeminiClient
@@ -349,6 +359,20 @@ def _run_blocking_analysis(
             logger.error(f"LIA correction failed: {e}")
             # Continue with dead link analysis even if LIA fails
         
+        # Apply XML typography corrections if enabled (in AI mode)
+        typo_corrections_count = 0
+        try:
+            from wikipedia_maintenance.analyzers import XMLTypographyAnalyzer
+            from wikipedia_maintenance.utils.typography_xml_analyzer_config import TypographyXMLAnalyzerConfig
+            
+            xml_config = TypographyXMLAnalyzerConfig.load()
+            if xml_config.enabled:
+                xml_analyzer = XMLTypographyAnalyzer.from_config(xml_config)
+                content, typo_corrections_count = xml_analyzer.apply_corrections(content)
+                logger.info(f"XML typography analyzer in AI mode: {typo_corrections_count} typo corrections applied")
+        except Exception as e:
+            logger.warning(f"XML typography analyzer failed in AI mode (non-critical): {e}")
+        
         # Apply dead link analysis (still needed in AI mode)
         if hasattr(config, 'analysis') and hasattr(config.analysis, 'enable_dead_link_analyzer'):
             if config.analysis.enable_dead_link_analyzer:
@@ -373,6 +397,19 @@ def _run_blocking_analysis(
             issues = []
             logger.info("DeadLinkAnalyzer setting not found, defaulting to enabled")
         
+        # Add a single issue to track typo corrections count (AI mode)
+        if typo_corrections_count > 0:
+            from wikipedia_maintenance.analyzers.base import Issue
+            typo_issue = Issue(
+                issue_type='typo',
+                description=f"Applied {typo_corrections_count} typo corrections via XML analyzer",
+                position=0,
+                original_text="",
+                suggested_text="",
+                severity='low'
+            )
+            issues.append(typo_issue)
+        
         # Apply ReferenceEnricherAnalyzer if enabled (enriches healthy references)
         if hasattr(config, 'reference_enricher_analyzer') and config.reference_enricher_analyzer.enabled:
             from wikipedia_maintenance.analyzers import ReferenceEnricherAnalyzer
@@ -387,7 +424,7 @@ def _run_blocking_analysis(
         else:
             logger.info("ReferenceEnricherAnalyzer disabled in config (AI mode)")
         
-        return content, (issues, content, page.pageid if page else 0, page.latest_revision_id if page else 0, normalization_result)
+        return content, (issues, content, page.pageid if page else 0, page.latest_revision_id if page else 0, normalization_result, typo_corrections_count)
     else:
         # Regex mode using DeadLinkAnalyzer (blocking CPU/IO)
         from wikipedia_maintenance.analyzers import DeadLinkAnalyzer
@@ -396,6 +433,12 @@ def _run_blocking_analysis(
 
         # Load config to check analyzer settings
         config = load_config()
+
+        # Initialize content with original content for reference analyzers
+        content = original_content
+
+        # Initialize issues list
+        issues = []
 
         # Apply case normalization if enabled (BEFORE dead link analysis)
         # Note: In AI mode, case normalization is handled by LIA's main prompt, not by CaseNormalizer's specific AI prompt
@@ -423,16 +466,143 @@ def _run_blocking_analysis(
                 normalization_result = None
         else:
             normalization_result = None
-
+        
         # Check if DeadLinkAnalyzer is enabled in config
         if hasattr(config, 'analysis') and hasattr(config.analysis, 'enable_dead_link_analyzer'):
             if not config.analysis.enable_dead_link_analyzer:
                 logger.info("DeadLinkAnalyzer disabled in config, skipping analysis")
-                return original_content, ([], content, page.pageid, page.latest_revision_id, normalization_result)
+                # Still apply XML typography corrections even if dead link analysis is disabled
+                typo_corrections_count = 0
+                try:
+                    from wikipedia_maintenance.analyzers import XMLTypographyAnalyzer
+                    from wikipedia_maintenance.utils.typography_xml_analyzer_config import TypographyXMLAnalyzerConfig
+                    
+                    xml_config = TypographyXMLAnalyzerConfig.load()
+                    if xml_config.enabled:
+                        xml_analyzer = XMLTypographyAnalyzer.from_config(xml_config)
+                        content, typo_corrections_count = xml_analyzer.apply_corrections(content)
+                        logger.info(f"XML typography analyzer: {typo_corrections_count} typo corrections applied")
+                except Exception as e:
+                    logger.warning(f"XML typography analyzer failed (non-critical): {e}")
+                
+                # Apply new reference analyzers (independent of DeadLinkAnalyzer)
+                # Apply ReferenceAnalyzer if enabled (bare URLs and duplicate references)
+                logger.info(f"Checking ReferenceAnalyzer: has references={hasattr(config, 'references')}")
+                if hasattr(config, 'references'):
+                    logger.info(f"ReferenceAnalyzer config: check_bare_refs={config.references.check_bare_refs}, check_duplicate_refs={config.references.check_duplicate_refs}")
+                
+                if hasattr(config, 'references') and (config.references.check_bare_refs or config.references.check_duplicate_refs):
+                    from wikipedia_maintenance.analyzers import ReferenceAnalyzer
+                    try:
+                        ref_analyzer = ReferenceAnalyzer()
+                        ref_issues = ref_analyzer.analyze(content)
+                        issues.extend(ref_issues)
+                        logger.info(f"ReferenceAnalyzer applied: {len(ref_issues)} reference issues")
+                    except Exception as e:
+                        logger.warning(f"ReferenceAnalyzer failed: {e}")
+                else:
+                    logger.info("ReferenceAnalyzer disabled: config not found or both checks disabled")
+                
+                # Apply ReferenceValidatorAnalyzer if enabled (uppercase, ISBN, template type)
+                logger.info(f"Checking ReferenceValidatorAnalyzer: has references={hasattr(config, 'references')}")
+                if hasattr(config, 'references'):
+                    logger.info(f"ReferenceValidatorAnalyzer config: check_uppercase_refs={config.references.check_uppercase_refs}, check_isbn_format={config.references.check_isbn_format}, check_template_type={config.references.check_template_type}")
+                
+                if hasattr(config, 'references') and (config.references.check_uppercase_refs or config.references.check_isbn_format or config.references.check_template_type):
+                    from wikipedia_maintenance.analyzers import ReferenceValidatorAnalyzer
+                    try:
+                        validator_analyzer = ReferenceValidatorAnalyzer()
+                        validator_issues = validator_analyzer.analyze(content)
+                        issues.extend(validator_issues)
+                        logger.info(f"ReferenceValidatorAnalyzer applied: {len(validator_issues)} validation issues")
+                    except Exception as e:
+                        logger.warning(f"ReferenceValidatorAnalyzer failed: {e}")
+                else:
+                    logger.info("ReferenceValidatorAnalyzer disabled: config not found or all checks disabled")
+                
+                # Apply BrokenLinkAnalyzer if enabled (check broken links)
+                logger.info(f"Checking BrokenLinkAnalyzer: has references={hasattr(config, 'references')}")
+                if hasattr(config, 'references'):
+                    logger.info(f"BrokenLinkAnalyzer config: check_broken_links={config.references.check_broken_links}")
+                
+                if hasattr(config, 'references') and config.references.check_broken_links:
+                    from wikipedia_maintenance.analyzers import BrokenLinkAnalyzer
+                    try:
+                        broken_link_analyzer = BrokenLinkAnalyzer()
+                        broken_link_issues = broken_link_analyzer.analyze(content)
+                        issues.extend(broken_link_issues)
+                        logger.info(f"BrokenLinkAnalyzer applied: {len(broken_link_issues)} broken links")
+                    except Exception as e:
+                        logger.warning(f"BrokenLinkAnalyzer failed: {e}")
+                else:
+                    logger.info("BrokenLinkAnalyzer disabled: config not found or check disabled")
+                
+                # Apply HttpLinksAnalyzer if enabled (HTTP to HTTPS conversion)
+                logger.info(f"Checking HttpLinksAnalyzer: has https_verification={hasattr(config, 'https_verification')}")
+                if hasattr(config, 'https_verification'):
+                    logger.info(f"HttpLinksAnalyzer config: enabled={config.https_verification.enabled}")
+                
+                if hasattr(config, 'https_verification') and config.https_verification.enabled:
+                    from wikipedia_maintenance.analyzers import HttpLinksAnalyzer
+                    try:
+                        http_analyzer = HttpLinksAnalyzer()
+                        http_issues = http_analyzer.analyze(content)
+                        issues.extend(http_issues)
+                        logger.info(f"HttpLinksAnalyzer applied: {len(http_issues)} HTTP to HTTPS conversions")
+                    except Exception as e:
+                        logger.warning(f"HttpLinksAnalyzer failed: {e}")
+                else:
+                    logger.info("HttpLinksAnalyzer disabled in config")
+                
+                # Apply corrections from reference analyzers
+                corrector = Corrector(content)  # Re-enable strict position check
+                corrected_content = corrector.apply_corrections(issues)
+                
+                # Log correction application results
+                logger.info(f"Corrector applied {len(corrector.corrections)} corrections out of {len(issues)} issues")
+                applied_count = sum(1 for c in corrector.corrections if c.applied)
+                logger.info(f"Successfully applied: {applied_count}, Failed: {len(corrector.corrections) - applied_count}")
+                
+                # Log content comparison for debugging
+                if corrected_content != content:
+                    logger.info(f"Content changed after corrections: original_length={len(content)}, corrected_length={len(corrected_content)}, diff={len(corrected_content) - len(content)}")
+                else:
+                    logger.warning(f"Content unchanged after corrections despite {applied_count} applied corrections")
+                
+                # Add a single issue to track the typo corrections count
+                if typo_corrections_count > 0:
+                    from wikipedia_maintenance.analyzers.base import Issue
+                    typo_issue = Issue(
+                        issue_type='typo',
+                        description=f"Applied {typo_corrections_count} typo corrections via XML analyzer",
+                        position=0,
+                        original_text="",
+                        suggested_text="",
+                        severity='low'
+                    )
+                    issues.append(typo_issue)
+                
+                return original_content, (issues, corrected_content, page.pageid if page else 0, page.latest_revision_id if page else 0, normalization_result, typo_corrections_count)
             else:
                 logger.info("DeadLinkAnalyzer enabled in config, proceeding with analysis")
         else:
             logger.info("DeadLinkAnalyzer setting not found in config, defaulting to enabled")
+
+        # Apply XML-based typography corrections if enabled (before dead link analysis)
+        typo_corrections_count = 0
+        typo_corrections_applied_to = "intermediate"  # Track where typo corrections were applied
+        try:
+            from wikipedia_maintenance.analyzers import XMLTypographyAnalyzer
+            from wikipedia_maintenance.utils.typography_xml_analyzer_config import TypographyXMLAnalyzerConfig
+            
+            xml_config = TypographyXMLAnalyzerConfig.load()
+            if xml_config.enabled:
+                xml_analyzer = XMLTypographyAnalyzer.from_config(xml_config)
+                content, typo_corrections_count = xml_analyzer.apply_corrections(content)
+                logger.info(f"XML typography analyzer: {typo_corrections_count} typo corrections applied")
+        except Exception as e:
+            logger.warning(f"XML typography analyzer failed (non-critical): {e}")
+            # Continue without XML corrections - don't break the existing flow
 
         # Phase 2: Initialize tracking service for correlation
         tracking_service = None
@@ -444,7 +614,166 @@ def _run_blocking_analysis(
             logger.warning(f"Phase 2: Failed to initialize TrackingService: {e}")
 
         analyzer = DeadLinkAnalyzer(tracking_service=tracking_service)
+        logger.info("Starting DeadLinkAnalyzer.analyze()")
         issues = analyzer.analyze(content)  # Blocking CPU/IO
+        logger.info(f"DeadLinkAnalyzer.analyze() completed: {len(issues)} issues")
+        
+        # Apply new reference analyzers (independent of DeadLinkAnalyzer)
+        # Apply ReferenceAnalyzer if enabled (bare URLs and duplicate references)
+        logger.info(f"Checking ReferenceAnalyzer: has references={hasattr(config, 'references')}")
+        if hasattr(config, 'references'):
+            logger.info(f"ReferenceAnalyzer config: check_bare_refs={config.references.check_bare_refs}, check_duplicate_refs={config.references.check_duplicate_refs}")
+        
+        if hasattr(config, 'references') and (config.references.check_bare_refs or config.references.check_duplicate_refs):
+            logger.info("Starting ReferenceAnalyzer")
+            from wikipedia_maintenance.analyzers import ReferenceAnalyzer
+            try:
+                ref_analyzer = ReferenceAnalyzer()
+                ref_issues = ref_analyzer.analyze(content)
+                issues.extend(ref_issues)
+                logger.info(f"ReferenceAnalyzer applied: {len(ref_issues)} reference issues")
+            except Exception as e:
+                logger.warning(f"ReferenceAnalyzer failed: {e}")
+        else:
+            logger.info("ReferenceAnalyzer disabled: config not found or both checks disabled")
+        
+        # Apply ReferenceValidatorAnalyzer if enabled (uppercase, ISBN, template type)
+        logger.info(f"Checking ReferenceValidatorAnalyzer: has references={hasattr(config, 'references')}")
+        if hasattr(config, 'references'):
+            logger.info(f"ReferenceValidatorAnalyzer config: check_uppercase_refs={config.references.check_uppercase_refs}, check_isbn_format={config.references.check_isbn_format}, check_template_type={config.references.check_template_type}")
+        
+        if hasattr(config, 'references') and (config.references.check_uppercase_refs or config.references.check_isbn_format or config.references.check_template_type):
+            logger.info("Starting ReferenceValidatorAnalyzer")
+            from wikipedia_maintenance.analyzers import ReferenceValidatorAnalyzer
+            try:
+                validator_analyzer = ReferenceValidatorAnalyzer()
+                validator_issues = validator_analyzer.analyze(content)
+                issues.extend(validator_issues)
+                logger.info(f"ReferenceValidatorAnalyzer applied: {len(validator_issues)} validation issues")
+            except Exception as e:
+                logger.warning(f"ReferenceValidatorAnalyzer failed: {e}")
+        else:
+            logger.info("ReferenceValidatorAnalyzer disabled: config not found or all checks disabled")
+        
+        # Apply BrokenLinkAnalyzer if enabled (check broken links)
+        logger.info(f"Checking BrokenLinkAnalyzer: has references={hasattr(config, 'references')}")
+        if hasattr(config, 'references'):
+            logger.info(f"BrokenLinkAnalyzer config: check_broken_links={config.references.check_broken_links}")
+        
+        if hasattr(config, 'references') and config.references.check_broken_links:
+            logger.info("Starting BrokenLinkAnalyzer")
+            from wikipedia_maintenance.analyzers import BrokenLinkAnalyzer
+            try:
+                broken_link_analyzer = BrokenLinkAnalyzer()
+                broken_link_issues = broken_link_analyzer.analyze(content)
+                issues.extend(broken_link_issues)
+                logger.info(f"BrokenLinkAnalyzer applied: {len(broken_link_issues)} broken links")
+            except Exception as e:
+                logger.warning(f"BrokenLinkAnalyzer failed: {e}")
+        else:
+            logger.info("BrokenLinkAnalyzer disabled: config not found or check disabled")
+        
+        # Apply HttpLinksAnalyzer if enabled (HTTP to HTTPS conversion)
+        logger.info(f"Checking HttpLinksAnalyzer: has https_verification={hasattr(config, 'https_verification')}")
+        if hasattr(config, 'https_verification'):
+            logger.info(f"HttpLinksAnalyzer config: enabled={config.https_verification.enabled}")
+        
+        if hasattr(config, 'https_verification') and config.https_verification.enabled:
+            logger.info("Starting HttpLinksAnalyzer")
+            from wikipedia_maintenance.analyzers import HttpLinksAnalyzer
+            try:
+                http_analyzer = HttpLinksAnalyzer()
+                http_issues = http_analyzer.analyze(content)
+                issues.extend(http_issues)
+                logger.info(f"HttpLinksAnalyzer applied: {len(http_issues)} HTTP to HTTPS conversions")
+            except Exception as e:
+                logger.warning(f"HttpLinksAnalyzer failed: {e}")
+        else:
+            logger.info("HttpLinksAnalyzer disabled in config")
+        
+        logger.info("All reference analyzers completed")
+        
+        # Add a single issue to track typo corrections count
+        if typo_corrections_count > 0:
+            from wikipedia_maintenance.analyzers.base import Issue
+            typo_issue = Issue(
+                issue_type='typo',
+                description=f"Applied {typo_corrections_count} typo corrections via XML analyzer",
+                position=0,
+                original_text="",
+                suggested_text="",
+                severity='low'
+            )
+            issues.append(typo_issue)
+        
+        # Apply new reference analyzers (independent of DeadLinkAnalyzer)
+        # Apply ReferenceAnalyzer if enabled (bare URLs and duplicate references)
+        logger.info(f"Checking ReferenceAnalyzer: has references={hasattr(config, 'references')}")
+        if hasattr(config, 'references'):
+            logger.info(f"ReferenceAnalyzer config: check_bare_refs={config.references.check_bare_refs}, check_duplicate_refs={config.references.check_duplicate_refs}")
+        
+        if hasattr(config, 'references') and (config.references.check_bare_refs or config.references.check_duplicate_refs):
+            from wikipedia_maintenance.analyzers import ReferenceAnalyzer
+            try:
+                ref_analyzer = ReferenceAnalyzer()
+                ref_issues = ref_analyzer.analyze(content)
+                issues.extend(ref_issues)
+                logger.info(f"ReferenceAnalyzer applied: {len(ref_issues)} reference issues")
+            except Exception as e:
+                logger.warning(f"ReferenceAnalyzer failed: {e}")
+        else:
+            logger.info("ReferenceAnalyzer disabled: config not found or both checks disabled")
+        
+        # Apply ReferenceValidatorAnalyzer if enabled (uppercase, ISBN, template type)
+        logger.info(f"Checking ReferenceValidatorAnalyzer: has references={hasattr(config, 'references')}")
+        if hasattr(config, 'references'):
+            logger.info(f"ReferenceValidatorAnalyzer config: check_uppercase_refs={config.references.check_uppercase_refs}, check_isbn_format={config.references.check_isbn_format}, check_template_type={config.references.check_template_type}")
+        
+        if hasattr(config, 'references') and (config.references.check_uppercase_refs or config.references.check_isbn_format or config.references.check_template_type):
+            from wikipedia_maintenance.analyzers import ReferenceValidatorAnalyzer
+            try:
+                validator_analyzer = ReferenceValidatorAnalyzer()
+                validator_issues = validator_analyzer.analyze(content)
+                issues.extend(validator_issues)
+                logger.info(f"ReferenceValidatorAnalyzer applied: {len(validator_issues)} validation issues")
+            except Exception as e:
+                logger.warning(f"ReferenceValidatorAnalyzer failed: {e}")
+        else:
+            logger.info("ReferenceValidatorAnalyzer disabled: config not found or all checks disabled")
+        
+        # Apply BrokenLinkAnalyzer if enabled (check broken links)
+        logger.info(f"Checking BrokenLinkAnalyzer: has references={hasattr(config, 'references')}")
+        if hasattr(config, 'references'):
+            logger.info(f"BrokenLinkAnalyzer config: check_broken_links={config.references.check_broken_links}")
+        
+        if hasattr(config, 'references') and config.references.check_broken_links:
+            from wikipedia_maintenance.analyzers import BrokenLinkAnalyzer
+            try:
+                broken_link_analyzer = BrokenLinkAnalyzer()
+                broken_link_issues = broken_link_analyzer.analyze(content)
+                issues.extend(broken_link_issues)
+                logger.info(f"BrokenLinkAnalyzer applied: {len(broken_link_issues)} broken links")
+            except Exception as e:
+                logger.warning(f"BrokenLinkAnalyzer failed: {e}")
+        else:
+            logger.info("BrokenLinkAnalyzer disabled: config not found or check disabled")
+        
+        # Apply HttpLinksAnalyzer if enabled (HTTP to HTTPS conversion)
+        logger.info(f"Checking HttpLinksAnalyzer: has https_verification={hasattr(config, 'https_verification')}")
+        if hasattr(config, 'https_verification'):
+            logger.info(f"HttpLinksAnalyzer config: enabled={config.https_verification.enabled}")
+        
+        if hasattr(config, 'https_verification') and config.https_verification.enabled:
+            from wikipedia_maintenance.analyzers import HttpLinksAnalyzer
+            try:
+                http_analyzer = HttpLinksAnalyzer()
+                http_issues = http_analyzer.analyze(content)
+                issues.extend(http_issues)
+                logger.info(f"HttpLinksAnalyzer applied: {len(http_issues)} HTTP to HTTPS conversions")
+            except Exception as e:
+                logger.warning(f"HttpLinksAnalyzer failed: {e}")
+        else:
+            logger.info("HttpLinksAnalyzer disabled in config")
         
         # Apply ReferenceEnricherAnalyzer if enabled (enriches healthy references)
         if hasattr(config, 'reference_enricher_analyzer') and config.reference_enricher_analyzer.enabled:
@@ -464,13 +793,40 @@ def _run_blocking_analysis(
         job = get_analysis_job(analysis_id)
         if job and job.get("status") in ["cancelled", "paused"]:
             logger.info(f"Analysis {analysis_id} was cancelled or paused after analysis")
-            return None, (None, None, None, None, normalization_result)
+            return None, (None, None, None, None, normalization_result, 0)
         
         # Generate corrected content (blocking CPU)
         corrector = Corrector(content)
         corrected_content = corrector.apply_corrections(issues)
         
-        return original_content, (issues, corrected_content, page.pageid, page.latest_revision_id, normalization_result)
+        # Log correction application results
+        logger.info(f"Corrector applied {len(corrector.corrections)} corrections out of {len(issues)} issues")
+        applied_count = sum(1 for c in corrector.corrections if c.applied)
+        logger.info(f"Successfully applied: {applied_count}, Failed: {len(corrector.corrections) - applied_count}")
+        
+        # Log content comparison for debugging
+        if corrected_content != content:
+            logger.info(f"Content changed after corrections: original_length={len(content)}, corrected_length={len(corrected_content)}, diff={len(corrected_content) - len(content)}")
+        else:
+            logger.warning(f"Content unchanged after corrections despite {applied_count} applied corrections")
+        
+        # Re-apply typo corrections to the final corrected content to ensure they are preserved
+        # This ensures typo corrections don't get lost during the corrector's transformations
+        if typo_corrections_count > 0:
+            try:
+                from wikipedia_maintenance.analyzers import XMLTypographyAnalyzer
+                from wikipedia_maintenance.utils.typography_xml_analyzer_config import TypographyXMLAnalyzerConfig
+                
+                xml_config = TypographyXMLAnalyzerConfig.load()
+                if xml_config.enabled:
+                    xml_analyzer = XMLTypographyAnalyzer.from_config(xml_config)
+                    corrected_content, final_typo_count = xml_analyzer.apply_corrections(corrected_content)
+                    logger.info(f"Re-applied typo corrections to final content: {final_typo_count} corrections")
+                    typo_corrections_count = final_typo_count
+            except Exception as e:
+                logger.warning(f"Failed to re-apply typo corrections to final content: {e}")
+
+        return original_content, (issues, corrected_content, page.pageid, page.latest_revision_id, normalization_result, typo_corrections_count)
 
 
 async def run_analysis_worker(
@@ -491,6 +847,9 @@ async def run_analysis_worker(
     to a thread pool to avoid blocking the event loop.
     """
     try:
+        # Load config to capture analysis parameters
+        from wikipedia_maintenance.utils.config import load_config
+        config = load_config()
         loop = asyncio.get_event_loop()
         
         # Run blocking operations in dedicated thread pool to isolate load
@@ -513,7 +872,7 @@ async def run_analysis_worker(
         
         # Handle AI mode separately (already async)
         if mode == "ai":
-            issues, corrected_content, page_id, revision_id, normalization_result = analysis_result
+            issues, corrected_content, page_id, revision_id, normalization_result, typo_corrections_count = analysis_result
             corrected_content = await run_ai_analysis(
                 original_content,
                 ai_provider,
@@ -524,7 +883,7 @@ async def run_analysis_worker(
             )
         else:
             # Unpack regex mode results
-            issues, corrected_content, page_id, revision_id, normalization_result = analysis_result
+            issues, corrected_content, page_id, revision_id, normalization_result, typo_corrections_count = analysis_result
         
         # Convert issues to response format and collect manual review URLs
         issue_infos = []
@@ -547,8 +906,14 @@ async def run_analysis_worker(
             ))
             
             # Collect URLs requiring manual review
+            # Include both REVIEW_REQUIRED status and medium severity issues
             if issue.extra and issue.extra.get('repair_status') == 'REVIEW_REQUIRED':
                 url = issue.extra.get('url') or issue.original_text
+                if url:
+                    manual_review_urls.append(url)
+            elif issue.severity == 'medium':
+                # Medium severity issues also require manual review
+                url = getattr(issue, 'url', None) or issue.original_text
                 if url:
                     manual_review_urls.append(url)
         
@@ -567,19 +932,131 @@ async def run_analysis_worker(
         # Count dead links (issues with dead link type)
         dead_links_count = len([i for i in issues if 'dead' in i.issue_type.lower()])
 
-        # Count corrected links (issues with suggested text AND actual repair applied)
-        # Only count issues that represent actual repairs, not informational/diagnostic issues
-        valid_repair_statuses = [
-            'REPAIR_APPLIED', 'SAFE_REPLACEMENT', 'ARCHIVE_ONLY_REPAIR', 'ENRICHMENT_APPLIED', 'BARE_URL_ENRICHMENT_APPLIED'
-        ]
+        # Count dead links corrected (only dead link repairs, not enrichments)
+        dead_links_corrected_count = 0
         
-        corrected_links_count = len([
-            i for i in issues 
-            if i.suggested_text 
-            and ('dead' in i.issue_type.lower() or 'reference_enrichment' in i.issue_type.lower())
-            and i.extra 
-            and i.extra.get('repair_status') in valid_repair_statuses
-        ])
+        # Count enrichments (reference enrichments only)
+        enrichment_count = 0
+        
+        # Count corrections by analyzer type
+        stats_by_analyzer = {
+            "bare_refs": 0,
+            "duplicate_refs": 0,
+            "uppercase_refs": 0,
+            "isbn_format": 0,
+            "template_type": 0,
+            "broken_links": 0,
+            "https_conversions": 0,
+            "enrichments": 0,
+            "manual_review": 0  # Issues without suggested_text
+        }
+        
+        try:
+            # Count dead link repairs
+            dead_link_repair_statuses = [
+                'REPAIR_APPLIED', 'SAFE_REPLACEMENT', 'ARCHIVE_ONLY_REPAIR'
+            ]
+            
+            # Count enrichments
+            enrichment_statuses = [
+                'ENRICHMENT_APPLIED', 'BARE_URL_ENRICHMENT_APPLIED'
+            ]
+            
+            # Count reference analyzer corrections
+            reference_analyzer_types = [
+                'bare_url', 'duplicate_reference', 'uppercase_parameter', 
+                'invalid_isbn', 'template_type_mismatch', 'broken_link'
+            ]
+            
+            for i in issues:
+                # Count all issues by type (regardless of suggested_text)
+                if i.issue_type == 'bare_url':
+                    stats_by_analyzer["bare_refs"] += 1
+                elif i.issue_type == 'duplicate_reference':
+                    stats_by_analyzer["duplicate_refs"] += 1
+                elif i.issue_type == 'uppercase_parameter':
+                    stats_by_analyzer["uppercase_refs"] += 1
+                elif i.issue_type == 'invalid_isbn':
+                    stats_by_analyzer["isbn_format"] += 1
+                elif i.issue_type == 'template_type_mismatch':
+                    stats_by_analyzer["template_type"] += 1
+                elif i.issue_type == 'broken_link':
+                    stats_by_analyzer["broken_links"] += 1
+                elif i.issue_type == 'http_link':
+                    stats_by_analyzer["https_conversions"] += 1
+                elif 'reference_enrichment' in i.issue_type.lower():
+                    stats_by_analyzer["enrichments"] += 1
+                
+                # Count manual review items (issues without suggested_text)
+                if not i.suggested_text:
+                    stats_by_analyzer["manual_review"] += 1
+                    continue  # Skip for corrected_links_count
+                    
+                if i.extra and i.extra.get('repair_status') in dead_link_repair_statuses:
+                    if 'dead' in i.issue_type.lower():
+                        dead_links_corrected_count += 1
+                elif i.extra and i.extra.get('repair_status') in enrichment_statuses:
+                    if 'reference_enrichment' in i.issue_type.lower():
+                        enrichment_count += 1
+                # Count new reference analyzer corrections
+                elif i.issue_type in reference_analyzer_types:
+                    enrichment_count += 1
+                # Count HTTP to HTTPS conversions
+                elif i.issue_type == 'http_link':
+                    enrichment_count += 1
+            
+            logger.info(f"Dead links corrected: {dead_links_corrected_count}, Enrichments: {enrichment_count}")
+            logger.info(f"Stats by analyzer: {stats_by_analyzer}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to count corrections via repair statuses: {e}")
+            # Simple fallback counting
+            for i in issues:
+                # Count all issues by type (regardless of suggested_text)
+                if i.issue_type == 'bare_url':
+                    stats_by_analyzer["bare_refs"] += 1
+                elif i.issue_type == 'duplicate_reference':
+                    stats_by_analyzer["duplicate_refs"] += 1
+                elif i.issue_type == 'uppercase_parameter':
+                    stats_by_analyzer["uppercase_refs"] += 1
+                elif i.issue_type == 'invalid_isbn':
+                    stats_by_analyzer["isbn_format"] += 1
+                elif i.issue_type == 'template_type_mismatch':
+                    stats_by_analyzer["template_type"] += 1
+                elif i.issue_type == 'broken_link':
+                    stats_by_analyzer["broken_links"] += 1
+                elif i.issue_type == 'http_link':
+                    stats_by_analyzer["https_conversions"] += 1
+                elif 'reference_enrichment' in i.issue_type.lower():
+                    stats_by_analyzer["enrichments"] += 1
+                
+                # Count manual review items (issues without suggested_text)
+                if not i.suggested_text:
+                    stats_by_analyzer["manual_review"] += 1
+                    continue
+                    
+                if 'dead' in i.issue_type.lower():
+                    dead_links_corrected_count += 1
+                elif 'reference_enrichment' in i.issue_type.lower():
+                    enrichment_count += 1
+                # Count new reference analyzer corrections in fallback
+                elif i.issue_type in ['bare_url', 'duplicate_reference', 'uppercase_parameter', 'invalid_isbn', 'template_type_mismatch', 'broken_link', 'http_link']:
+                    enrichment_count += 1
+
+        # For backward compatibility, corrected_links_count = dead_links_corrected_count + enrichment_count
+        corrected_links_count = dead_links_corrected_count + enrichment_count
+        
+        # Build stats dictionary with detailed breakdown
+        stats = {
+            "total_links": total_links,
+            "dead_links_count": dead_links_count,
+            "dead_links_corrected_count": dead_links_corrected_count,
+            "corrected_links_count": corrected_links_count,
+            "enrichment_count": enrichment_count,
+            "character_count": len(original_content) if original_content else 0,
+            "changes_count": len(issues),
+            "stats_by_analyzer": stats_by_analyzer
+        }
         
         # Track analysis with final status
         analyzed_tracker = get_analyzed_tracker()
@@ -654,6 +1131,71 @@ async def run_analysis_worker(
                     })
                 normalization_reports_json = json.dumps(reports_data)
         
+        # Build analysis config used (analyzers that were enabled during analysis)
+        analysis_config_used = {}
+        
+        # Capture analysis configuration - only if enabled
+        if hasattr(config, 'analysis'):
+            if hasattr(config.analysis, 'enable_dead_link_analyzer') and config.analysis.enable_dead_link_analyzer:
+                analysis_config_used['enable_dead_link_analyzer'] = True
+            if hasattr(config.analysis, 'enable_case_normalization') and config.analysis.enable_case_normalization:
+                analysis_config_used['enable_case_normalization'] = True
+            if hasattr(config.analysis, 'normalize_with_ai') and config.analysis.normalize_with_ai:
+                analysis_config_used['normalize_with_ai'] = True
+        
+        # Capture reference enricher configuration - only if enabled
+        if hasattr(config, 'reference_enricher_analyzer'):
+            if hasattr(config.reference_enricher_analyzer, 'enabled') and config.reference_enricher_analyzer.enabled:
+                analysis_config_used['reference_enricher_analyzer'] = True
+        
+        # Capture HTTPS verification configuration - only if enabled
+        if hasattr(config, 'https_verification'):
+            if hasattr(config.https_verification, 'enabled') and config.https_verification.enabled:
+                analysis_config_used['https_verification'] = True
+        
+        # Capture references configuration - only if enabled
+        if hasattr(config, 'references'):
+            if hasattr(config.references, 'use_wayback_api') and config.references.use_wayback_api:
+                analysis_config_used['use_wayback_api'] = True
+            if hasattr(config.references, 'check_bare_refs') and config.references.check_bare_refs:
+                analysis_config_used['check_bare_refs'] = True
+            if hasattr(config.references, 'check_duplicate_refs') and config.references.check_duplicate_refs:
+                analysis_config_used['check_duplicate_refs'] = True
+        
+        # Add mode
+        analysis_config_used['mode'] = mode
+        
+        analyzers_status_json = json.dumps(analysis_config_used)
+        
+        # Count typo corrections from issues
+        # Note: typo corrections are tracked via typo_corrections_count variable, not via individual issues
+        # The XML analyzer creates a single summary issue for all typo corrections
+        typo_issues = [issue for issue in issues if issue.issue_type == 'typo']
+        if typo_issues:
+            # Extract the actual count from the description if it's a summary issue
+            for issue in typo_issues:
+                if issue.description and "typo corrections" in issue.description:
+                    import re
+                    match = re.search(r'Applied (\d+) typo corrections', issue.description)
+                    if match:
+                        typo_corrections_count = int(match.group(1))
+                        break
+        else:
+            typo_corrections_count = 0
+        
+        # Clean up any incomplete analysis results for this article before storing new result
+        try:
+            cursor = db.conn.cursor()
+            cursor.execute("""
+                DELETE FROM analysis_results 
+                WHERE article_title = ? 
+                AND status IN ('analyzing', 'running', 'cancelled', 'paused')
+            """, (article_title,))
+            db.conn.commit()
+            logger.info(f"Cleaned up incomplete analysis results for article '{article_title}'")
+        except Exception as cleanup_error:
+            logger.warning(f"Failed to clean up incomplete analysis results: {cleanup_error}")
+        
         db.create_analysis_result(
             result_id=f"{article_title}_{revision_id if revision_id else 0}",
             job_id=analysis_id,
@@ -676,8 +1218,25 @@ async def run_analysis_worker(
             analysis_date=datetime.now().isoformat(),
             normalization_changes_count=normalization_changes_count,
             normalization_ignored_count=normalization_ignored_count,
-            normalization_reports=normalization_reports_json
+            normalization_reports=normalization_reports_json,
+            analyzers_status=analyzers_status_json,
+            typo_corrections_count=typo_corrections_count,
+            stats_by_analyzer=json.dumps(stats_by_analyzer)  # Store detailed analyzer stats
         )
+
+        # Update article status in articles_to_analyze table to 'analyzed'
+        try:
+            cursor = db.conn.cursor()
+            cursor.execute("""
+                UPDATE articles_to_analyze
+                SET status = 'analyzed'
+                WHERE title = ?
+            """, (article_title,))
+            db.conn.commit()
+            logger.info(f"Updated status to 'analyzed' for article {article_title} in articles_to_analyze table")
+        except Exception as update_error:
+            logger.warning(f"Failed to update status in articles_to_analyze table: {update_error}")
+            # Non-critical error, continue
 
         # Note: Batch job tracking simplified for database persistence
         # Individual jobs are now tracked independently in the database
@@ -737,9 +1296,24 @@ async def run_analysis_worker(
                 human_verified=False,
                 manual_review_urls=None,
                 issues_json=None,
-                analysis_date=datetime.now().isoformat()
+                analysis_date=datetime.now().isoformat(),
+                analyzers_status=json.dumps({"mode": mode, "error": "failed"})
             )
             logger.info(f"Stored failed analysis result for {article_title} in database")
+            
+            # Update article status in articles_to_analyze table to 'error' on error
+            try:
+                cursor = db.conn.cursor()
+                cursor.execute("""
+                    UPDATE articles_to_analyze
+                    SET status = 'error'
+                    WHERE title = ?
+                """, (article_title,))
+                db.conn.commit()
+                logger.info(f"Set status to 'error' for article {article_title} in articles_to_analyze table after error")
+            except Exception as update_error:
+                logger.warning(f"Failed to update status in articles_to_analyze table: {update_error}")
+                # Non-critical error, continue
         except Exception as db_error:
             logger.error(f"Failed to store error result in database: {db_error}")
 
@@ -1132,7 +1706,8 @@ async def get_analysis_results(job_id: str, database = Depends(get_database)):
                 cursor.execute("""
                     SELECT article_title, original_content, corrected_content, 
                            dead_links_count, corrected_links_count, character_count, 
-                           total_links, changes_count, analysis_date, issues_json
+                           total_links, changes_count, analysis_date, issues_json,
+                           stats_by_analyzer
                     FROM analysis_results
                     WHERE job_id = ?
                     ORDER BY analysis_date DESC
@@ -1152,6 +1727,14 @@ async def get_analysis_results(job_id: str, database = Depends(get_database)):
                             issues_data = json.loads(row[9])
                         except json.JSONDecodeError as e:
                             logger.warning(f"Failed to parse issues_json: {e}")
+                    
+                    # Parse stats_by_analyzer if available
+                    stats_by_analyzer = {}
+                    if len(row) > 10 and row[10]:  # stats_by_analyzer column
+                        try:
+                            stats_by_analyzer = json.loads(row[10])
+                        except json.JSONDecodeError as e:
+                            logger.warning(f"Failed to parse stats_by_analyzer: {e}")
                     
                     job = {
                         "job_id": job_id,
@@ -1180,7 +1763,8 @@ async def get_analysis_results(job_id: str, database = Depends(get_database)):
                                 "corrected_links_count": row[4],
                                 "high_severity": 0,  # Will be calculated from actual issues
                                 "medium_severity": 0,  # Will be calculated from actual issues
-                                "low_severity": 0  # Will be calculated from actual issues
+                                "low_severity": 0,  # Will be calculated from actual issues
+                                "stats_by_analyzer": stats_by_analyzer
                             },
                             "issues": issues_data
                         }

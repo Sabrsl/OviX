@@ -246,7 +246,7 @@ export default function ManualReview() {
               margin: '0 0 4px',
               lineHeight: 1.3
             }}>
-              Liens nécessitant révision manuelle
+              Révision manuelle
             </h1>
             <p style={{ margin: 0, fontSize: '12.5px', color: T.textMuted }}>
               Vérifiez et corrigez les liens détectés avant publication

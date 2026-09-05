@@ -122,6 +122,17 @@ class Corrector:
             logger.debug("Cannot apply correction: missing suggested_text or original_text")
             return False
 
+        # Guard: no-op correction (bug in analyzer)
+        if issue.suggested_text == issue.original_text:
+            logger.warning(
+                f"Correction for issue_type={issue.issue_type} at position {issue.position} "
+                f"is a no-op (suggested_text == original_text) — skipping"
+            )
+            self.corrections.append(
+                Correction(issue=issue, applied=False, operation_id=issue.operation_id)
+            )
+            return False
+
         # Try position‑based replacement first
         if issue.position is not None:
             return self._apply_correction_at_position(issue)
@@ -192,6 +203,7 @@ class Corrector:
                 logger.warning(
                     f"Text mismatch at position {start}: expected {issue.original_text!r}, got {actual_text!r}"
                 )
+                logger.warning(f"Issue type: {issue.issue_type}, suggested_text: {issue.suggested_text!r}")
                 # Attempt to find the text elsewhere? Not safe; we skip.
                 self.corrections.append(
                     Correction(

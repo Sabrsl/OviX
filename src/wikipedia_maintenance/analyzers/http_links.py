@@ -240,12 +240,26 @@ class HttpLinksAnalyzer(BaseAnalyzer):
                 # Calculate absolute position
                 absolute_position = template.start_position + url_position_in_template
                 
+                # Include the parameter name in original_text for proper matching
+                # Find the parameter name (e.g., "|url=")
+                param_start = url_position_in_template
+                while param_start > 0 and template_text[param_start-1] != '|' and template_text[param_start-1] != ' ':
+                    param_start -= 1
+                
+                # Extract the full parameter (e.g., "|url=http://...")
+                param_end = url_position_in_template + len(http_url)
+                while param_end < len(template_text) and template_text[param_end] not in '|}':
+                    param_end += 1
+                
+                original_param = template_text[param_start:param_end]
+                suggested_param = original_param.replace(http_url, https_url, 1)
+                
                 self.issues.append(Issue(
                     issue_type="http_link",
                     description=f"Lien HTTP dans template (HTTPS disponible) : {http_url}",
-                    position=absolute_position,
-                    original_text=http_url,
-                    suggested_text=https_url,
+                    position=template.start_position + param_start,
+                    original_text=original_param,
+                    suggested_text=suggested_param,
                     severity="low",
                     confidence=1.0,
                     extra={

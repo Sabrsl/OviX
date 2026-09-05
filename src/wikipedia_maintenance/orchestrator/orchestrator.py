@@ -15,7 +15,7 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
 from ..analyzers.base import Issue
-from ..analyzers import DeadLinkAnalyzer, HttpLinksAnalyzer
+from ..analyzers import DeadLinkAnalyzer, HttpLinksAnalyzer, XMLTypographyAnalyzer
 from ..utils.publisher import Corrector
 from ..utils.tracking_service import TrackingService
 from ..utils.database import DatabaseManager
@@ -31,6 +31,7 @@ class DeadLinkResult:
     issues: List[Issue]
     dead_links_found: int = 0
     http_links_found: int = 0  # Number of HTTP links detected
+    typo_corrections_found: int = 0  # Number of typo corrections found
     repairs_attempted: int = 0
     repairs_successful: int = 0
 
@@ -77,12 +78,17 @@ class DeadLinkOrchestrator:
         # OviX HTTP Links Analyzer (for HTTP→HTTPS conversion)
         self.http_links_analyzer = HttpLinksAnalyzer()
         
+        # OviX XML Typography Analyzer (for typo correction)
+        from ..utils.typography_xml_analyzer_config import TypographyXMLAnalyzerConfig
+        xml_config = TypographyXMLAnalyzerConfig.load()
+        self.xml_typography_analyzer = XMLTypographyAnalyzer.from_config(xml_config)
+        
         # Corrector
         self.corrector: Optional[Corrector] = None
     
     def analyze(self, content: str) -> DeadLinkResult:
         """
-        Analyze content for dead links and HTTP links, then generate corrections.
+        Analyze content for dead links, HTTP links, and typography issues, then generate corrections.
         
         Args:
             content: Original wikicode.
@@ -90,7 +96,7 @@ class DeadLinkOrchestrator:
         Returns:
             DeadLinkResult with analysis results.
         """
-        logger.info("Starting dead link and HTTP link analysis")
+        logger.info("Starting dead link, HTTP link, and typography analysis")
         
         # Run dead link analyzer
         dead_link_issues = self.dead_link_analyzer.analyze(content)
@@ -98,12 +104,16 @@ class DeadLinkOrchestrator:
         # Run HTTP links analyzer (if enabled)
         http_link_issues = self.http_links_analyzer.analyze(content)
         
+        # Run XML typography analyzer (if enabled)
+        typo_issues = self.xml_typography_analyzer.analyze(content)
+        
         # Combine all issues
-        issues = dead_link_issues + http_link_issues
+        issues = dead_link_issues + http_link_issues + typo_issues
         
         # Count issues by type
         dead_links_found = len([i for i in issues if i.issue_type == 'dead_link'])
         http_links_found = len([i for i in issues if i.issue_type == 'http_link'])
+        typo_corrections_found = len([i for i in issues if i.issue_type == 'typo'])
         
         # Initialize corrector
         self.corrector = Corrector(content)
@@ -117,7 +127,8 @@ class DeadLinkOrchestrator:
         
         logger.info(
             f"Analysis complete: {dead_links_found} dead links found, "
-            f"{http_links_found} HTTP links found, {repairs_successful} repairs applied"
+            f"{http_links_found} HTTP links found, {typo_corrections_found} typo corrections found, "
+            f"{repairs_successful} repairs applied"
         )
         
         return DeadLinkResult(
@@ -126,6 +137,7 @@ class DeadLinkOrchestrator:
             issues=issues,
             dead_links_found=dead_links_found,
             http_links_found=http_links_found,
+            typo_corrections_found=typo_corrections_found,
             repairs_attempted=repairs_attempted,
             repairs_successful=repairs_successful
         )

@@ -44,6 +44,16 @@ export const historyApi = {
   },
 
   /**
+   * Get articles ready to publish (analyzed with valid corrections, not yet published)
+   */
+  async getReadyToPublish(limit: number = 500, offset: number = 0): Promise<AnalyzedHistory> {
+    const response = await apiClient.get<AnalyzedHistory>('/api/history/ready-to-publish', { 
+      params: { limit, offset } 
+    })
+    return response.data
+  },
+
+  /**
    * Get article-specific history
    */
   async getArticleHistory(title: string): Promise<{ success: boolean; history: any }> {

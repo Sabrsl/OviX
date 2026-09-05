@@ -34,8 +34,8 @@ class TimingManager:
     """
     
     # Configuration constants
-    MIN_DELAY_MINUTES = 2
-    MAX_DELAY_MINUTES = 4
+    MIN_DELAY_MINUTES = 3
+    MAX_DELAY_MINUTES = 5
     
     PUBLICATIONS_PER_PERIODIC_PAUSE = 25
     MIN_PERIODIC_PAUSE_MINUTES = 2

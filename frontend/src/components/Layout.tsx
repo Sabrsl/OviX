@@ -23,15 +23,15 @@ const navigation = [
     icon: LayoutDashboard,
   },
   {
-    name: 'Analysis',
+    name: 'Analyse',
     icon: Search,
     children: [
-      { name: 'New Analysis', href: '/analysis/new' },
-      { name: 'Results', href: '/analysis/results' },
-      { name: 'Article Workflow', href: '/analysis/workflow' },
-      { name: 'Analyzed History', href: '/analysis/history' },
-      { name: 'Manual Review', href: '/manual-review' },
-      { name: 'Articles to Analyze', href: '/articles/to-analyze' },
+      { name: 'Récupération d\'articles', href: '/articles/retrieval' },
+      { name: 'File d\'analyse', href: '/articles/to-analyze' },
+      { name: 'Historique d\'analyse', href: '/analysis/history' },
+      { name: 'Révision manuelle', href: '/manual-review' },
+      { name: 'Workflow', href: '/analysis/workflow' },
+      { name: 'Liens morts publiés', href: '/published-dead-links' },
       { name: 'Scheduler', href: '/articles/scheduler' },
     ],
   },
@@ -39,9 +39,9 @@ const navigation = [
     name: 'Publication',
     icon: FileText,
     children: [
-      { name: 'Ready to Publish', href: '/articles/ready-to-publish' },
-      { name: 'Pending', href: '/publication/pending' },
-      { name: 'History', href: '/publication/history' },
+      { name: 'Prêt à publier', href: '/articles/ready-to-publish' },
+      { name: 'En attente', href: '/publication/pending' },
+      { name: 'Historique', href: '/publication/history' },
     ],
   },
   {
@@ -54,11 +54,11 @@ const navigation = [
     ],
   },
   {
-    name: 'Settings',
+    name: 'Paramètres',
     icon: Settings,
     children: [
       { name: 'Wikipedia', href: '/settings/wikipedia' },
-      { name: 'General', href: '/settings' },
+      { name: 'Général', href: '/settings' },
     ],
   },
 ]
@@ -408,33 +408,50 @@ export default function Layout() {
 
         {/* Wikipedia Status */}
         <div style={{ padding: '12px', flexShrink: 0, borderTop: '1px solid var(--border-subtle)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 10px', backgroundColor: '#161616', borderRadius: '7px' }}>
-            <span style={{ position: 'relative', display: 'flex', width: '6px', height: '6px', flexShrink: 0 }}>
-              {wikiConnected && !authLoading && (
+          <Link
+            to="/settings/wikipedia"
+            style={{ textDecoration: 'none' }}
+          >
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '10px', 
+              padding: '7px 10px', 
+              backgroundColor: '#161616', 
+              borderRadius: '7px',
+              cursor: 'pointer',
+              transition: 'background-color 0.15s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1a1a1a'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#161616'}
+            >
+              <span style={{ position: 'relative', display: 'flex', width: '6px', height: '6px', flexShrink: 0 }}>
+                {wikiConnected && !authLoading && (
+                  <span style={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: '50%',
+                    backgroundColor: wikiDotColor,
+                    opacity: 0.75,
+                    animation: 'ovix-pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                  }} />
+                )}
                 <span style={{
-                  position: 'absolute',
-                  inset: 0,
+                  position: 'relative',
+                  width: '6px',
+                  height: '6px',
                   borderRadius: '50%',
-                  backgroundColor: wikiDotColor,
-                  opacity: 0.75,
-                  animation: 'ovix-pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                  backgroundColor: wikiDotColor
                 }} />
-              )}
-              <span style={{
-                position: 'relative',
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                backgroundColor: wikiDotColor
-              }} />
-            </span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '11px', fontWeight: 500, color: '#f5f5f5' }}>Wikipédia</div>
-              <div style={{ fontSize: '10.5px', color: wikiConnected && !authLoading ? '#10b981' : '#666666' }}>
-                {authLoading ? 'Chargement...' : (wikiConnected ? 'Connecté' : 'Déconnecté')}
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '11px', fontWeight: 500, color: '#f5f5f5' }}>Wikipédia</div>
+                <div style={{ fontSize: '10.5px', color: wikiConnected && !authLoading ? '#10b981' : '#666666' }}>
+                  {authLoading ? 'Chargement...' : (wikiConnected ? 'Opérationnel' : 'Inactif')}
+                </div>
               </div>
             </div>
-          </div>
+          </Link>
         </div>
       </aside>
 

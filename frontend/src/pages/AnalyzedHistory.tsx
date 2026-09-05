@@ -305,7 +305,7 @@ export default function AnalyzedHistory() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out' }}>
         <div>
-          <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#f5f5f5' }}>Articles Analysés</h2>
+          <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#f5f5f5' }}>Historique d'analyse</h2>
           <p style={{ color: '#a0a0a0', marginTop: '4px' }}>Voir les articles analysés et leur statut</p>
         </div>
         <SkeletonBlock />
@@ -318,7 +318,7 @@ export default function AnalyzedHistory() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out' }}>
         <div>
-          <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#f5f5f5' }}>Articles Analysés</h2>
+          <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#f5f5f5' }}>Historique d'analyse</h2>
           <p style={{ color: '#a0a0a0', marginTop: '4px' }}>Voir les articles analysés et leur statut</p>
         </div>
         <div style={{

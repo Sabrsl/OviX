@@ -589,6 +589,14 @@ async def run_publication_worker(
         if database:
             try:
                 cursor = database.conn.cursor()
+                
+                # Clean up any incomplete analysis results for this article before updating status
+                cursor.execute("""
+                    DELETE FROM analysis_results 
+                    WHERE article_title = ? 
+                    AND status IN ('analyzing', 'running', 'cancelled', 'paused')
+                """, (article_title,))
+                
                 cursor.execute("""
                     UPDATE analysis_results 
                     SET status = 'published',

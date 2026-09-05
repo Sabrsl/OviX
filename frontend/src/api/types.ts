@@ -373,8 +373,9 @@ export interface PublishedItem {
 }
 
 export interface AnalyzedHistory {
+  success: boolean
   items: AnalyzedItem[]
-  total: number
+  count: number
 }
 
 export interface AnalyzedItem {

@@ -305,6 +305,26 @@ class DatabaseManager:
             cursor.execute("ALTER TABLE analysis_results ADD COLUMN normalization_reports TEXT")
             logger.info("Added normalization_reports column to analysis_results table")
         
+        cursor.execute("PRAGMA table_info(analysis_results)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'analyzers_status' not in columns:
+            cursor.execute("ALTER TABLE analysis_results ADD COLUMN analyzers_status TEXT")
+            logger.info("Added analyzers_status column to analysis_results table")
+        
+        # Add typo_corrections_count column if it doesn't exist (migration)
+        cursor.execute("PRAGMA table_info(analysis_results)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'typo_corrections_count' not in columns:
+            cursor.execute("ALTER TABLE analysis_results ADD COLUMN typo_corrections_count INTEGER DEFAULT 0")
+            logger.info("Added typo_corrections_count column to analysis_results table")
+        
+        # Add stats_by_analyzer column if it doesn't exist (migration)
+        cursor.execute("PRAGMA table_info(analysis_results)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'stats_by_analyzer' not in columns:
+            cursor.execute("ALTER TABLE analysis_results ADD COLUMN stats_by_analyzer TEXT")
+            logger.info("Added stats_by_analyzer column to analysis_results table")
+        
         # User contributions table - stores cached user contributions
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_contributions (
@@ -1430,7 +1450,10 @@ class DatabaseManager:
                                issues_json: Optional[str] = None, analysis_date: Optional[str] = None,
                                normalization_changes_count: Optional[int] = None,
                                normalization_ignored_count: Optional[int] = None,
-                               normalization_reports: Optional[str] = None) -> bool:
+                               normalization_reports: Optional[str] = None,
+                               analyzers_status: Optional[str] = None,
+                               typo_corrections_count: Optional[int] = None,
+                               stats_by_analyzer: Optional[str] = None) -> bool:
         """Create or update an analysis result in database.
         
         Uses article_title and revision_id as unique key to prevent duplicates.
@@ -1458,6 +1481,9 @@ class DatabaseManager:
             normalization_changes_count: Number of normalization changes applied
             normalization_ignored_count: Number of normalization items ignored
             normalization_reports: JSON array of normalization reports
+            analyzers_status: JSON string of analyzer statuses
+            typo_corrections_count: Number of typo corrections applied
+            stats_by_analyzer: JSON string of detailed analyzer stats
             
         Returns:
             True if successful, False otherwise
@@ -1471,13 +1497,15 @@ class DatabaseManager:
                  changes_count, summary, original_content, corrected_content, 
                  character_count, total_links, dead_links_count, corrected_links_count, 
                  human_verified, manual_review_urls, issues_json, analysis_date,
-                 normalization_changes_count, normalization_ignored_count, normalization_reports)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 normalization_changes_count, normalization_ignored_count, normalization_reports,
+                 analyzers_status, typo_corrections_count, stats_by_analyzer)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (f"{article_title}_{revision_id}", job_id, article_title, page_id, revision_id, status, mode,
                   changes_count, summary, original_content, corrected_content,
                   character_count, total_links, dead_links_count, corrected_links_count,
                   human_verified, manual_review_urls, issues_json, analysis_date or datetime.now().isoformat(),
-                  normalization_changes_count or 0, normalization_ignored_count or 0, normalization_reports))
+                  normalization_changes_count or 0, normalization_ignored_count or 0, normalization_reports,
+                  analyzers_status, typo_corrections_count or 0, stats_by_analyzer))
             self.conn.commit()
             logger.info(f"Analysis result saved for article {article_title} (revision {revision_id})")
             return True
@@ -1913,7 +1941,7 @@ class DatabaseManager:
     # Valid state transitions for queue state machine
     VALID_QUEUE_TRANSITIONS = {
         'queued': ['processing', 'error'],
-        'processing': ['validated', 'publishing', 'stale', 'error'],
+        'processing': ['validated', 'publishing', 'stale', 'error', 'retry'],  # Added retry for pre-check failures
         'validated': ['publishing', 'error'],
         'publishing': ['published', 'stale', 'error', 'retry'],  # Added retry for failed publications
         'published': [],  # Terminal state - no transitions allowed
@@ -1977,7 +2005,7 @@ class DatabaseManager:
             cursor.execute("""
                 SELECT * FROM scheduler_queue 
                 WHERE status = 'queued'
-                ORDER BY priority DESC, queued_at ASC
+                ORDER BY priority DESC, queued_at DESC
                 LIMIT 1
             """)
             row = cursor.fetchone()
@@ -2008,19 +2036,44 @@ class DatabaseManager:
 
     def get_scheduler_queue_size(self) -> int:
         """
-        Get the current queue size (count of 'queued' items).
+        Get the current queue size including articles in scheduler_queue and analyzed articles with valid corrections.
         
         Returns:
-            Number of queued articles in queue
+            Total number of articles available for publication (queued + analyzed with corrections)
         """
         cursor = self.conn.cursor()
         try:
+            # Count articles already in scheduler_queue with 'queued' status, not published, and with valid corrections
             cursor.execute("""
-                SELECT COUNT(*) as count FROM scheduler_queue 
-                WHERE status = 'queued'
+                SELECT COUNT(*) as count FROM scheduler_queue sq
+                WHERE sq.status = 'queued'
+                AND EXISTS (
+                    SELECT 1 FROM analysis_results ar
+                    WHERE ar.article_title = sq.article_title
+                    AND ar.corrected_links_count > 0
+                    AND ar.status != 'published'
+                )
             """)
             row = cursor.fetchone()
-            return row['count'] if row else 0
+            queued_count = row['count'] if row else 0
+            
+            # Count analyzed articles with valid corrections that are not already in scheduler_queue and not published
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM analysis_results ar
+                WHERE ar.corrected_links_count > 0
+                AND ar.status != 'published'
+                AND NOT EXISTS (
+                    SELECT 1 FROM scheduler_queue sq 
+                    WHERE sq.article_title = ar.article_title 
+                    AND sq.status NOT IN ('completed', 'error', 'published')
+                )
+            """)
+            row = cursor.fetchone()
+            analyzed_count = row['count'] if row else 0
+            
+            total_count = queued_count + analyzed_count
+            logger.info(f"Queue size: {queued_count} queued + {analyzed_count} analyzed = {total_count} total")
+            return total_count
         except Exception as e:
             logger.error(f"Error getting queue size: {e}")
             return 0
@@ -2301,7 +2354,7 @@ class DatabaseManager:
 
     def get_scheduler_statistics(self) -> Dict[str, Any]:
         """
-        Get scheduler statistics.
+        Get scheduler statistics including analyzed articles with valid corrections.
         
         Returns:
             Dictionary with statistics
@@ -2310,16 +2363,28 @@ class DatabaseManager:
         try:
             cursor.execute("SELECT * FROM scheduler_statistics WHERE id = 1")
             row = cursor.fetchone()
+            stats = {}
             if row:
-                return dict(row)
-            return {
-                'total_published': 0,
-                'total_analyzed': 0,
-                'total_ignored': 0,
-                'total_errors': 0,
-                'avg_publish_delay': 0.0,
-                'avg_processing_time': 0.0
-            }
+                stats = dict(row)
+            else:
+                stats = {
+                    'total_published': 0,
+                    'total_analyzed': 0,
+                    'total_ignored': 0,
+                    'total_errors': 0,
+                    'avg_publish_delay': 0.0,
+                    'avg_processing_time': 0.0
+                }
+            
+            # Add count of analyzed articles with valid corrections (not yet published)
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM analysis_results 
+                WHERE corrected_links_count > 0 AND status != 'published'
+            """)
+            row = cursor.fetchone()
+            stats['analyzed_with_corrections'] = row['count'] if row else 0
+            
+            return stats
         except Exception as e:
             logger.error(f"Error getting scheduler statistics: {e}")
             return {}

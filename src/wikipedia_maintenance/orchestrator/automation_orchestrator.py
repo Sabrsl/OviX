@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 from wikipedia_maintenance.retrievers import CategoryRetriever, Article
 from wikipedia_maintenance.utils.analyzed_tracker import AnalyzedTracker, AnalysisStatus, AnalysisRecord, get_analyzed_tracker
 from wikipedia_maintenance.utils.ui_settings import get_settings_manager
-from wikipedia_maintenance.analyzers import DeadLinkAnalyzer, HttpLinksAnalyzer
+from wikipedia_maintenance.analyzers import DeadLinkAnalyzer, HttpLinksAnalyzer, XMLTypographyAnalyzer
 from wikipedia_maintenance.utils.publisher import Publisher, Corrector
 from wikipedia_maintenance.utils.published_tracker import PublishedTracker
 from wikipedia_maintenance.utils.database import DatabaseManager
@@ -822,7 +822,8 @@ class AutomationOrchestrator:
         # Map analyzer names to their classes
         analyzer_classes = {
             "DeadLinkAnalyzer": DeadLinkAnalyzer,
-            "HttpLinksAnalyzer": HttpLinksAnalyzer
+            "HttpLinksAnalyzer": HttpLinksAnalyzer,
+            "XMLTypographyAnalyzer": XMLTypographyAnalyzer
         }
         
         # Initialize only enabled analyzers once
@@ -830,7 +831,13 @@ class AutomationOrchestrator:
         for analyzer_name in enabled_analyzer_names:
             if analyzer_name in analyzer_classes:
                 logger.info(f"Initializing analyzer: {analyzer_name}")
-                analyzers.append(analyzer_classes[analyzer_name]())
+                if analyzer_name == "XMLTypographyAnalyzer":
+                    # Initialize XML analyzer with config
+                    from wikipedia_maintenance.utils.typography_xml_analyzer_config import TypographyXMLAnalyzerConfig
+                    config = TypographyXMLAnalyzerConfig.load()
+                    analyzers.append(XMLTypographyAnalyzer.from_config(config))
+                else:
+                    analyzers.append(analyzer_classes[analyzer_name]())
         
         self._analyzers_cache = analyzers
         logger.info(f"Cached {len(analyzers)} analyzers for reuse across articles")
@@ -884,6 +891,14 @@ class AutomationOrchestrator:
                 if config.analysis.enable_http_links_analyzer and "HttpLinksAnalyzer" not in enabled_list:
                     enabled_list.append("HttpLinksAnalyzer")
                     logger.info("HttpLinksAnalyzer enabled via enable_http_links_analyzer setting")
+            
+            # Check if XML typography analyzer is enabled
+            if hasattr(config, 'typography_xml_analyzer') and hasattr(config.typography_xml_analyzer, 'enabled'):
+                if config.typography_xml_analyzer.enabled:
+                    enabled_list.append("XMLTypographyAnalyzer")
+                    logger.info("XMLTypographyAnalyzer enabled via typography_xml_analyzer.enabled setting")
+                else:
+                    logger.info("XMLTypographyAnalyzer disabled via typography_xml_analyzer.enabled setting")
             
             return enabled_list if enabled_list else ["DeadLinkAnalyzer"]
             

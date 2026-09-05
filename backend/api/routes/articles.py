@@ -6,6 +6,7 @@ Handles article retrieval and information.
 
 import logging
 import uuid
+import json
 from typing import Optional, List, Dict
 from datetime import datetime
 from pathlib import Path
@@ -100,6 +101,8 @@ class ArticleStatusResponse(BaseModel):
     normalization_changes_count: Optional[int] = None
     normalization_ignored_count: Optional[int] = None
     normalization_reports: Optional[str] = None
+    # Typography fields
+    typo_corrections_count: Optional[int] = None
 
 
 class ArticleHistoryResponse(BaseModel):
@@ -121,6 +124,7 @@ class ArticleHistoryResponse(BaseModel):
     corrected_links_count: Optional[int] = None
     normalization_changes_count: Optional[int] = None
     normalization_ignored_count: Optional[int] = None
+    typo_corrections_count: Optional[int] = None
 
 
 class ArticleAnalysisRequest(BaseModel):
@@ -844,7 +848,8 @@ async def get_article_result(
             SELECT article_title, page_id, revision_id, status, analysis_date, changes_count,
                    summary, corrected_content, character_count, mode, human_verified,
                    original_content, total_links, dead_links_count, corrected_links_count,
-                   normalization_changes_count, normalization_ignored_count, normalization_reports
+                   normalization_changes_count, normalization_ignored_count, normalization_reports,
+                   analyzers_status, typo_corrections_count
             FROM analysis_results
             WHERE article_title = ?
             ORDER BY analysis_date DESC
@@ -883,8 +888,16 @@ async def get_article_result(
             "corrected_links_count": row[14],
             "normalization_changes_count": row[15],
             "normalization_ignored_count": row[16],
-            "normalization_reports": row[17]
+            "normalization_reports": row[17],
+            "analyzers_status": json.loads(row[18]) if len(row) > 18 and row[18] else None,
+            "typo_corrections_count": row[19] if len(row) > 19 else None
         }
+        
+        # Convert boolean values in analyzers_status to strings for Pydantic compatibility
+        if result.get("analyzers_status"):
+            for key, value in result["analyzers_status"].items():
+                if isinstance(value, bool):
+                    result["analyzers_status"][key] = str(value)
 
         return result
 

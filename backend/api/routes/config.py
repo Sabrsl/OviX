@@ -31,6 +31,7 @@ KNOWN_SECTIONS = {
     "safety", "logging", "api_throttling", "api_urls",
     "dead_links_analyzer", "other", "publication_delays",
     "scheduler", "timeouts", "ai", "reference_enricher_analyzer",
+    "references", "https_verification", "typography_xml_analyzer",
 }
 
 
@@ -304,6 +305,69 @@ def _validate_config_data(config_data: Dict[str, Any]) -> tuple[list, list]:
             errors.append("reference_enricher_analyzer.enable_consulte_le_fill must be a boolean")
     elif "reference_enricher_analyzer" in config_data:
         errors.append("reference_enricher_analyzer section must be a mapping")
+
+    # Validate references section
+    references = config_data.get("references")
+    if isinstance(references, dict):
+        if "check_bare_refs" in references and not isinstance(references["check_bare_refs"], bool):
+            errors.append("references.check_bare_refs must be a boolean")
+        if "check_duplicate_refs" in references and not isinstance(references["check_duplicate_refs"], bool):
+            errors.append("references.check_duplicate_refs must be a boolean")
+        if "check_uppercase_refs" in references and not isinstance(references["check_uppercase_refs"], bool):
+            errors.append("references.check_uppercase_refs must be a boolean")
+        if "check_isbn_format" in references and not isinstance(references["check_isbn_format"], bool):
+            errors.append("references.check_isbn_format must be a boolean")
+        if "check_template_type" in references and not isinstance(references["check_template_type"], bool):
+            errors.append("references.check_template_type must be a boolean")
+        if "check_broken_links" in references and not isinstance(references["check_broken_links"], bool):
+            errors.append("references.check_broken_links must be a boolean")
+        if "use_wayback_api" in references and not isinstance(references["use_wayback_api"], bool):
+            errors.append("references.use_wayback_api must be a boolean")
+        if "link_check_timeout" in references:
+            if not isinstance(references["link_check_timeout"], (int, float)) or isinstance(
+                references["link_check_timeout"], bool
+            ):
+                errors.append("references.link_check_timeout must be a number")
+            elif references["link_check_timeout"] <= 0:
+                errors.append("references.link_check_timeout must be positive")
+    elif "references" in config_data:
+        errors.append("references section must be a mapping")
+
+    # Validate https_verification section
+    https_verify = config_data.get("https_verification")
+    if isinstance(https_verify, dict):
+        if "enabled" in https_verify and not isinstance(https_verify["enabled"], bool):
+            errors.append("https_verification.enabled must be a boolean")
+        if "timeout" in https_verify:
+            if not isinstance(https_verify["timeout"], (int, float)) or isinstance(
+                https_verify["timeout"], bool
+            ):
+                errors.append("https_verification.timeout must be a number")
+            elif https_verify["timeout"] <= 0:
+                errors.append("https_verification.timeout must be positive")
+        if "ttl_available" in https_verify:
+            if not isinstance(https_verify["ttl_available"], int) or isinstance(
+                https_verify["ttl_available"], bool
+            ):
+                errors.append("https_verification.ttl_available must be an integer")
+            elif https_verify["ttl_available"] < 1:
+                errors.append("https_verification.ttl_available must be at least 1")
+        if "ttl_unavailable" in https_verify:
+            if not isinstance(https_verify["ttl_unavailable"], int) or isinstance(
+                https_verify["ttl_unavailable"], bool
+            ):
+                errors.append("https_verification.ttl_unavailable must be an integer")
+            elif https_verify["ttl_unavailable"] < 1:
+                errors.append("https_verification.ttl_unavailable must be at least 1")
+        if "ttl_failed" in https_verify:
+            if not isinstance(https_verify["ttl_failed"], int) or isinstance(
+                https_verify["ttl_failed"], bool
+            ):
+                errors.append("https_verification.ttl_failed must be an integer")
+            elif https_verify["ttl_failed"] < 1:
+                errors.append("https_verification.ttl_failed must be at least 1")
+    elif "https_verification" in config_data:
+        errors.append("https_verification section must be a mapping")
 
     # Non-blocking heads-up for unknown top-level sections (helps catch typos in the UI)
     unknown_sections = set(config_data.keys()) - KNOWN_SECTIONS

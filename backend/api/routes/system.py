@@ -6,6 +6,7 @@ Handles system-level operations like Kill Switch and Scheduler control.
 
 import logging
 import asyncio
+import json
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends
@@ -91,7 +92,7 @@ def _create_default_scheduler_status() -> SchedulerStatusResponse:
         daily_published_count=0,
         queue_size=0,
         next_publish_time=None,
-        statistics=None,
+        statistics={},
         current_task=None,
         next_execution=None,
         last_execution=None,
@@ -733,13 +734,14 @@ async def get_scheduler_status(scheduler = Depends(get_scheduler)):
         # Determine current task based on state
         current_task = None
         if state.is_active and queue_size > 0:
-            current_task = f"Processing {queue_size} articles in queue"
+            analyzed_count = state.statistics.get('analyzed_with_corrections', 0) if state.statistics else 0
+            current_task = f"Processing {queue_size} articles in queue ({analyzed_count} analyzed with corrections)"
         elif state.is_active:
             current_task = "Waiting for articles"
         
         # Calculate progress percentage
         progress_percentage = 0.0
-        total_articles = queue_size + state.daily_published_count
+        total_articles = queue_size
         if total_articles > 0:
             progress_percentage = (state.daily_published_count / total_articles) * 100
         
@@ -853,14 +855,20 @@ async def start_scheduler(
 
             # Initialize enhanced tracking in state
             state = scheduler.state_manager.get_state()
-            state.session_id = session_id
-            state.started_at = datetime.now().isoformat()
-            state.articles_analyzed = 0
-            state.articles_corrected = 0
-            state.articles_error = 0
-            state.current_article = None
-            state.current_step = "Starting"
-            scheduler.state_manager.save_state()
+            # Note: SQLiteStateManager doesn't have session_id, started_at, articles_analyzed, articles_corrected, current_article, current_step fields
+            # These are JSON StateManager specific fields. For SQLite, we just set is_active=True
+            # Use update_state() for SQLiteStateManager instead of save_state()
+            if hasattr(scheduler.state_manager, 'update_state'):
+                scheduler.state_manager.update_state(is_active=True)
+            elif hasattr(scheduler.state_manager, 'save_state'):
+                state.session_id = session_id
+                state.started_at = datetime.now().isoformat()
+                state.articles_analyzed = 0
+                state.articles_corrected = 0
+                state.articles_error = 0
+                state.current_article = None
+                state.current_step = "Starting"
+                scheduler.state_manager.save_state()
 
             # Emit scheduler start event
             if event_manager:
@@ -910,8 +918,13 @@ async def start_scheduler(
                 logger.warning(f"Could not verify scheduler state: {e}")
 
             # Update state to reflect successful start
-            state.current_step = "Running"
-            scheduler.state_manager.save_state()
+            # Use update_state() for SQLiteStateManager instead of save_state()
+            if hasattr(scheduler.state_manager, 'update_state'):
+                # SQLiteStateManager doesn't have current_step field
+                pass  # State is already updated via set_active()
+            elif hasattr(scheduler.state_manager, 'save_state'):
+                state.current_step = "Running"
+                scheduler.state_manager.save_state()
 
             logger.info("Scheduler started and verified successfully via API")
 
@@ -998,11 +1011,6 @@ async def pause_scheduler(
                 status=_create_default_scheduler_status()
             )
 
-        # Update state before pausing
-        state = scheduler.state_manager.get_state()
-        state.current_step = "Pausing"
-        scheduler.state_manager.save_state()
-
         # Pause the scheduler (preserves state)
         logger.info("Pausing scheduler via API...")
         await scheduler.pause()
@@ -1019,10 +1027,6 @@ async def pause_scheduler(
                 message="Scheduler failed to pause - verification failed",
                 status=_create_default_scheduler_status()
             )
-
-        # Update state after successful pause
-        state.current_step = "Paused"
-        scheduler.state_manager.save_state()
 
         # Emit pause event
         if event_manager:
@@ -1103,12 +1107,6 @@ async def resume_scheduler(
                 status=_create_default_scheduler_status()
             )
 
-        # Update state before resuming
-        state = scheduler.state_manager.get_state()
-        logger.info(f"Before resume - is_running: {scheduler.is_running()}, is_paused: {scheduler.is_paused()}")
-        state.current_step = "Resuming"
-        scheduler.state_manager.save_state()
-
         # Resume the scheduler
         import asyncio
         logger.info("Resuming scheduler via API...")
@@ -1140,10 +1138,6 @@ async def resume_scheduler(
                 )
         except Exception as e:
             logger.warning(f"Could not verify scheduler state: {e}")
-
-        # Update state after successful resume
-        state.current_step = "Running"
-        scheduler.state_manager.save_state()
 
         # Emit resume event
         if event_manager:
@@ -1196,7 +1190,8 @@ async def resume_scheduler(
         logger.error(f"Failed to resume scheduler: {e}", exc_info=True)
         return SchedulerActionResponse(
             success=False,
-            message=f"Failed to resume scheduler: {str(e)}"
+            message=f"Failed to resume scheduler: {str(e)}",
+            status=_create_default_scheduler_status()
         )
 
 
@@ -1217,20 +1212,28 @@ async def stop_scheduler(
                 status=_create_default_scheduler_status()
             )
 
-        if not scheduler.is_running():
-            return SchedulerActionResponse(
-                success=False,
-                message="Scheduler is not running",
-                status=_create_default_scheduler_status()
-            )
-
-        # Get session ID before stopping
+        # Get current state from SQLite
         state = scheduler.state_manager.get_state()
         session_id = getattr(state, 'session_id', None)
 
-        # Update state before stopping
-        state.current_step = "Stopping"
-        scheduler.state_manager.save_state()
+        # Check if scheduler is actually running
+        if not scheduler.is_running():
+            # If scheduler is not running but state shows active, fix the state
+            if state.is_active:
+                logger.info("Scheduler not running but state shows active - fixing state")
+                scheduler.state_manager.set_active(False)
+                scheduler.state_manager.set_paused(False)
+                return SchedulerActionResponse(
+                    success=True,
+                    message="Scheduler was not running but state has been corrected to inactive",
+                    status=_create_default_scheduler_status()
+                )
+            else:
+                return SchedulerActionResponse(
+                    success=False,
+                    message="Scheduler is not running",
+                    status=_create_default_scheduler_status()
+                )
 
         # Stop the scheduler (terminates session)
         logger.info("Stopping scheduler via API...")
@@ -1247,12 +1250,6 @@ async def stop_scheduler(
                 success=False,
                 message="Scheduler failed to stop - still running"
             )
-
-        # Update state after successful stop
-        state.current_step = "Stopped"
-        state.is_active = False
-        state.is_paused = False
-        scheduler.state_manager.save_state()
 
         # Emit stop event
         if event_manager:
@@ -1318,7 +1315,8 @@ async def stop_scheduler(
         logger.error(f"Failed to stop scheduler: {e}", exc_info=True)
         return SchedulerActionResponse(
             success=False,
-            message=f"Failed to stop scheduler: {str(e)}"
+            message=f"Failed to stop scheduler: {str(e)}",
+            status=_create_default_scheduler_status()
         )
 
 

@@ -22,6 +22,7 @@ import { historyApi } from '../api/history.api'
 import { diffApi } from '../api/diff.api'
 import { publicationApi } from '../api/publication.api'
 import { articlesApi } from '../api/articles.api'
+import { AnalyzerBadges } from '../components/AnalyzerBadges'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,6 +45,8 @@ interface ArticleInfo {
   normalization_changes_count?: number
   normalization_ignored_count?: number
   normalization_reports?: string
+  analyzers_status?: Record<string, string>
+  typo_corrections_count?: number
 }
 
 interface ArticleListItem {
@@ -298,6 +301,17 @@ export default function ArticleDetail() {
             console.error('Failed to generate diff:', err)
           }
 
+          // Parse analyzers_status (now contains analysis config) if it's a JSON string
+          let parsedAnalysisConfig = data.analyzers_status
+          if (typeof data.analyzers_status === 'string') {
+            try {
+              parsedAnalysisConfig = JSON.parse(data.analyzers_status)
+            } catch (e) {
+              console.error('Failed to parse analyzers_status:', e)
+              parsedAnalysisConfig = null
+            }
+          }
+
           setArticle({
             title,
             status: data.status || 'analyzed',
@@ -313,6 +327,8 @@ export default function ArticleDetail() {
             normalization_changes_count: data.normalization_changes_count,
             normalization_ignored_count: data.normalization_ignored_count,
             normalization_reports: data.normalization_reports,
+            analyzers_status: parsedAnalysisConfig,
+            typo_corrections_count: data.typo_corrections_count,
           })
           setEditSummary(data.summary || 'Correction de liens morts via OVIX')
           return
@@ -364,6 +380,17 @@ export default function ArticleDetail() {
           }
         }
 
+        // Parse analyzers_status (now contains analysis config) if it's a JSON string
+        let parsedAnalysisConfig = result.analyzers_status
+        if (typeof result.analyzers_status === 'string') {
+          try {
+            parsedAnalysisConfig = JSON.parse(result.analyzers_status)
+          } catch (e) {
+            console.error('Failed to parse analyzers_status:', e)
+            parsedAnalysisConfig = null
+          }
+        }
+
         setArticle({
           title,
           status: result.status || 'analyzed',
@@ -378,6 +405,8 @@ export default function ArticleDetail() {
           normalization_changes_count: result.normalization_changes_count,
           normalization_ignored_count: result.normalization_ignored_count,
           normalization_reports: result.normalization_reports,
+          analyzers_status: parsedAnalysisConfig,
+          typo_corrections_count: result.typo_corrections_count,
         })
         setEditSummary(result.summary || 'Correction de liens morts via OVIX')
       } else {
@@ -853,6 +882,12 @@ export default function ArticleDetail() {
                   {article.normalization_changes_count} normalisations appliquées
                 </div>
               )}
+              {article.typo_corrections_count !== undefined && article.typo_corrections_count !== null && article.typo_corrections_count > 0 && (
+                <div className="flex items-center gap-1 text-[11px] text-blue-500">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  {article.typo_corrections_count} corrections typo (XML)
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -888,6 +923,12 @@ export default function ArticleDetail() {
             {statusLabel(article.status)}
           </span>
         </div>
+
+        {article.analyzers_status && Object.keys(article.analyzers_status).length > 0 && (
+          <div className="mt-2">
+            <AnalyzerBadges analysisConfig={article.analyzers_status} typoCorrectionsCount={article.typo_corrections_count} />
+          </div>
+        )}
       </div>
 
       {actionError && (
@@ -913,6 +954,9 @@ export default function ArticleDetail() {
           <StatPill label="Modifications" value={article.corrected_links_count ?? 0} />
           {article.normalization_changes_count !== undefined && article.normalization_changes_count !== null && article.normalization_changes_count > 0 && (
             <StatPill label="Normalisations" value={article.normalization_changes_count} statusColor="purple" />
+          )}
+          {article.typo_corrections_count !== undefined && article.typo_corrections_count !== null && article.typo_corrections_count > 0 && (
+            <StatPill label="Corrections typo (XML)" value={article.typo_corrections_count} statusColor="blue" />
           )}
           {article.normalization_ignored_count !== undefined && article.normalization_ignored_count !== null && article.normalization_ignored_count > 0 && (
             <StatPill label="Normalisations ignorées" value={article.normalization_ignored_count} statusColor="amber" />

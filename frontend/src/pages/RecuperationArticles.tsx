@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Search, FileText, AlertTriangle, CheckCircle, User, FileText as FileIcon, Scan } from 'lucide-react'
-import { analysisApi } from '../api/analysis.api'
 import { articlesApi } from '../api/articles.api'
 import { useNavigate } from 'react-router-dom'
 
-export default function AnalysisNew() {
+export default function RecuperationArticles() {
   const navigate = useNavigate()
   const [mode, setMode] = useState<'category' | 'manual' | 'petscan' | 'file' | 'user-contribs' | 'article'>('category')
   const [articleTitle, setArticleTitle] = useState('')
@@ -28,7 +27,6 @@ export default function AnalysisNew() {
   const [articles, setArticles] = useState<any[]>([])
   const [articlesRetrieved, setArticlesRetrieved] = useState(false)
   const [selectedArticles, setSelectedArticles] = useState<Set<string>>(new Set())
-  const [analyzingArticle, setAnalyzingArticle] = useState<string | null>(null)
 
   // Load articles from localStorage on mount
   useEffect(() => {
@@ -86,14 +84,6 @@ export default function AnalysisNew() {
   // User contributions retrieval
   const [username, setUsername] = useState('')
 
-  // Analysis mode
-  const [analysisMode, setAnalysisMode] = useState<'regex' | 'ia'>('regex')
-
-  // AI Configuration
-  const [aiProvider, setAiProvider] = useState<'gemini' | 'ollama'>('gemini')
-  const [aiCharacterLimit, setAiCharacterLimit] = useState(50000)
-  const [geminiApiKey, setGeminiApiKey] = useState('')
-  const [geminiProjectId, setGeminiProjectId] = useState('')
 
   // Load predefined categories
   useEffect(() => {
@@ -194,55 +184,10 @@ export default function AnalysisNew() {
       const retrievedArticles = result.articles || []
       setArticles(retrievedArticles)
       setArticlesRetrieved(true)
-
-      // Add articles to queue only if they are not already analyzed or published
-      if (retrievedArticles.length > 0) {
-        await addArticlesToQueue(retrievedArticles, mode)
-      }
     } catch (err: any) {
       setError(err.message || err.userMessage || 'Erreur lors de la récupération des articles')
     } finally {
       setRetrievingArticles(false)
-    }
-  }
-
-  const addArticlesToQueue = async (retrievedArticles: any[], source: string) => {
-    try {
-      const addedCount = await articlesApi.addArticlesToAnalyze({
-        articles: retrievedArticles.map(article => ({
-          title: article.title,
-          page_id: article.page_id,
-          revision_id: article.revision_id,
-          source: source,
-          source_details: getSourceDetails(source),
-          priority: 'medium'
-        }))
-      })
-
-      if (addedCount.added_count > 0) {
-        // Show success message
-        console.log(`Added ${addedCount.added_count} articles to analysis queue`)
-      }
-    } catch (err: any) {
-      console.error('Failed to add articles to queue:', err)
-      // Don't block the main workflow if this fails
-    }
-  }
-
-  const getSourceDetails = (source: string) => {
-    switch (source) {
-      case 'category':
-        return selectedCategory === 'custom' ? category : selectedCategory
-      case 'manual':
-        return 'Manual entry'
-      case 'petscan':
-        return `PetScan ID: ${petScanId}`
-      case 'file':
-        return `File: ${filePath}`
-      case 'user-contribs':
-        return `User: ${username}`
-      default:
-        return source
     }
   }
 
@@ -254,107 +199,16 @@ export default function AnalysisNew() {
       return
     }
 
-    // For retrieval modes, require articles to be retrieved first
-    if (['category', 'manual', 'petscan', 'file', 'user-contribs'].includes(mode)) {
-      if (!articlesRetrieved) {
-        setError('Veuillez d\'abord récupérer les articles')
-        return
-      }
-      if (articles.length === 0) {
-        setError('Aucun article disponible')
-        return
-      }
+    // For article mode, navigate to single article analysis page
+    if (mode === 'article') {
+      navigate(`/analysis/article?title=${encodeURIComponent(articleTitle)}`)
+      return
     }
 
-    // Validate AI configuration if IA mode is selected
-    if (analysisMode === 'ia') {
-      if (aiProvider === 'gemini' && (!geminiApiKey || !geminiProjectId)) {
-        setError('Veuillez configurer l\'API key et le Project ID Gemini')
-        return
-      }
-    }
-
-    setLoading(true)
-    try {
-      const baseRequest = {
-        mode: analysisMode,
-        ai_provider: aiProvider,
-        ai_character_limit: aiCharacterLimit,
-        gemini_api_key: geminiApiKey,
-        gemini_project_id: geminiProjectId
-      }
-
-      if (mode === 'article') {
-        // Single article analysis
-        const request = {
-          ...baseRequest,
-          article_title: articleTitle,
-          analysis_type: 'article' as const
-        }
-
-        const result = await analysisApi.startAnalysis(request)
-        navigate(`/analysis/results?jobId=${result.job_id}`)
-      } else {
-        // Batch analysis for selected articles or all articles
-        const articlesToAnalyze = selectedArticles.size > 0
-          ? articles.filter(a => selectedArticles.has(a.title))
-          : articles
-
-        if (articlesToAnalyze.length === 0) {
-          setError('Veuillez sélectionner au moins un article')
-          setLoading(false)
-          return
-        }
-
-        const articleTitles = articlesToAnalyze.map(a => a.title)
-        const request = {
-          ...baseRequest,
-          article_titles: articleTitles
-        }
-
-        const result = await analysisApi.startBatchAnalysis(request)
-        // Navigate to analyzed history to see results when ready
-        navigate('/analysis/history')
-      }
-    } catch (err: any) {
-      setError(err.message || err.userMessage || 'Erreur lors du démarrage de l\'analyse')
-    } finally {
-      setLoading(false)
-    }
+    // For retrieval modes, navigate to analysis history page
+    navigate('/analysis/history')
   }
 
-  const handleAnalyzeSingle = async (articleTitle: string) => {
-    setError(null)
-    setAnalyzingArticle(articleTitle)
-
-    // Validate AI configuration if IA mode is selected
-    if (analysisMode === 'ia') {
-      if (aiProvider === 'gemini' && (!geminiApiKey || !geminiProjectId)) {
-        setError('Veuillez configurer l\'API key et le Project ID Gemini')
-        setAnalyzingArticle(null)
-        return
-      }
-    }
-
-    try {
-      const request = {
-        mode: analysisMode,
-        ai_provider: aiProvider,
-        ai_character_limit: aiCharacterLimit,
-        gemini_api_key: geminiApiKey,
-        gemini_project_id: geminiProjectId,
-        article_title: articleTitle,
-        analysis_type: 'article' as const
-      }
-
-      const result = await analysisApi.startAnalysis(request)
-      // Navigate to analyzed history to see results when ready
-      navigate('/analysis/history')
-    } catch (err: any) {
-      setError(err.message || err.userMessage || 'Erreur lors du démarrage de l\'analyse')
-      setAnalyzingArticle(null)
-    }
-  }
 
   const handleSelectAll = () => {
     if (selectedArticles.size === articles.length) {
@@ -377,8 +231,8 @@ export default function AnalysisNew() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out' }}>
       <div>
-        <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#f5f5f5' }}>Nouvelle Analyse</h2>
-        <p style={{ color: '#a0a0a0', marginTop: '4px' }}>Démarrer une nouvelle analyse de liens morts</p>
+        <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#f5f5f5' }}>Récupération d'articles</h2>
+        <p style={{ color: '#a0a0a0', marginTop: '4px' }}>Récupérer des articles pour analyse</p>
       </div>
 
       {/* Mode Selection */}
@@ -929,7 +783,7 @@ export default function AnalysisNew() {
               }}
             />
             <p style={{ fontSize: '12px', color: '#666666', marginTop: '8px' }}>
-              Le fichier doit contenir un titre d'article par ligne
+              Entrez le chemin vers un fichier contenant des titres d'articles (un par ligne)
             </p>
 
             {/* File Options */}
@@ -1015,13 +869,13 @@ export default function AnalysisNew() {
         ) : mode === 'user-contribs' ? (
           <div>
             <label style={{ display: 'block', fontSize: '14px', color: '#a0a0a0', marginBottom: '8px' }}>
-              Nom d'utilisateur Wikipédia
+              Nom d'utilisateur
             </label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Ex: Username"
+              placeholder="Ex: Exemple"
               style={{
                 width: '100%',
                 padding: '12px',
@@ -1033,7 +887,7 @@ export default function AnalysisNew() {
               }}
             />
             <p style={{ fontSize: '12px', color: '#666666', marginTop: '8px' }}>
-              Récupérera les articles récemment modifiés par cet utilisateur
+              Entrez le nom d'utilisateur Wikipédia
             </p>
 
             {/* User Contribs Options */}
@@ -1111,31 +965,6 @@ export default function AnalysisNew() {
               {retrievingArticles ? 'Récupération...' : 'Récupérer les articles'}
             </button>
 
-            {/* View History Button */}
-            <button
-              onClick={() => {
-                navigate('/user-contributions')
-              }}
-              style={{
-                marginTop: '8px',
-                width: '100%',
-                padding: '12px',
-                backgroundColor: '#1a1a1a',
-                border: '1px solid #2a2a2a',
-                borderRadius: '6px',
-                color: '#a0a0a0',
-                fontSize: '14px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                justifyContent: 'center'
-              }}
-            >
-              Voir mes 50 dernières contributions
-            </button>
-
             {/* Articles Retrieved Info */}
             {articlesRetrieved && (
               <div style={{
@@ -1154,7 +983,7 @@ export default function AnalysisNew() {
               </div>
             )}
           </div>
-        ) : (
+        ) : mode === 'article' ? (
           <div>
             <label style={{ display: 'block', fontSize: '14px', color: '#a0a0a0', marginBottom: '8px' }}>
               Titre de l'article
@@ -1178,163 +1007,8 @@ export default function AnalysisNew() {
               L'analyse sera effectuée sur cet article spécifique
             </p>
           </div>
-        )}
+        ) : null}
       </div>
-
-      {/* Analysis Mode - Only show for non-user-contribs modes */}
-      {mode !== 'user-contribs' && (
-        <div style={{ backgroundColor: '#161616', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '24px' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: 500, color: '#666666', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '16px' }}>
-            Mode d'analyse
-          </h3>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <button
-              onClick={() => setAnalysisMode('regex')}
-              style={{
-                flex: 1,
-                padding: '12px',
-                backgroundColor: analysisMode === 'regex' ? '#3b82f6' : '#1a1a1a',
-                border: analysisMode === 'regex' ? '1px solid #3b82f6' : '1px solid #2a2a2a',
-                borderRadius: '6px',
-                color: analysisMode === 'regex' ? '#ffffff' : '#a0a0a0',
-                fontSize: '14px',
-                fontWeight: 500,
-                cursor: 'pointer'
-              }}
-            >
-              Regex (Rapide)
-            </button>
-            <button
-              onClick={() => setAnalysisMode('ia')}
-              style={{
-                flex: 1,
-                padding: '12px',
-                backgroundColor: analysisMode === 'ia' ? '#3b82f6' : '#1a1a1a',
-                border: analysisMode === 'ia' ? '1px solid #3b82f6' : '1px solid #2a2a2a',
-                borderRadius: '6px',
-                color: analysisMode === 'ia' ? '#ffffff' : '#a0a0a0',
-                fontSize: '14px',
-                fontWeight: 500,
-                cursor: 'pointer'
-              }}
-            >
-              IA (Précis)
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* AI Configuration */}
-      {analysisMode === 'ia' && (
-        <div style={{ backgroundColor: '#161616', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '24px' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: 500, color: '#666666', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '16px' }}>
-            Configuration IA
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', color: '#a0a0a0', marginBottom: '8px' }}>
-                Provider IA
-              </label>
-              <select
-                value={aiProvider}
-                onChange={(e) => setAiProvider(e.target.value as 'gemini' | 'ollama')}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  backgroundColor: '#0a0a0a',
-                  border: '1px solid #2a2a2a',
-                  borderRadius: '6px',
-                  color: '#f5f5f5',
-                  fontSize: '14px'
-                }}
-              >
-                <option value="gemini">Google Gemini</option>
-                <option value="ollama">Ollama (Local)</option>
-              </select>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', color: '#a0a0a0', marginBottom: '8px' }}>
-                Limite de caractères
-              </label>
-              <input
-                type="number"
-                value={aiCharacterLimit}
-                onChange={(e) => setAiCharacterLimit(parseInt(e.target.value) || 50000)}
-                min="1000"
-                max="100000"
-                step="1000"
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  backgroundColor: '#0a0a0a',
-                  border: '1px solid #2a2a2a',
-                  borderRadius: '6px',
-                  color: '#f5f5f5',
-                  fontSize: '14px'
-                }}
-              />
-              <p style={{ fontSize: '12px', color: '#666666', marginTop: '4px' }}>
-                Nombre maximum de caractères à envoyer à l'IA
-              </p>
-            </div>
-
-            {aiProvider === 'gemini' && (
-              <>
-                <div>
-                  <label style={{ display: 'block', fontSize: '14px', color: '#a0a0a0', marginBottom: '8px' }}>
-                    API Key Gemini
-                  </label>
-                  <input
-                    type="password"
-                    value={geminiApiKey}
-                    onChange={(e) => setGeminiApiKey(e.target.value)}
-                    placeholder="AIza..."
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      backgroundColor: '#0a0a0a',
-                      border: '1px solid #2a2a2a',
-                      borderRadius: '6px',
-                      color: '#f5f5f5',
-                      fontSize: '14px'
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '14px', color: '#a0a0a0', marginBottom: '8px' }}>
-                    Project ID
-                  </label>
-                  <input
-                    type="text"
-                    value={geminiProjectId}
-                    onChange={(e) => setGeminiProjectId(e.target.value)}
-                    placeholder="your-project-id"
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      backgroundColor: '#0a0a0a',
-                      border: '1px solid #2a2a2a',
-                      borderRadius: '6px',
-                      color: '#f5f5f5',
-                      fontSize: '14px'
-                    }}
-                  />
-                </div>
-              </>
-            )}
-
-            {aiProvider === 'ollama' && (
-              <div style={{ padding: '12px', backgroundColor: '#1a1a1a', borderRadius: '6px', border: '1px solid #2a2a2a' }}>
-                <p style={{ fontSize: '12px', color: '#a0a0a0' }}>
-                  Ollama doit être installé et configuré localement. Assurez-vous que le serveur Ollama est accessible.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Error */}
       {error && (
@@ -1353,8 +1027,8 @@ export default function AnalysisNew() {
         </div>
       )}
 
-      {/* Articles List - Only show for non-user-contribs modes */}
-      {articlesRetrieved && articles.length > 0 && mode !== 'user-contribs' && (
+      {/* Articles List - Only show for retrieval modes */}
+      {articlesRetrieved && articles.length > 0 && ['category', 'manual', 'petscan', 'file'].includes(mode) && (
         <div style={{ backgroundColor: '#161616', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ fontSize: '14px', fontWeight: 500, color: '#666666', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -1365,39 +1039,32 @@ export default function AnalysisNew() {
               style={{
                 padding: '6px 12px',
                 backgroundColor: '#1a1a1a',
-                border: '1px solid #3b82f6',
+                border: '1px solid #2a2a2a',
                 borderRadius: '4px',
-                color: '#3b82f6',
+                color: '#a0a0a0',
                 fontSize: '12px',
                 cursor: 'pointer'
               }}
             >
-              {selectedArticles.size === articles.length ? 'Tout désélectionner' : 'Tout sélectionner'}
+              {selectedArticles.size === articles.length ? 'Désélectionner tout' : 'Sélectionner tout'}
             </button>
           </div>
 
-          <div style={{ maxHeight: '400px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
             {articles.map((article, index) => (
               <div
-                key={article.title || index}
+                key={index}
                 style={{
-                  padding: '12px',
-                  backgroundColor: '#1a1a1a',
-                  border: '1px solid #2a2a2a',
-                  borderRadius: '6px',
                   display: 'flex',
+                  justifyContent: 'space-between',
                   alignItems: 'center',
-                  gap: '12px',
-                  transition: 'all 0.2s'
+                  padding: '12px',
+                  backgroundColor: '#0a0a0a',
+                  border: '1px solid #2a2a2a',
+                  borderRadius: '6px'
                 }}
               >
-                <input
-                  type="checkbox"
-                  checked={selectedArticles.has(article.title)}
-                  onChange={() => handleToggleArticle(article.title)}
-                  style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                />
-                <div style={{ flex: 1 }}>
+                <div>
                   <div style={{ fontSize: '14px', color: '#f5f5f5', fontWeight: 500 }}>
                     {article.title}
                   </div>
@@ -1408,22 +1075,29 @@ export default function AnalysisNew() {
                   )}
                 </div>
                 <button
-                  onClick={() => handleAnalyzeSingle(article.title)}
-                  disabled={analyzingArticle === article.title}
+                  onClick={() => {
+                    const newSelected = new Set(selectedArticles)
+                    if (newSelected.has(article.title)) {
+                      newSelected.delete(article.title)
+                    } else {
+                      newSelected.add(article.title)
+                    }
+                    setSelectedArticles(newSelected)
+                  }}
                   style={{
                     padding: '6px 12px',
-                    backgroundColor: analyzingArticle === article.title ? '#3b82f6' : '#10b981',
+                    backgroundColor: selectedArticles.has(article.title) ? '#3b82f6' : '#10b981',
                     border: 'none',
                     borderRadius: '4px',
                     color: '#ffffff',
                     fontSize: '12px',
-                    cursor: analyzingArticle === article.title ? 'not-allowed' : 'pointer',
+                    cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px'
                   }}
                 >
-                  {analyzingArticle === article.title ? 'Analyse...' : 'Analyser'}
+                  {selectedArticles.has(article.title) ? 'Sélectionné' : 'Sélectionner'}
                 </button>
               </div>
             ))}
@@ -1437,18 +1111,15 @@ export default function AnalysisNew() {
         </div>
       )}
 
-      {/* Start Button - Only show for non-user-contribs modes */}
-      {mode !== 'user-contribs' && (
+      {/* Start Button - Only show when articles are retrieved */}
+      {articlesRetrieved && articles.length > 0 && mode !== 'user-contribs' && (
         <button
           className="btn btn-primary"
           onClick={handleStartAnalysis}
-          disabled={loading}
           style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}
         >
           <Search style={{ width: '16px', height: '16px' }} />
-          {loading ? 'Démarrage...' : selectedArticles.size > 0
-            ? `Analyser ${selectedArticles.size} article(s)`
-            : 'Analyser tous les articles'}
+          Voir les articles récupérés
         </button>
       )}
     </div>

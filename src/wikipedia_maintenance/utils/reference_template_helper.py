@@ -61,6 +61,8 @@ class ReferenceTemplateHelper:
         'podcast': 'podcast',
         'vidéo': 'vidéo',
         'video': 'vidéo',
+        'lien vidéo': 'Lien vidéo',
+        'lien_video': 'Lien vidéo',
         'lien brisé': 'Lien brisé',
         'lien_brisé': 'Lien brisé',
         'lien archive': 'Lien archive',
@@ -84,7 +86,7 @@ class ReferenceTemplateHelper:
     # link as broken, so silently pointing `url` at the archive there
     # would misrepresent the template's own semantics.
     # NOTE: All names are lowercase for case-insensitive comparison (all usages normalize template names).
-    TEMPLATES_SUPPORTING_ARCHIVE_AS_MAIN_LINK = {'lien web', 'lien archive', 'interview', 'podcast', 'vidéo'}
+    TEMPLATES_SUPPORTING_ARCHIVE_AS_MAIN_LINK = {'lien web', 'lien archive', 'interview', 'podcast', 'vidéo', 'lien vidéo'}
 
     # Templates for which a |site= parameter is not semantically valid
     # (e.g. a book has no "site"). generate_archive_repair_template must
@@ -101,7 +103,7 @@ class ReferenceTemplateHelper:
     # publications (books, chapters) are NOT included.
     # NOTE: All names are lowercase for case-insensitive comparison (ReferenceEnricherAnalyzer
     # normalizes template names to lowercase before checking this set).
-    TEMPLATES_SUPPORTING_CONSULTE_LE = {'lien web', 'lien archive', 'interview', 'podcast', 'vidéo'}
+    TEMPLATES_SUPPORTING_CONSULTE_LE = {'lien web', 'lien archive', 'interview', 'podcast', 'vidéo', 'lien vidéo'}
 
     # Templates for which archive parameters (archive-url, archive-date, brisé le)
     # are NOT semantically valid. These are physical/digital publications that
@@ -293,6 +295,29 @@ class ReferenceTemplateHelper:
             'titre', 'url', 'horodatage archive', 'date', 'éditeur', 'format',
             'langue', 'auteur', 'auteur prénom', 'auteur nom', 'auteur lien',
             'site', 'consulté le', 'archive-url', 'archive-date', 'brisé le',
+        ],
+        'Lien vidéo': [
+            'langue',
+            'auteur', 'auteur prénom', 'auteur nom', 'auteur lien', 'auteur responsabilité',
+            'auteur2', 'auteur2 prénom', 'auteur2 nom', 'auteur2 lien', 'auteur2 responsabilité',
+            'auteur3', 'auteur3 prénom', 'auteur3 nom',
+            'et al.', 'auteur institutionnel',
+            'traducteur', 'photographe',
+            'titre', 'sous-titre', 'traduction titre', 'description',
+            'url', 'lire en ligne', 'url texte', 'lien',
+            'format électronique', 'accès url',
+            'série', 'work', 'site', 'website', 'périodique',
+            'lieu', 'lieu édition', 'location',
+            'éditeur', 'publisher', 'editeur',
+            'date', 'année', 'year', 'en ligne le', 'en ligne',
+            'date jour', 'date mois', 'date année',
+            'archive-url', 'archiveurl', 'archive-date', 'archivedate',
+            'brisé le', 'dead-url', 'deadurl', 'lien brisé',
+            'isbn', 'issn', 'e-issn', 'oclc', 'pmid', 'pmcid',
+            'doi', 'accès doi', 'jstor', 'bibcode', 'math reviews', 'zbmath', 'arxiv',
+            'consulté le', 'extrait', 'citation', 'quote', 'page', 'pages', 'passage',
+            'id', 'libellé', 'plume', 'nature document', 'afficher plume', 'nocat',
+            'durée', 'format', 'genre',
         ],
     }
 
@@ -815,14 +840,20 @@ class ReferenceTemplateHelper:
         # Try exact match first
         mapped = ReferenceTemplateHelper.DOMAIN_TO_SITE_NAME.get(domain)
         if mapped:
-            return mapped
+            # Ensure we return a string, not a list
+            if isinstance(mapped, list):
+                return str(mapped[0]) if mapped else domain
+            return str(mapped)
 
         # Try without www prefix
         if domain.startswith('www.'):
             domain_without_www = domain[len('www.'):]
             mapped = ReferenceTemplateHelper.DOMAIN_TO_SITE_NAME.get(domain_without_www)
             if mapped:
-                return mapped
+                # Ensure we return a string, not a list
+                if isinstance(mapped, list):
+                    return str(mapped[0]) if mapped else domain_without_www
+                return str(mapped)
 
         # Fallback: return domain without www (no wiki link brackets)
         if domain.startswith('www.'):

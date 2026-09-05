@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AlertTriangle, Search, RefreshCw, Inbox } from 'lucide-react'
 import { historyApi } from '../api/history.api'
-import { articlesApi } from '../api/articles.api'
 
 interface ReadyToPublishItem {
   title: string
@@ -59,23 +58,10 @@ export default function ReadyToPublish() {
     setError(null)
 
     try {
-      const [analyzedResponse, publishedResponse] = await Promise.all([
-        articlesApi.getArticleHistory(500),  // Augmenter la limite pour récupérer plus d'articles
-        historyApi.getPublishedHistory(),
-      ])
+      // Use the new dedicated endpoint for ready-to-publish articles
+      const readyToPublishResponse = await historyApi.getReadyToPublish(2000, 0)
 
-      const publishedTitles = new Set(
-        (publishedResponse.items || []).map((item: any) => item.title)
-      )
-
-      const readyToPublish: ReadyToPublishItem[] = analyzedResponse
-        .filter((item: any) => {
-          const title = item.title || item.article_title
-          const isPublished = publishedTitles.has(title)
-          const hasValidCorrections = item.corrected_links_count > 0
-          const isReadyStatus = item.status === 'analyzed' || item.status === 'pending'
-          return !isPublished && hasValidCorrections && isReadyStatus
-        })
+      const readyToPublish: ReadyToPublishItem[] = (readyToPublishResponse.items || [])
         .map((item: any) => ({
           title: item.title || item.article_title,
           page_id: item.page_id,
@@ -90,11 +76,6 @@ export default function ReadyToPublish() {
           human_verified: item.human_verified,
           summary: item.summary,
         }))
-        .sort((a, b) => {
-          const dateA = new Date(a.analysis_date || 0).getTime()
-          const dateB = new Date(b.analysis_date || 0).getTime()
-          return dateB - dateA
-        })
 
       setArticles(readyToPublish)
     } catch (err: any) {

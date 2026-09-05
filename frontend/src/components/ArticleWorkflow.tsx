@@ -65,7 +65,7 @@ export function ArticleWorkflow({ articles = [] }: ArticleWorkflowProps) {
         color: '#fff',
         marginBottom: '24px'
       }}>
-        Article Workflow
+        Workflow
       </h1>
 
       {/* Active Articles */}

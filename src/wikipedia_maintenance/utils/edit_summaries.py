@@ -35,6 +35,13 @@ REFERENCE_PAGES: Final[Dict[str, List[str]]] = {
     "case_normalization": [],  # Pas de page de référence spécifique
     "lia_correction": [],  # Pas de page de référence spécifique
     "typo": [],  # Pas de page de référence spécifique
+    # Nouveaux analyseurs de références
+    "bare_url": ["[[Wikipédia:Vérifiabilité|Vérifiabilité]]"],
+    "duplicate_refs": ["[[Wikipédia:Vérifiabilité|Vérifiabilité]]"],
+    "uppercase_parameter": ["[[Wikipédia:Typographie|Typographie]]"],
+    "invalid_isbn": ["[[Wikipédia:ISBN|ISBN]]"],
+    "template_type": ["[[Wikipédia:Modèle|Modèles]]"],
+    "broken_link": ["[[Wikipédia:Vérifiabilité|Vérifiabilité]]"],
 }
 
 # Actions principales pour chaque type de correction
@@ -60,6 +67,31 @@ ACTIONS: Final[Dict[str, List[str]]] = {
         "Correction typographique",
         "Correction typo",
         "Correction typographique"
+    ],
+    # Nouveaux analyseurs de références
+    "bare_url": [
+        "Conversion de liens nus en références",
+        "Wikification de liens nus",
+    ],
+    "duplicate_refs": [
+        "Suppression de références dupliquées",
+        "Nettoyage de références",
+    ],
+    "uppercase_parameter": [
+        "Correction de paramètres en majuscules",
+        "Harmonisation des paramètres de références",
+    ],
+    "invalid_isbn": [
+        "Correction de format ISBN",
+        "Normalisation ISBN",
+    ],
+    "template_type": [
+        "Correction de type de modèle",
+        "Harmonisation des modèles de référence",
+    ],
+    "broken_link": [
+        "Vérification de liens brisés",
+        "Test de disponibilité des liens",
     ],
 }
 
@@ -108,6 +140,8 @@ _TYPO_ISSUE_TYPES: Final[frozenset] = frozenset({
 
 _KNOWN_CORRECTION_TYPES: Final[frozenset] = frozenset({
     "dead_link", "http_link", "case_normalization", "lia_correction", "reference_enrichment",
+    # Nouveaux analyseurs de références
+    "bare_url", "duplicate_refs", "uppercase_parameter", "invalid_isbn", "template_type", "broken_link",
 })
 
 
@@ -171,7 +205,10 @@ def _build_ovix_summary(correction_counts: Dict[str, int]) -> str:
 
     # Déterminer l'action principale basée sur la priorité des corrections
     # Priorité: dead_link > reference_enrichment > http_link > case_normalization > typo
-    priority_order = ["dead_link", "reference_enrichment", "http_link", "case_normalization", "typo"]
+    # Nouveaux analyseurs: bare_url, duplicate_refs, uppercase_parameter, invalid_isbn, template_type, broken_link
+    priority_order = ["dead_link", "reference_enrichment", "http_link", "case_normalization", 
+                      "bare_url", "duplicate_refs", "uppercase_parameter", "invalid_isbn", 
+                      "template_type", "broken_link", "typo"]
 
     primary_correction = None
     for correction_type in priority_order:
@@ -203,6 +240,19 @@ def _build_ovix_summary(correction_counts: Dict[str, int]) -> str:
                 other_corrections.append(f"réf ({count})")
             elif correction_type == "typo":
                 other_corrections.append(f"typo ({count})")
+            # Nouveaux analyseurs de références
+            elif correction_type == "bare_url":
+                other_corrections.append(f"liens nus ({count})")
+            elif correction_type == "duplicate_refs":
+                other_corrections.append(f"doublons ({count})")
+            elif correction_type == "uppercase_parameter":
+                other_corrections.append(f"majuscules ({count})")
+            elif correction_type == "invalid_isbn":
+                other_corrections.append(f"ISBN ({count})")
+            elif correction_type == "template_type":
+                other_corrections.append(f"modèles ({count})")
+            elif correction_type == "broken_link":
+                other_corrections.append(f"liens brisés ({count})")
 
     # Collecter toutes les pages de référence uniques
     reference_pages = []
@@ -263,6 +313,14 @@ def get_summary(corrections_count: int = 0,
         case_normalization_count = _safe_count(issue_types.get("case_normalization", 0))
         lia_correction_count = _safe_count(issue_types.get("lia_correction", 0))
         reference_enrichment_count = _safe_count(issue_types.get("reference_enrichment", 0))
+        
+        # Nouveaux analyseurs de références
+        bare_url_count = _safe_count(issue_types.get("bare_url", 0))
+        duplicate_refs_count = _safe_count(issue_types.get("duplicate_refs", 0))
+        uppercase_parameter_count = _safe_count(issue_types.get("uppercase_parameter", 0))
+        invalid_isbn_count = _safe_count(issue_types.get("invalid_isbn", 0))
+        template_type_count = _safe_count(issue_types.get("template_type", 0))
+        broken_link_count = _safe_count(issue_types.get("broken_link", 0))
 
         # Compter les issues typographiques
         typo_count = sum(
@@ -282,6 +340,19 @@ def get_summary(corrections_count: int = 0,
             correction_counts["case_normalization"] = case_normalization_count
         if reference_enrichment_count > 0:
             correction_counts["reference_enrichment"] = reference_enrichment_count
+        # Nouveaux analyseurs de références
+        if bare_url_count > 0:
+            correction_counts["bare_url"] = bare_url_count
+        if duplicate_refs_count > 0:
+            correction_counts["duplicate_refs"] = duplicate_refs_count
+        if uppercase_parameter_count > 0:
+            correction_counts["uppercase_parameter"] = uppercase_parameter_count
+        if invalid_isbn_count > 0:
+            correction_counts["invalid_isbn"] = invalid_isbn_count
+        if template_type_count > 0:
+            correction_counts["template_type"] = template_type_count
+        if broken_link_count > 0:
+            correction_counts["broken_link"] = broken_link_count
         if total_typo > 0:
             correction_counts["typo"] = total_typo
 

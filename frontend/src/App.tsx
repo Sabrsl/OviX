@@ -1,8 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
-import AnalysisNew from './pages/AnalysisNew'
-import AnalysisResults from './pages/AnalysisResults'
+import RecuperationArticles from './pages/RecuperationArticles'
 import AnalyzedHistory from './pages/AnalyzedHistory'
 import ArticleDetail from './pages/ArticleDetail'
 import ArticleWorkflowPage from './pages/ArticleWorkflowPage'
@@ -20,6 +19,9 @@ import ArticlesToAnalyze from './pages/ArticlesToAnalyze'
 import ReadyToPublish from './pages/ReadyToPublish'
 import UserContributions from './pages/UserContributions'
 import ArticleScheduler from './pages/ArticleScheduler'
+import PublishedDeadLinks from './pages/PublishedDeadLinks'
+import PublishedDeadLinksDetail from './pages/PublishedDeadLinksDetail'
+import AnalyzedDeadLinksDetail from './pages/AnalyzedDeadLinksDetail'
 
 function App() {
   return (
@@ -27,12 +29,14 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
-          <Route path="analysis/new" element={<AnalysisNew />} />
-          <Route path="analysis/results" element={<AnalysisResults />} />
+          <Route path="articles/retrieval" element={<RecuperationArticles />} />
           <Route path="analysis/history" element={<AnalyzedHistory />} />
           <Route path="analysis/workflow" element={<ArticleWorkflowPage />} />
           <Route path="article/detail" element={<ArticleDetail />} />
           <Route path="manual-review" element={<ManualReview />} />
+          <Route path="published-dead-links" element={<PublishedDeadLinks />} />
+          <Route path="published-dead-links/:articleTitle" element={<PublishedDeadLinksDetail />} />
+          <Route path="analyzed-dead-links/:articleTitle" element={<AnalyzedDeadLinksDetail />} />
           <Route path="articles/to-analyze" element={<ArticlesToAnalyze />} />
           <Route path="articles/ready-to-publish" element={<ReadyToPublish />} />
           <Route path="articles/scheduler" element={<ArticleScheduler />} />

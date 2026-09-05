@@ -94,6 +94,14 @@ typography:
   check_units: true
   check_section_titles: true
 
+# XML Typography analyzer configuration
+typography_xml_analyzer:
+  enabled: false  # Enable XML-based typo correction using normalise_typo.xml
+  xml_rules_path: null  # Custom path to XML rules file (null for default: src/wikipedia_maintenance/analyzers/normalise_typo.xml)
+  max_corrections_per_article: 100  # Maximum number of typo corrections to apply per article
+  ignore_protected_areas: true  # Skip corrections in nowiki, comments, and other protected areas
+  case_sensitive: false  # Whether regex matching should be case-sensitive
+
 # References analyzer configuration
 references:
   check_bare_refs: true

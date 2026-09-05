@@ -103,6 +103,7 @@ class Scheduler:
         self._running = False
         self._paused = False  # NEW: Track pause state
         self._task: Optional[asyncio.Task] = None
+        self._heartbeat_task: Optional[asyncio.Task] = None  # Track heartbeat task for cancellation
         self._active_pauses: List[PauseSchedule] = []
         self._state_lock = Lock()  # Lock to prevent race conditions on _paused/_running
 
@@ -323,7 +324,23 @@ class Scheduler:
         
         # Set running flag to false first - this prevents NEW operations from starting
         self._running = False
-        
+
+        # Cancel heartbeat task if running
+        if self._heartbeat_task and not self._heartbeat_task.done():
+            logger.info("Cancelling heartbeat task...")
+            self._heartbeat_task.cancel()
+            try:
+                await asyncio.wait_for(self._heartbeat_task, timeout=2.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
+            except Exception as e:
+                logger.error(f"Error cancelling heartbeat task: {e}")
+            finally:
+                self._heartbeat_task = None
+
+        # Set state to inactive immediately so scheduler loop can detect it
+        self.state_manager.set_active(False)
+
         # Wait for current operation to complete naturally
         # The scheduler loop will check _running flag and stop after current iteration
         logger.info("Waiting for current operation to complete (max 30 seconds)...")
@@ -353,11 +370,7 @@ class Scheduler:
                     self._task = None
         else:
             logger.info(f"Current operation completed in {waited}s")
-        
-        # Set state to inactive (queue preserved in database)
-        logger.info("Setting scheduler state to inactive (queue preserved)...")
-        self.state_manager.set_active(False)
-        
+
         # Stop Telegram bot
         if self.telegram_bot:
             try:
@@ -441,6 +454,15 @@ class Scheduler:
         logger.info("Starting main scheduler loop with first_iteration=True")
 
         while self._running:
+            # CRITICAL FIX: Check if paused - if so, wait and don't process articles
+            if self._paused:
+                logger.info("Scheduler is paused, waiting for resume...")
+                while self._paused and self._running:
+                    await asyncio.sleep(1)
+                if not self._running:
+                    break
+                logger.info("Scheduler resumed from pause")
+
             logger.info("=== Scheduler loop iteration ===")
             try:
                 # Check Wikipedia talk page for kill switch commands (every iteration)
@@ -521,13 +543,15 @@ class Scheduler:
                     self.state_manager.update_state(next_publish_time=next_working.isoformat())
                     # Sleep in short intervals to allow cancellation with Kill Switch check
                     while wait_time > 0 and self._running:
-                        # P1 CRITICAL FIX: Check Kill Switch during wait (both sources)
-                        if not self.state_manager.get_state().is_active or (self.kill_switch_manager and self.kill_switch_manager.is_enabled()):
-                            logger.warning("KILL SWITCH ACTIVATED - ABORTING WAIT")
+                        # P1 CRITICAL FIX: Check Kill Switch and is_active during wait (both sources)
+                        state = self.state_manager.get_state()
+                        if not state.is_active or (self.kill_switch_manager and self.kill_switch_manager.is_enabled()):
+                            logger.warning("KILL SWITCH ACTIVATED or STOP REQUESTED - ABORTING WAIT")
                             break
                         sleep_time = min(wait_time, 1)  # P0 CRITICAL FIX: Sleep max 1 second for immediate Kill Switch response
                         await asyncio.sleep(sleep_time)
                         wait_time -= sleep_time
+                    # Re-check is_active after wait to ensure we stop if stop was called during wait
                     if not self.state_manager.get_state().is_active or (self.kill_switch_manager and self.kill_switch_manager.is_enabled()):
                         break
                     continue
@@ -545,13 +569,15 @@ class Scheduler:
 
                     # Sleep in short intervals to allow cancellation with Kill Switch check
                     while wait_time > 0 and self._running:
-                        # P1 CRITICAL FIX: Check Kill Switch during wait (both sources)
-                        if not self.state_manager.get_state().is_active or (self.kill_switch_manager and self.kill_switch_manager.is_enabled()):
-                            logger.warning("KILL SWITCH ACTIVATED - ABORTING WAIT")
+                        # P1 CRITICAL FIX: Check Kill Switch and is_active during wait (both sources)
+                        state = self.state_manager.get_state()
+                        if not state.is_active or (self.kill_switch_manager and self.kill_switch_manager.is_enabled()):
+                            logger.warning("KILL SWITCH ACTIVATED or STOP REQUESTED - ABORTING WAIT")
                             break
                         sleep_time = min(wait_time, 1)  # P0 CRITICAL FIX: Sleep max 1 second for immediate Kill Switch response
                         await asyncio.sleep(sleep_time)
                         wait_time -= sleep_time
+                    # Re-check is_active after wait to ensure we stop if stop was called during wait
                     if not self.state_manager.get_state().is_active or (self.kill_switch_manager and self.kill_switch_manager.is_enabled()):
                         break
                     continue
@@ -564,14 +590,16 @@ class Scheduler:
                     logger.info(f"In {active_pause.pause_type} pause, waiting {wait_time/60:.1f} minutes until {active_pause.end_time.strftime('%H:%M')}")
                     # Sleep in short intervals to allow cancellation with Kill Switch check
                     while wait_time > 0 and self._running:
-                        # P1 CRITICAL FIX: Check Kill Switch during wait (both sources)
-                        if not self.state_manager.get_state().is_active or (self.kill_switch_manager and self.kill_switch_manager.is_enabled()):
-                            logger.warning("KILL SWITCH ACTIVATED - ABORTING WAIT")
+                        # P1 CRITICAL FIX: Check Kill Switch and is_active during wait (both sources)
+                        state = self.state_manager.get_state()
+                        if not state.is_active or (self.kill_switch_manager and self.kill_switch_manager.is_enabled()):
+                            logger.warning("KILL SWITCH ACTIVATED or STOP REQUESTED - ABORTING WAIT")
                             break
                         sleep_time = min(wait_time, 1)  # P0 CRITICAL FIX: Sleep max 1 second for immediate Kill Switch response
                         await asyncio.sleep(sleep_time)
                         wait_time -= sleep_time
-                    if not self.state_manager.get_state().is_active:
+                    # Re-check is_active after wait to ensure we stop if stop was called during wait
+                    if not self.state_manager.get_state().is_active or (self.kill_switch_manager and self.kill_switch_manager.is_enabled()):
                         break
                     continue
 
@@ -664,8 +692,9 @@ class Scheduler:
             talk_page_title = f"Discussion utilisateur:{self.config.bot_username}"
             logger.info(f"Checking talk page: {talk_page_title}")
 
-            # Get the page content
-            page = self.config.site.page(talk_page_title)
+            # Get the page content using pywikibot.Page
+            import pywikibot
+            page = pywikibot.Page(self.config.site, talk_page_title)
             page_content = page.text
 
             if not page_content:
@@ -705,8 +734,8 @@ class Scheduler:
                 WHERE ar.corrected_links_count > 0
                 AND NOT EXISTS (
                     SELECT 1 FROM scheduler_queue sq 
-                    WHERE sq.title = ar.article_title 
-                    AND sq.status NOT IN ('completed', 'error')
+                    WHERE sq.article_title = ar.article_title 
+                    AND sq.status NOT IN ('completed', 'error', 'published')
                 )
                 ORDER BY ar.analysis_date DESC
                 LIMIT 20
@@ -727,10 +756,12 @@ class Scheduler:
                  changes_count, mode) = row
                 
                 logger.info(f"Adding ready-to-publish article: {title}")
-                state.current_article = title
-                state.current_step = "Adding to queue"
-                state.articles_corrected += 1
-                self.state_manager.save_state()
+                # Note: SQLiteStateManager doesn't have articles_corrected field
+                # Skip updating state fields that are JSON-specific
+                # state.current_article = title
+                # state.current_step = "Adding to queue"
+                # state.articles_corrected += 1
+                # self.state_manager.save_state()
 
                 try:
                     article_data = {
@@ -757,12 +788,13 @@ class Scheduler:
 
                 except Exception as e:
                     logger.error(f"Error adding article {title} to queue: {e}", exc_info=True)
-                    state.articles_error += 1
+                    # Note: SQLiteStateManager doesn't have articles_error field (JSON-specific)
+                    # state.articles_error += 1
 
-            # Reset current tracking
-            state.current_article = None
-            state.current_step = "Waiting"
-            self.state_manager.save_state()
+            # Reset current tracking - SQLiteStateManager doesn't have these fields
+            # state.current_article = None
+            # state.current_step = "Waiting"
+            # self.state_manager.save_state()
 
         except Exception as e:
             logger.error(f"Error transferring articles to queue: {e}", exc_info=True)
@@ -801,11 +833,11 @@ class Scheduler:
         logger.info(f"Stored changes count: {stored_changes_count}")
 
         # Start heartbeat task for this article
-        heartbeat_task = asyncio.create_task(self._heartbeat_loop(article_id))
+        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop(article_id))
 
         if not corrected_content:
             logger.error(f"Article '{title}' has no corrected_content, skipping to avoid a broken publish/diff")
-            heartbeat_task.cancel()
+            self._heartbeat_task.cancel()
             if self.database:
                 self.database.transition_queue_item(article_id, 'error')
                 self.database.conn.execute(
@@ -830,15 +862,16 @@ class Scheduler:
                     logger.error(f"Failed to record analysis for missing content: {e}")
             return
 
-        # Calculate actual changes count by comparing with current Wikipedia content
+        # Calculate actual changes count by fetching fresh content (single API call)
+        # This content will be reused for re-validation to avoid duplicate API calls
+        current_content = None
         actual_changes_count = stored_changes_count
         try:
             import pywikibot
-            # Use site from config if available, otherwise create default
             site = self.config.site if self.config.site else pywikibot.Site('fr', 'wikipedia')
             page = pywikibot.Page(site, title)
             if page.exists():
-                current_content = page.get()
+                current_content = page.get()  # Single API call - will be reused for re-validation
                 import difflib
                 diff = list(difflib.unified_diff(
                     current_content.splitlines(keepends=True),
@@ -859,7 +892,7 @@ class Scheduler:
         if actual_changes_count > 200:
             logger.warning(f"Article '{title}' has {actual_changes_count} changes (threshold: 200), skipping publication")
             logger.info(f"Marked '{title}' as 'to validate manually'")
-            heartbeat_task.cancel()
+            self._heartbeat_task.cancel()
             if self.database:
                 self.database.transition_queue_item(article_id, 'error')
                 self.database.conn.execute(
@@ -886,9 +919,10 @@ class Scheduler:
         # Check if there are actual changes (no changes = skip publication)
         if actual_changes_count == 0:
             logger.info(f"Article '{title}' has no changes, skipping publication")
-            heartbeat_task.cancel()
+            self._heartbeat_task.cancel()
             if self.database:
-                self.database.transition_queue_item(article_id, 'published')
+                # Transition to validated (valid state from processing) instead of published
+                self.database.transition_queue_item(article_id, 'validated')
             # Update analyzed tracker status
             if self.analyzed_tracker:
                 self.analyzed_tracker.record_analysis(
@@ -911,7 +945,7 @@ class Scheduler:
         # 1. Kill Switch check (BOTH sources - database and state file)
         if not self.state_manager.get_state().is_active or (self.kill_switch_manager and self.kill_switch_manager.is_enabled()):
             logger.warning("KILL SWITCH ACTIVATED - ABORTING PUBLICATION (pre-check)")
-            heartbeat_task.cancel()
+            self._heartbeat_task.cancel()
             if self.database:
                 self.database.transition_queue_item(article_id, 'retry')
             return
@@ -920,7 +954,7 @@ class Scheduler:
         # 2. Scheduler active check
         if not self._running:
             logger.warning("Scheduler not active - ABORTING PUBLICATION")
-            heartbeat_task.cancel()
+            self._heartbeat_task.cancel()
             if self.database:
                 self.database.transition_queue_item(article_id, 'retry')
             return
@@ -929,7 +963,7 @@ class Scheduler:
         # 3. Article validity check (already done above, but verify again)
         if not corrected_content:
             logger.error(f"Article '{title}' has no corrected_content - ABORTING PUBLICATION")
-            heartbeat_task.cancel()
+            self._heartbeat_task.cancel()
             if self.database:
                 self.database.transition_queue_item(article_id, 'error')
             return
@@ -945,7 +979,7 @@ class Scheduler:
         # 5. Diff validity check (already done above - changes count threshold)
         if actual_changes_count > 200:
             logger.error(f"Article '{title}' exceeds diff threshold - ABORTING PUBLICATION")
-            heartbeat_task.cancel()
+            self._heartbeat_task.cancel()
             if self.database:
                 self.database.transition_queue_item(article_id, 'error')
             return
@@ -955,7 +989,7 @@ class Scheduler:
         state = self.state_manager.get_state()
         if self.timing_manager.has_reached_daily_limit(state.daily_published_count):
             logger.warning(f"Daily limit reached - ABORTING PUBLICATION")
-            heartbeat_task.cancel()
+            self._heartbeat_task.cancel()
             if self.database:
                 self.database.transition_queue_item(article_id, 'retry')
             return
@@ -965,7 +999,7 @@ class Scheduler:
         current_time = datetime.now()
         if not self.timing_manager.is_within_working_hours(current_time):
             logger.warning(f"Outside working hours - ABORTING PUBLICATION")
-            heartbeat_task.cancel()
+            self._heartbeat_task.cancel()
             if self.database:
                 self.database.transition_queue_item(article_id, 'retry')
             return
@@ -976,14 +1010,11 @@ class Scheduler:
         
         logger.info(f"=== ALL PUBLICATION PRE-CHECKS PASSED FOR '{title}' ===")
 
-        # P0 CRITICAL FIX: Re-validation before publication - fetch fresh content and recalculate diff
+        # P0 CRITICAL FIX: Re-validation before publication - reuse already fetched content to avoid duplicate API calls
         logger.info(f"Re-validating article '{title}' before publication...")
         try:
-            import pywikibot
-            site = self.config.site if self.config.site else pywikibot.Site('fr', 'wikipedia')
-            page = pywikibot.Page(site, title)
-            if page.exists():
-                current_content = page.get()
+            if current_content is not None:
+                # Reuse the content fetched earlier to avoid duplicate API call
                 import difflib
                 diff = list(difflib.unified_diff(
                     current_content.splitlines(keepends=True),
@@ -998,7 +1029,7 @@ class Scheduler:
                 # Check if changes count still within threshold
                 if fresh_changes_count > 200:
                     logger.warning(f"Article '{title}' has {fresh_changes_count} changes after re-validation (threshold: 200), skipping publication")
-                    heartbeat_task.cancel()
+                    self._heartbeat_task.cancel()
                     if self.database:
                         self.database.transition_queue_item(article_id, 'error')
                         self.database.conn.execute(
@@ -1024,7 +1055,7 @@ class Scheduler:
                 # Check if changes count matches expected (within reasonable tolerance)
                 if abs(fresh_changes_count - actual_changes_count) > 10:
                     logger.warning(f"Article '{title}' changes count mismatch: expected {actual_changes_count}, calculated {fresh_changes_count}. Page may have been modified.")
-                    heartbeat_task.cancel()
+                    self._heartbeat_task.cancel()
                     if self.database:
                         self.database.transition_queue_item(article_id, 'retry')
                         self.database.conn.execute(
@@ -1049,7 +1080,7 @@ class Scheduler:
                 logger.info(f"Re-validation successful for '{title}' - changes count: {fresh_changes_count}")
             else:
                 logger.warning(f"Article {title} no longer exists, skipping publication")
-                heartbeat_task.cancel()
+                self._heartbeat_task.cancel()
                 if self.database:
                     self.database.transition_queue_item(article_id, 'error')
                     self.database.conn.execute(
@@ -1123,10 +1154,12 @@ class Scheduler:
             return
 
         # Cancel heartbeat task
-        heartbeat_task.cancel()
+        self._heartbeat_task.cancel()
 
         # Update statistics
         stats = state.statistics.copy()
+        # Filter out SQL-specific columns (id, updated_at) before updating
+        stats = {k: v for k, v in stats.items() if k not in ('id', 'updated_at')}
         if success:
             self.state_manager.increment_daily_published()
             stats['total_published'] += 1
@@ -1279,6 +1312,8 @@ class Scheduler:
 
         # Update average publish delay
         stats = self.state_manager.get_state().statistics.copy()
+        # Filter out SQL-specific columns (id, updated_at) before updating
+        stats = {k: v for k, v in stats.items() if k not in ('id', 'updated_at')}
         current_avg = stats['avg_publish_delay']
         n = stats['total_published']
         if n > 0:

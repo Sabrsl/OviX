@@ -1,0 +1,370 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Typos>
+<Typo word="Date lien vers modèle" find="\[\[([0-9]{1,2})(&#160;| )?(a(?:vril|o[ûu]t)|décembre|février|j(?:anvier|ui(?:n|llet))|ma(?:rs|i)|novembre|octobre|septembre)\]\](&#160;| )?\[\[([0-2]*[0-9]*[0-9][0-9])\]\]" replace="{{date|$1 $3 $5}}" />
+<Typo word="Date lien avec domaine vers modèle" find="\[\[([0-9]{1,2})(&#160;| )?(a(?:vril|o[ûu]t)|décembre|février|j(?:anvier|ui(?:n|llet))|ma(?:rs|i)|novembre|octobre|septembre)\]\](&#160;| )?\[\[([0-2]*[0-9]*[0-9][0-9]) *(aux?|dans|en|à)?( )*(aéronautique|architecture|astronomie|cinéma|droit|les c(?:hemins de fer|roisades)|politique|échecs|économie|animation asiatique|informatique|jeu|littérature|les parcs d'attractions|la télévision|musique(?: classique)?|science|sociologie|sport|théâtre)?(\|)?([0-2]*[0-9]*[0-9]*[0-9]*)\]\]" replace="{{date|$1 $3 $5$9$6$7$8}}" />
+<Typo word="Date modèle et lien avec domaine vers modèle" find="\{\{([0-9]{1,2})(er)*(&#160;| )?(a(?:vril|o[ûu]t)|décembre|février|j(?:anvier|ui(?:n|llet))|ma(?:rs|i)|novembre|octobre|septembre)\}\}(&#160;| )?\[\[([0-2]*[0-9]*[0-9][0-9]) *(aux?|dans|en|à)?( )*(aéronautique|architecture|astronomie|cinéma|droit|les c(?:hemins de fer|roisades)|politique|échecs|économie|animation asiatique|informatique|jeu|littérature|les parcs d'attractions|la télévision|musique(?: classique)?|science|sociologie|sport|théâtre)?(\|)?([0-2]*[0-9]*[0-9]*[0-9]*)\]\]" replace="{{date|$1 $4 $6$10$7$8$9}}" />
+<Typo word="Date mois-année et lien vers modèle" find="\[\[(a(?:vril|o[ûu]t)|décembre|février|j(?:anvier|ui(?:n|llet))|ma(?:rs|i)|novembre|octobre|septembre)\]\] *\[\[([0-2]*[0-9]*[0-9][0-9])\]\]" replace="{{date|$1 $2}}" />
+<Typo word="Date mois-année avec domaine vers lien" find="\[\[(a(?:vril|o[ûu]t)|décembre|février|j(?:anvier|ui(?:n|llet))|ma(?:rs|i)|novembre|octobre|septembre)\]\] *\[\[([0-9]{4}) +(aux?|dans|en|à) +(aéronautique|architecture|astronomie|cinéma|droit|les c(?:hemins de fer|roisades)|politique|échecs|économie|animation asiatique|informatique|jeu|littérature|les parcs d'attractions|la télévision|musique(?: classique)?|science|sociologie|sport|théâtre)(\|[0-2]*[0-9]*[0-9][0-9])?\]\]" replace="{{date|$1 $2|$3 $4}}" />
+<Typo word="janvier" find="\b(\d{1,2}) +Janvier\b" replace="$1 janvier" />
+<Typo word="janvier" find="(?&lt;!Auguste )([a-z,;:] ) ?(\[*)Janvier\b" replace="$1$2janvier" />
+<Typo word="janvier" find="\b[jJ]anv?\.? +([0-9]{4}|\[\[[0-9]{4}\]\])\b" replace="janvier $1" />
+<Typo word="février" find="\b(\d{1,2}) +[fF][eé]vrier\b" replace="$1 février" />
+<Typo word="février" find="([a-z,;:] ) ?(\[*)[fF][eé]vrier\b" replace="$1$2février" />
+<Typo word="février" find="\b[fF][eé][vb]\.? +([0-9]{4}|\[\[[0-9]{4}\]\])\b" replace="février $1" />
+<Typo word="mars" find="\b(\d{1,2}) +Mars\b" replace="$1 mars" />
+<Typo word="mars" find="\b[mM]ar\.? +([0-9]{4}|\[\[[0-9]{4}\]\])\b" replace="mars $1" />
+<Typo word="avril" find="\b(\d{1,2}) +Avril\b" replace="$1 avril" />
+<Typo word="avril" find="([a-z,;:] |['’]) ?(\[*)Avril\b" replace="$1$2avril" />
+<Typo word="avril" find="\b[aA]vr\.? +([0-9]{4}|\[\[[0-9]{4}\]\])\b" replace="avril $1" />
+<Typo word="mai" find="\b(\d{1,2}) +Mai\b" replace="$1 mai" />
+<Typo word="mai" find="([a-z,;:] ) ?(\[*)Mai\b" replace="$1$2mai" />
+<Typo word="juin" find="\b(\d{1,2}) +Juin\b" replace="$1 juin" />
+<Typo word="juin" find="([a-z,;:] ) ?(\[*)Juin\b" replace="$1$2juin" />
+<Typo word="juillet" find="\b(\d{1,2}) +Juillet\b" replace="$1 juillet" />
+<Typo word="juillet" find="(?&lt;![mM]onarchie de )(?&lt;![rR]évolution de )([a-z,;:] ) ?(\[*)Juillet\b" replace="$1$2juillet" />
+<Typo word="juillet" find="\b[jJ]uil?\.? +([0-9]{4}|\[\[[0-9]{4}\]\])\b" replace="juillet $1" />
+<Typo word="août" find="\b(\d{1,2}) +Août\b" replace="$1 août" />
+<Typo word="août" find="([a-z,;:] |['’]) ?(\[*)Août\b" replace="$1$2août" />
+<Typo word="août" find="\b[aA]oû.? +([0-9]{4}|\[\[[0-9]{4}\]\])\b" replace="août $1" />
+<Typo word="aout" find="\b(\d{1,2}) +Aout\b" replace="$1 aout" />
+<Typo word="aout" find="([a-z,;:] |['’]) ?(\[*)Aout\b" replace="$1$2aout" />
+<Typo word="septembre" find="\b(\d{1,2}) +Septembre\b" replace="$1 septembre" />
+<Typo word="septembre" find="([a-z,;:] ) ?(\[*)Septembre\b" replace="$1$2septembre" />
+<Typo word="septembre" find="\b[sS]ept?\.? +([0-9]{4}|\[\[[0-9]{4}\]\])\b" replace="septembre $1" />
+<Typo word="octobre" find="\b(\d{1,2}) +Octobre\b" replace="$1 octobre" />
+<Typo word="octobre" find="([a-z,;:] |['’]) ?(\[*)Octobre\b" replace="$1$2octobre" />
+<Typo word="octobre" find="\b[oO]ct\.? +([0-9]{4}|\[\[[0-9]{4}\]\])\b" replace="octobre $1" />
+<Typo word="novembre" find="\b(\d{1,2}) +Novembre\b" replace="$1 novembre" />
+<Typo word="novembre" find="([a-z,;:] ) ?(\[*)Novembre\b" replace="$1$2novembre" />
+<Typo word="novembre" find="\b[nN]ov\.? +([0-9]{4}|\[\[[0-9]{4}\]\])\b" replace="novembre $1" />
+<Typo word="décembre" find="\b(\d{1,2}) +[dD][ée]cembre\b" replace="$1 décembre" />
+<Typo word="décembre" find="([a-z,;:] ) ?(\[*)[dD][ée]cembre\b" replace="$1$2décembre" />
+<Typo word="décembre" find="\b[dD][eé]c\.? +([0-9]{4}|\[\[[0-9]{4}\]\])\b" replace="décembre $1" />
+<Typo word="1er du mois" find="\b1 +(avril|ao[uû]t|décembre|février|janvier|juin|juillet|mars|mai|novembre|octobre|septembre)\b" replace="{{1er}} $1" />
+<Typo word="Années 19?0" find="\b([aA])nnées +([1-9]0)\b" replace="$1nnées 19$2" />
+<Typo word="Siècle av. J.-C." find="\b([12]?\d) *(?:&lt;sup(?: +class=&quot;exposant&quot;)?&gt;)?i?[éeè°ᵉ](?:me)?(?:&lt;/sup&gt;)? *[sS](?:i[eèé]cle|\.) +av(?:ant|\.) +J(?:ésus|\.)?[- ]?C(?:hrist\b|\.|\b)" replace="{{-s-|{{subst:Nombre en romain|$1}}}}" />
+<Typo word="Siècle av. J.-C." find="\b([XVI]+) *(?:&lt;sup(?: +class=&quot;exposant&quot;)?&gt;)?i?[éeè°ᵉ](?:me)?(?:&lt;/sup&gt;)? *[sS](?:i[eèé]cle|\.) +av(?:ant|\.) +J(?:ésus|\.)?[- ]?C(?:hrist\b|\.|\b)" replace="{{-s-|$1}}" />
+<Typo word="Siècle" find="\b([12]?\d) *(?:&lt;sup(?: +class=&quot;exposant&quot;)?&gt;)?i?[éeè°ᵉ](?:me)?(?:&lt;/sup&gt;)? *[sS](?:i[eèé]cle\b|\.)" replace="{{s-|{{subst:Nombre en romain|$1}}}}" />
+<Typo word="Siècle" find="\b([XVI]+) *(?:&lt;sup(?: +class=&quot;exposant&quot;)?&gt;)?i?[éeè°ᵉ](?:me)?(?:&lt;/sup&gt;)? *[sS](?:i[eèé]cle\b|\.)" replace="{{s-|$1}}" />
+<Typo word="ap. J.-C." find="\bap\. +J\.[- ]?C\." replace="ap. J.-C." />
+<Typo word="d͡z" find="ʣ" replace="d͡z" />
+<Typo word="d͡ʒ" find="ʤ" replace="d͡ʒ" />
+<Typo word="d͡ʑ" find="ʥ" replace="d͡ʑ" />
+<Typo word="t͡s" find="ʦ" replace="t͡s" />
+<Typo word="t͡ʃ" find="ʧ" replace="t͡ʃ" />
+<Typo word="t͡ɕ" find="ʨ" replace="t͡ɕ" />
+<Typo word="n° non suivi d'un chiffre" find="\b([nN])°([^0-9][^0-9])\b" replace="{{Numéro}} $2" />
+<Typo word="points de suspension" find="\betc(\.\.\.*|…)\b" replace="etc." />
+<Typo word="Virgule double" find="\b(\,\,)\b" replace="," />
+<Typo word="Deux points après à" find="\b(à\:)\b" replace="à :" />
+<Typo word="Casse de République centrafricaine" find="République Centrafricaine" replace="République centrafricaine" />
+<Typo word="Casse de République dominicaine" find="République Dominicaine" replace="République dominicaine" />
+<Typo word="Casse de République tchèque" find="République Tchèque" replace="République tchèque" />
+<Typo word="Accent du préfixe tchéco" find="([tT])chèco" replace="$1chéco" />
+<Typo word="surface - 2 en exposant" find="\b(da?|[muµnpchkGKM])?m[²2]([^0-9])" replace="$1m{{2}}$2" />
+<Typo word="volume - 3 en exposant" find="\b(da?|[muµnpchkGKM])?m[³3]([^0-9])" replace="$1m{{3}}$2" />
+<Typo word="préfixe kilo - k au lieu de K" find="\b[kK](Bq|cd|Gy|Hz?|kat|l[mx]|m(?:ol)?|[ocgTVAFJKΩN]|Pa|sr?|Sv?|Wb?)\b" replace="k$1" />
+<Typo word="latin ad hoc" find="\b(ad hoc(''')?)(?=[\s,.)]|$)" replace="''$1''" />
+<Typo word="latin a fortiori" find="\b(a fortiori(''')?)(?=[\s,.)]|$)" replace="''$1''" />
+<Typo word="latin a posteriori" find="\b(a posteriori(''')?)(?=[\s,.)]|$)" replace="''$1''" />
+<Typo word="latin a priori" find="\b(a priori(''')?)(?=[\s,.)]|$)" replace="''$1''" />
+<Typo word="latin bis" find="\b(bis(''')?)(?=[\s,.)]|$)" replace="''$1''" />
+<Typo word="latin grosso modo" find="\b(grosso modo(''')?)(?=[\s,.)]|$)" replace="''$1''" />
+<Typo word="latin ibidem" find="\b(ibidem(''')?)(?=[\s,.)]|$)" replace="''$1''" />
+<Typo word="latin idem" find="\b(idem(''')?)(?=[\s,.)]|$)" replace="''$1''" />
+<Typo word="latin in extenso" find="\b(in extenso(''')?)(?=[\s,.)]|$)" replace="''$1''" />
+<Typo word="latin in extremis" find="\b(in extremis(''')?)(?=[\s,.)]|$)" replace="''$1''" />
+<Typo word="latin in fine" find="\b(in fine(''')?)(?=[\s,.)]|$)" replace="''$1''" />
+<Typo word="latin infra" find="\b(infra(''')?)(?=[\s,.)]|$)" replace="''$1''" />
+<Typo word="latin modus vivendi" find="\b(modus vivendi(''')?)(?=[\s,.)]|$)" replace="''$1''" />
+<Typo word="latin sic" find="\b(sic(''')?)(?=[\s,.)]|$)" replace="''$1''" />
+<Typo word="latin statu quo" find="\b(statu quo(''')?)(?=[\s,.)]|$)" replace="''$1''" />
+<Typo word="latin vice versa" find="\b(vice versa(''')?)(?=[\s,.)]|$)" replace="''$1''" />
+<Typo word="1er" find="\b ([1I]) ?i?er\b" replace=" {{$1er}}" />
+<Typo word="1re" find="\b ([1I]) ?(i?ere|i?ère|i?ére|re)\b" replace=" {{$1re}}" />
+<Typo word="ordinal" find="\b ([0-9]{1,3}) ?([eéè]|i?[eéè]me) \b" replace=" {{$1e}} " />
+<Typo word="espace insécable + ponctuation" find="&#160;([:;\!\?»])" replace=" $1" />
+<Typo word="espaces multiples + ponctuation" find="  +([:;\!\?»])" replace=" $1" />
+<Typo word="guillemet ouvrant" find="«&#160;" replace="« " />
+<Typo word="guillemet fermant" find="&#160;»" replace=" »" />
+<Typo word="Catégorie" find="\[\s*\[[ _]*(?:(:)[ _]*)?(?:fr[ _]*:[ _]*)?[cC]at[éèêe]gor(?:ie|y)[ _]*:[ _]*(.*[^\s*\]]+)\s*\]\s*\]" replace="[[$1Catégorie:$2]]" />
+<Typo word="CO2" find="\b[cC][oO]2\b(?!\|)" replace="{{fchim|CO|2}}" />
+<Typo word="CH4" find="\b[cC][hH]4\b(?!\|)" replace="{{fchim|CH|4}}" />
+<Typo word="H2O" find="\b[hH]2[oO]\b(?!\|)" replace="{{fchim|[H2]|O}}" />
+<Typo word="vitesse" find="(k?m)\.([sh])-([1-4])" replace="$1.$2&lt;sup&gt;-$3&lt;/sup&gt;" />
+<Typo word="vitesse" find="(k?m)\/([sh])([1-4])" replace="$1/$2&lt;sup&gt;$3&lt;/sup&gt;" />
+<Typo word="Image" find="\[\[[ _]*(?:(:)[ _]*)?(?:fr[ _]*:[ _]*)?[iI]mage[ _]*:[ _]*" replace="[[$1Image:" />
+<Typo word="Clr" find="&lt;[bB][rR] +[cC]lear *[=:] *&quot;?(left|right)&quot;? */?&gt;" replace="{{Clr|$1}}" />
+<Typo word="Clr" find="&lt;[bB][rR] +[cC]lear *[=:] *&quot;?(both|all)&quot;? */?&gt;" replace="{{Clr}}" />
+<Typo word="br" find="&lt;/[bB][rR] ?&gt;" replace="&lt;br /&gt;" />
+<Typo word="lang" find="{{lang\|([^\|]{2})\|('+)([^']+)('+)}}" replace="$2{{lang|$1|$3}}$4" />
+<Typo word="Coord" find="(-?) *([0-9]{1,3}) *° *(-?) *([0-9]{1,2}) *[\'\′] *([NS]) *,? *(-?) *([0-9]{1,3}) *° *(-?) *([0-9]{1,2}) *[\'\′] *([EW])" replace="{{Coord|$1$2|$3$4|$5|$6$7|$8$9|$10}}" />
+<Typo word="Coord" find="(-?) *([0-9]{1,3}) *° *(-?) *([0-9]{1,2}) *[\.,] *([0-9]{1,2}) *[\'\′] *([NS]) *,? *(-?) *([0-9]{1,3}) *° *(-?) *([0-9]{1,2}) *[\.,] *([0-9]{1,2}) *[\'\′] *([EW])" replace="{{Coord|$1$2|$3$4.$5|$6|$7$8|$9$10.$11|$12}}" />
+<Typo word="Coord" find="(-?) *([0-9]{1,3}) *° *(-?) *([0-9]{1,2}) *[\'\′] *(-?) *([0-9]{1,2}) *[&quot;\″] *([NS]) *,? *(-?) *([0-9]{1,3}) *° *(-?) *([0-9]{1,2}) *[\'\′] *(-?) *([0-9]{1,2}) *[&quot;\″] *([EW])" replace="{{Coord|$1$2|$3$4|$5$6|$7|$8$9|$10$11|$12$13|$14}}" />
+<Typo word="n°s" find="\bn(&#160;| )*(°|º|˚|{{o}})s(&#160;| )*([0-9–-]+)\b" replace="{{nos|$4}}" />
+<Typo word="N°s" find="\bN(&#160;| )*(°|º|˚|{{o}})s(&#160;| )*([0-9–-]+)\b" replace="{{Numéros avec majuscule|$4}}" />
+<Typo word="n°" find="\bn(&#160;| )*(°|º|˚|{{o}})(&#160;| )*([0-9–-]+)\b" replace="{{n°|$4}}" />
+<Typo word="N°" find="\bN(&#160;| )*(°|º|˚|{{o}})(&#160;| )*([0-9–-]+)\b" replace="{{Numéro avec majuscule|$4}}" />
+<Typo word="p." find="\b(P\.|pp?\.?)(&#160;| +)?([0-9][0-9–-]*)\b" replace="{{p.|$3}}" />
+<Typo word="titre section" find="\n(==={0,3})(?: *)([^\n=]+)(?: *)\1(?: *)\n" replace="\n$1 $2 $1\n" />
+<Typo word="ref,ref" find="(&lt;/ref&gt;|&lt;ref[^/]*/&gt;) *(&lt;sup&gt;)?[,;\.]?(&lt;/sup&gt;)? *&lt;ref\b" replace="$1{{,}}&lt;ref" />
+<Typo word="ref vs ponct" find="(\.|\.{3}|,| *;| *:| *\!| *\?)? *(&lt;ref[^&gt;]*&gt;[^&lt;]*&lt;/ref&gt;|&lt;ref[^/]*/&gt;)({{,}}&lt;ref[^&gt;]*&gt;[^&lt;]*&lt;/ref&gt;|{{,}}&lt;ref[^/]*/&gt;)?({{,}}&lt;ref[^&gt;]*&gt;[^&lt;]*&lt;/ref&gt;|{{,}}&lt;ref[^/]*/&gt;)?({{,}}&lt;ref[^&gt;]*&gt;[^&lt;]*&lt;/ref&gt;|{{,}}&lt;ref[^/]*/&gt;)?({{,}}&lt;ref[^&gt;]*&gt;[^&lt;]*&lt;/ref&gt;|{{,}}&lt;ref[^/]*/&gt;)?" replace="$2$3$4$5$6$1" />
+<Typo word="ref dotdot" find="(&lt;/ref&gt;|&lt;ref[^/]*/&gt;)\.{2}([^\.])" replace="$1.$2" />
+<Typo word="espace avant ref" find="([^|]) &lt;ref" replace="$1&lt;ref" />
+<Typo word="espace avant modèle de ref" find=" {{([Ee]fn|[Ss]fn|[Nn]ote)" replace="{{$1" />
+<Typo word="ruby" find="&lt;ruby&gt;&lt;rb&gt;([^&lt;]+)&lt;/rb&gt;&lt;rt&gt;([^&lt;]+)&lt;/rt&gt;&lt;/ruby&gt;" replace="{{Ruby|$1|$2}}" />
+<Typo word="Unité monnaie après xxx.xxx" find="([0-9]+)[.,]([0-9]+)(?:&#160;| )*(€|c€|dollars?|euros?|francs?|k€|M€|roupies?|roubles?|USD|\$|£|₤|¥)" replace="{{unité|$1.$2|$3}}" />
+<Typo word="Unité monnaie après xxx xxx.xxx" find="([0-9]+)(?:&#160;| )+([0-9]+)[.,]([0-9]+)(?:&#160;| )*(€|c€|dollars?|euros?|francs?|k€|M€|roupies?|roubles?|USD|\$|£|₤|¥)" replace="{{unité|$1$2.$3|$4}}" />
+<Typo word="Unité monnaie après xxx xxx xxx" find="([0-9]+)(?:&#160;| )+([0-9]+)(?:&#160;| )+([0-9]+)(?:&#160;| )*(€|c€|dollars?|euros?|francs?|k€|M€|roupies?|roubles?|USD|\$|£|₤|¥)" replace="{{unité|$1$2$3|$4}}" />
+<Typo word="Unité monnaie après xxx xxx" find="([0-9]+)(?:&#160;| )+([0-9]+)(?:&#160;| )*(€|c€|dollars?|euros?|francs?|k€|M€|roupies?|roubles?|USD|\$|£|₤|¥)" replace="{{unité|$1$2|$3}}" />
+<Typo word="Unité monnaie après xxx" find="([0-9]+)(?:&#160;| )*(€|c€|dollars?|euros?|francs?|k€|M€|roupies?|roubles?|USD|\$|£|₤|¥)" replace="{{unité|$1|$2}}" />
+<Typo word="Unité monnaie avant" find="(¤|₳|฿|¢|₡|₵|₢|₫|€|ƒ|₣|₲|₭|£|₤|₥|₦|₱|₧|₨|\$|₮|₩|¥|Ƶ|₯|₴|₪|₠|₰)+([0-9]+)(&#160;| )*([0-9]+)?[.,]([0-9]+)?( 000| milliers?| millions?| milliards?| billions?| billiards?)?\b" replace="{{unité|$2$4.$5$6|$1}}" />
+<Typo word="Unité monnaie avant 2" find="(¤|₳|฿|¢|₡|₵|₢|₫|€|ƒ|₣|₲|₭|£|₤|₥|₦|₱|₧|₨|\$|₮|₩|¥|Ƶ|₯|₴|₪|₠|₰)+([0-9]+)( 000| milliers?| millions?| milliards?| billions?| billiards?)?\b" replace="{{unité|$2$3|$1}}" />
+<Typo word="Unité température" find="([−-]?)([0-9]+)(&#160;| )*([0-9]*)[.,]([0-9]+)(&#160;| )*°([CF])" replace="{{tmp|$1$2$4.$5|°$7}}" />
+<Typo word="Unité température 2" find="([−-]?)([0-9]+)(&#160;| )*([0-9]*)(&#160;| )*([0-9]*)(&#160;| )*°([CF])" replace="{{tmp|$1$2$4$6|°$8}}" />
+<Typo word="Unité Pascal" find="([0-9]+)(&#160;| +)?([0-9]+)?[.,]([0-9]+)(&#160;| +)?(GPa|hPa|kPa|MPa|[pP]ascals?|Pa)\b(?!\|)" replace="{{unité|$1$3.$4|$6}}" />
+<Typo word="Unité Pascal 2" find="([0-9]+)(&#160;| +)?([0-9]+)?(&#160;| +)?([0-9]+)?(&#160;| +)?(GPa|hPa|kPa|MPa|[pP]ascals?|Pa)\b(?!\|)" replace="{{unité|$1$3$5|$7}}" />
+<Typo word="Unité octet" find="([0-9]+)(&#160;| )*([0-9]*)[.,]([0-9]+)(&#160;| )*(Eo|Eio|Go|Gio|ko|Kio|Mo|Mio|octets?|o|Po|Pio|To|Tio)\b" replace="{{unité|$1$3.$4|$6}}" />
+<Typo word="Unité octet 2" find="(?&lt;=[\s(])([0-9]+)(&#160;| )*([0-9]*)(&#160;| )*([0-9]*)(&#160;| )*(Eo|Eio|Go|Gio|ko|Kio|Mo|Mio|octets?|o|Po|Pio|To|Tio)\b" replace="{{unité|$1$3$5|$7}}" />
+<Typo word="Unité masse" find="(?&lt;=[\s(])([0-9]+)(&#160;| +)?([0-9]+)?[.,]([0-9]+)(&#160;| +)?(grammes?|g|µg|[gG]igatonnes?|Gt|k(?:ilogrammes?|[tg])|lb|mg|[mM][ée]gatonnes?|Mt|t(?:onnes?)?)\b(?!\|)" replace="{{unité|$1$3.$4|$6}}" />
+<Typo word="Unité masse 2" find="(?&lt;=[\s(])([0-9]+)(&#160;| +)?([0-9]+)?(&#160;| +)?([0-9]+)?(&#160;| +)?(grammes?|g|µg|[gG]igatonnes?|Gt|kg|kilogrammes?|kt|lb|mg|[mM][ée]gatonnes?|Mt|t|tonnes?)\b(?!\|)" replace="{{unité|$1$3$5|$7}}" />
+<Typo word="Unité Hertz" find="([0-9]+)(&#160;| +)?([0-9]+)?[.,]([0-9]+)(&#160;| +)?(GHz|[hH](?:ertz|z)|kHz|MHz|THz)\b(?!\|)" replace="{{unité|$1$3.$4|$6}}" />
+<Typo word="Unité Hertz 2" find="([0-9]+)(&#160;| +)?([0-9]+)?(&#160;| +)?([0-9]+)?(&#160;| +)?(GHz|[hH]ertz|hz|Hz|kHz|MHz|THz)\b(?!\|)" replace="{{unité|$1$3$5|$7}}" />
+<Typo word="Unité Volt" find="(?&lt;=[\s(])([0-9]+)(&#160;| +)?([0-9]+)?[.,]([0-9]+)(&#160;| +)?([vV]olts?|µV|GV|kV|mV|MV)\b(?!\|)" replace="{{unité|$1$3.$4|$6}}" />
+<Typo word="Unité Volt 2" find="(?&lt;=[\s(])([0-9]+)(&#160;| +)?([0-9]+)?(&#160;| +)?([0-9]+)?(&#160;| +)?([vV]olts?|µV|GV|kV|mV|MV)\b(?!\|)" replace="{{unité|$1$3$5|$7}}" />
+<Typo word="Unité électronvolt" find="(?&lt;=[\s(])([0-9]+)(&#160;| +)?([0-9]+)?[.,]([0-9]+)(&#160;| +)?(électronvolts?|électron-volts?|eV|µeV|GeV|keV|meV|MeV)\b(?!\|)" replace="{{unité|$1$3.$4|$6}}" />
+<Typo word="Unité électronvolt 2" find="(?&lt;=[\s(])([0-9]+)(&#160;| +)?([0-9]+)?(&#160;| +)?([0-9]+)?(&#160;| +)?(électronvolts?|électron-volts?|eV|µeV|GeV|keV|meV|MeV)\b(?!\|)" replace="{{unité|$1$3$5|$7}}" />
+<Typo word="Unité Ampère" find="(?&lt;=[\s(])([0-9]+)(&#160;| +)?([0-9]+)?[.,]([0-9]+)(&#160;| +)?([aA]mpères?|mA|µA|kA)\b(?!-)" replace="{{unité|$1$3.$4|$6}}" />
+<Typo word="Unité Ampère 2" find="(?&lt;=[\s(])([0-9]+)(&#160;| +)?([0-9]+)?(&#160;| +)?([0-9]+)?(&#160;| +)?([aA]mpères?|mA|µA|kA)\b(?!-)" replace="{{unité|$1$3$5|$7}}" />
+<Typo word="Unité Ohm" find="(?&lt;=[\s(])([0-9]+)(&#160;| +)?([0-9]+)?[.,]([0-9]+)(&#160;| +)?([oO]hms?|Ω|mΩ|µΩ|kΩ)\b(?!-)" replace="{{unité|$1$3.$4|$6}}" />
+<Typo word="Unité Ohm 2" find="(?&lt;=[\s(])([0-9]+)(&#160;| +)?([0-9]+)?(&#160;| +)?([0-9]+)?(&#160;| +)?([oO]hms?|Ω|mΩ|µΩ|kΩ)\b(?!-)" replace="{{unité|$1$3$5|$7}}" />
+<Typo word="Unité énergie" find="(?&lt;=[\s(])([0-9]+)(&#160;| +)?([0-9]+)?[.,]([0-9]+)(&#160;| +)?(EJ|GJ|[jJ]oules?|J|kJ|[kK]ilowatt-heure|kWh|MJ|PJ|TJ|kW⋅h|calories?|cal|GWh|ktep|MWh|Mtep|TWh|[tT]onnes? d'équivalent pétrole|tep|Wh)\b(?!\|)" replace="{{unité|$1$3.$4|$6}}" />
+<Typo word="Unité énergie 2" find="(?&lt;=[\s(])([0-9]+)(&#160;| +)?([0-9]+)?(&#160;| +)?([0-9]+)?(&#160;| +)?(EJ|GJ|[jJ]oules?|J|kJ|[kK]ilowatt-heure|kWh|MJ|PJ|TJ|kW⋅h|calories?|cal|GWh|ktep|MWh|Mtep|TWh|[tT]onnes? d'équivalent pétrole|tep|Wh)\b(?!\|)" replace="{{unité|$1$3$5|$7}}" />
+<Typo word="Unité puissance" find="(?&lt;=[\s(])([0-9]+)(&#160;| +)?([0-9]+)?[.,]([0-9]+)(&#160;| +)?([gG]igawatts?|GWth|GWel?|GWc?|[kK]ilowatts?|kWth|kWel?|kWc?|kVA|mW|[mM][ée]gawatts?|MWth|MWel?|MWc?|MVA|VA|[wW]atts?|Wc?|Wth|Wel?)\b(?!\|)" replace="{{unité|$1$3.$4|$6}}" />
+<Typo word="Unité puissance 2" find="(?&lt;=[\s(])([0-9]+)(&#160;| +)?([0-9]+)?(&#160;| +)?([0-9]+)?(&#160;| +)?([gG]igawatts?|GWth|GWel?|GWc?|[kK]ilowatts?|kW|kWth|kWel?|kWc|kVA|mW|[mM][ée]gawatts?|MWth|MWel?|MWc?|MVA|VA|[wW]atts?|Wth|Wel?|Wc?)\b(?!\|)" replace="{{unité|$1$3$5|$7}}" />
+<Typo word="Unité vitesse" find="([0-9]+)(&#160;| +)?([0-9]+)?[.,]([0-9]+)(&#160;| +)?(cm|km|m|mm)/([hs])\b(?!\|)" replace="{{unité|$1$3.$4|$6/$7}}" />
+<Typo word="Unité vitesse 2" find="([0-9]+)(&#160;| +)?([0-9]+)?(&#160;| +)?([0-9]+)?(&#160;| +)?(cm|km|m|mm)/([hs])\b(?!\|)" replace="{{unité|$1$3$5|$7/$8}}" />
+<Typo word="Unité baril" find="([0-9]+)(&#160;| +)?([0-9]+)?[.,]([0-9]+)(&#160;| +)?([bB]arils?|bl|bbl|Gbl|Gbbl|kbl|kbbl|Mbl|Mbbl)\b(?!\|)" replace="{{unité|$1$3.$4|$6}}" />
+<Typo word="Unité baril 2" find="([0-9]+)(&#160;| +)?([0-9]+)?(&#160;| +)?([0-9]+)?(&#160;| +)?([bB]arils?|bl|bbl|Gbl|Gbbl|kbl|kbbl|Mbl|Mbbl)\b(?!\|)" replace="{{unité|$1$3$5|$7}}" />
+<Typo word="Unité mètre carré" find="([0-9]+)?([0-9]+)(&#160;| +)?(cm|km|m|mm)(&#160;| +)?([1-9][0-9])" replace="{{unité|$1$2.$6|$4}}" />
+<Typo word="Unité mètre exposant" find="([0-9]+)(&#160;| +)?([0-9]+)?[.,]([0-9]+)(&#160;| +)?(cm|km|m|mm)(&lt;sup&gt;|{{|{{exp\|)?([2-9])(&lt;/sup&gt;|}})?" replace="{{unité|$1$3.$4|$6|$8}}" />
+<Typo word="Unité mètre exposant 2" find="([0-9]+)(&#160;| +)?([0-9]+)?(&#160;| +)?([0-9]+)?(&#160;| +)?(cm|km|m|mm)(&lt;sup&gt;|{{|{{exp\|)?([2-9])(&lt;/sup&gt;|}})?" replace="{{unité|$1$3$5|$7|$9}}" />
+<Typo word="Unité mètre carré 2" find="([0-9]+)(&#160;| +)?([0-9]+)?[.,]([0-9]+)(&#160;| +)?(cm|km|m|mm|Mm)(&lt;sup&gt;|{{|{{exp\|)?²(&lt;/sup&gt;|}})?" replace="{{unité|$1$3.$4|$6|2}}" />
+<Typo word="Unité mètre carré 3" find="([0-9]+)(&#160;| +)?([0-9]+)?(&#160;| +)?([0-9]+)?(&#160;| +)?(cm|km|m|mm|Mm)(&lt;sup&gt;|{{|{{exp\|)?²(&lt;/sup&gt;|}})?" replace="{{unité|$1$3$5|$7|2}}" />
+<Typo word="Unité mètre cube" find="([0-9]+)(&#160;| +)?([0-9]+)?[.,]([0-9]+)(&#160;| +)?(cm|km|m|mm|Mm)(&lt;sup&gt;|{{|{{exp\|)?³(&lt;/sup&gt;|}})?" replace="{{unité|$1$3.$4|$6|3}}" />
+<Typo word="Unité mètre cube 2" find="([0-9]+)(&#160;| +)?([0-9]+)?(&#160;| +)?([0-9]+)?(&#160;| +)?(cm|km|m|mm|Mm)(&lt;sup&gt;|{{|{{exp\|)?³(&lt;/sup&gt;|}})?" replace="{{unité|$1$3$5|$7|3}}" />
+<Typo word="Unité longueur" find="( |\n|\()([0-9]+)(&#160;| +)?([0-9]+)?[.,]([0-9]+)(&#160;| +)?(cm|centimètres?|ft|in|km|kilomètres?|mètres?|m|mm|millimètres?|miles?|pieds?|pouces?)\b" replace="$1{{unité|$2$4.$5|$7}}" />
+<Typo word="Unité longueur 2" find="( |\n|\()([0-9]+)(&#160;| +)?([0-9]+)?(&#160;| +)?([0-9]+)?(&#160;| +)?(cm|centimètres?|ft|in|km|kilomètres?|mètres?|m|mm|millimètres?|miles?|pieds?|pouces?)\b" replace="$1{{unité|$2$4$6|$8}}" />
+<Typo word="Unité surface" find="( |\n|\()([0-9]+)(&#160;| +)?([0-9]+)?[.,]([0-9]+)(&#160;| +)?([aA]res?|[hH]ectares?|ha)\b" replace="$1{{unité|$2$4.$5|$7}}" />
+<Typo word="Unité surface 2" find="( |\n|\()([0-9]+)(&#160;| +)?([0-9]+)?(&#160;| +)?([0-9]+)?(&#160;| +)?([aA]res?|[hH]ectares?|ha)\b" replace="$1{{unité|$2$4$6|$8}}" />
+<Typo word="Unité pourmille" find="( |\n|\()([0-9]+)(&#160;| +)?([0-9]+)?[.,]([0-9]+)(&#160;| +)?‰" replace="$1{{unité|$2$4.$5|‰}}" />
+<Typo word="Unité pourmille 2" find="( |\n|\()([0-9]+)(&#160;| +)?([0-9]+)?(&#160;| +)?([0-9]+)?(&#160;| +)?‰" replace="$1{{unité|$2$4$6|‰}}" />
+<Typo word="Unité ppm" find="(?&lt;=[\s(])([0-9]+)(&#160;| +)?([0-9]+)?[.,]([0-9]+)(&#160;| +)?(ppm)\b(?!-)" replace="{{unité|$1$3.$4|$6}}" />
+<Typo word="Unité ppm 2" find="(?&lt;=[\s(])([0-9]+)(&#160;| +)?([0-9]+)?(&#160;| +)?([0-9]+)?(&#160;| +)?(ppm)\b(?!-)" replace="{{unité|$1$3$5|$7}}" />
+<Typo word="formatnum" find="(?&lt;=[\s|(])((?:'''?)?)([0-9]{1,3})(?: |&#160;)([0-9]{3})(?:(?: |&#160;)([0-9]{3}))?(?:(?: |&#160;)([0-9]{3}))?(?:(?: |&#160;)([0-9]{3}))?(?:(?: |&#160;)([0-9]{3}))?(?! *[,.]?\d)\1(?=[,.\s|)&lt;⌊])" replace="$1{{formatnum:$2$3$4$5$6$7}}$1" />
+<Typo word="Modèle Liens" find="\x2a(?:&#160;| )*\{\{(?:&#160;| )*[Ll]iens( de biographie)?(?:&#160;| )*(?=(?:\||\}\}))" replace="{{Liens$1" />
+<Typo word="Modèle Portail" find="({{[Pp]ortail\|)(.*?)(\|)(}})" replace="$1$2$4" />
+<Typo word="Modèle Portail 2" find="({{[Pp]ortail\|)(.*?)(\|\|)(.*?)(}})" replace="$1$2|$4$5" />
+<Typo word="Abkhazie" find="\b[aA][bhk]*azie\b" replace="Abkhazie" />
+<Typo word="Afghanistan" find="\b[aA]fgh?ann?istan\b" replace="Afghanistan" />
+<Typo word="Afghanistan 2" find="\b[aA]fhg?an?istan\b" replace="Afghanistan" />
+<Typo word="Albanie" find="\b[aA]ll?bann?ie\b" replace="Albanie" />
+<Typo word="Algérie" find="\b[aA]llg[eéèêë]rie\b" replace="Algérie" />
+<Typo word="Allemagne" find="\b[aA]ll?emagne\b" replace="Allemagne" />
+<Typo word="Andorre" find="\b[aA]ndorr?e\b" replace="Andorre" />
+<Typo word="Angleterre" find="\b[aA]ngleterr?e\b" replace="Angleterre" />
+<Typo word="Angola" find="\b[aA]ngoll?a\b" replace="Angola" />
+<Typo word="Arménie" find="\b[aA]rm[eéèêë]nie\b" replace="Arménie" />
+<Typo word="Australie" find="\b[aA]ustrall?ie\b" replace="Australie" />
+<Typo word="Autriche" find="\bautriche\b" replace="Autriche" />
+<Typo word="Bahamas" find="\bbahamas\b" replace="Bahamas" />
+<Typo word="Bahreïn" find="\b[bB]ahre[iï]n\b" replace="Bahreïn" />
+<Typo word="Bahreïn 2" find="\b[lL]e [bB]ahre[iï]n\b" replace="Bahreïn" />
+<Typo word="Bangladesh" find="\bbangladesh\b" replace="Bangladesh" />
+<Typo word="Belgique" find="\b[bB][eéèêë]lgique\b" replace="Belgique" />
+<Typo word="Belize" find="\b[bB][eéèêë]ll?ize\b" replace="Belize" />
+<Typo word="Benelux" find="\b[bB][eéèêë]n[eéèêë]lux\b" replace="Benelux" />
+<Typo word="Birmanie" find="\b[bB]irmann?ie\b" replace="Birmanie" />
+<Typo word="Bolivie" find="\b[bB]oll?ivie\b" replace="Bolivie" />
+<Typo word="Bosnie-et-Herzégovine" find="\b[bB]osnie[ -]et[ -]([hH])[éeèêë]r[sz][éeèêë]gg?ovine\b" replace="Bosnie-et-Herzégovine" />
+<Typo word="Bosnie-Herzégovine" find="\b[bB]osnie[ -]([hH])[éeèêë]r[sz][éeèêë]gg?ovine\b" replace="Bosnie-Herzégovine" />
+<Typo word="Botswana" find="\b[bB]os?ts?wann?a\b" replace="Botswana" />
+<Typo word="Brésil" find="\b[bB]r[eé][sz]il\b" replace="Brésil" />
+<Typo word="Bulgarie" find="\b[bB]ulgarr?ie\b" replace="Bulgarie" />
+<Typo word="Burkina" find="\b[bB]urkinn?a\b" replace="Burkina" />
+<Typo word="Burkina Faso" find="\b[bB]urkinn?a[ -]([fF])ass?o\b" replace="Burkina Faso" />
+<Typo word="Cambodge" find="\b[cC]a[mn]bodge\b" replace="Cambodge" />
+<Typo word="Cameroun" find="\b[cC]amm?err?oun\b" replace="Cameroun" />
+<Typo word="Canada" find="\b[cC]ann?ada\b" replace="Canada" />
+<Typo word="Caraïbes" find="\b([cC])arr?a[iïî]bb?e(s?)\b" replace="$1araïbe$2" />
+<Typo word="Ceylan" find="\bceylan\b" replace="Ceylan" />
+<Typo word="Cisjordanie" find="\b[cC]isjordann?ie?\b" replace="Cisjordanie" />
+<Typo word="Colombie" find="\b[cC]oll?o[mn]bie?\b" replace="Colombie" />
+<Typo word="Comores" find="\b[cC]omm?orr?es?\b" replace="Comores" />
+<Typo word="Congo" find="\bcongo\b" replace="Congo" />
+<Typo word="Corée" find="\b[ckCK]orr?[eéèêë]e\b" replace="Corée" />
+<Typo word="Costa Rica" find="\b[cC]osta[ -][rR]ica\b" replace="Costa Rica" />
+<Typo word="Côte d'Ivoire" find="\b[cC][oô]tt?es?[ -]d('|’)[iI]vo[iïî]rr?es?\b" replace="Côte d$1Ivoire" />
+<Typo word="Croatie" find="\bcroatie\b" replace="Croatie" />
+<Typo word="Danemark" find="\b[dD]ann?emm?arc?k\b" replace="Danemark" />
+<Typo word="Djibouti" find="\b[dD]jibb?outt?ie?s?\b" replace="Djibouti" />
+<Typo word="Dominique" find="\b[dD]omm?inn?ique\b" replace="Dominique" />
+<Typo word="Écosse" find="\b[eéE]cosse\b" replace="Écosse" />
+<Typo word="Égypte" find="\b[eéE]gypte\b" replace="Égypte" />
+<Typo word="Équateur" find="\b[EÉ]quatt?eur\b" replace="Équateur" />
+<Typo word="Émirats arabes unis" find="\b[eéEÉ]mm?irr?at?e?s?[ -][aA]rr?abb?es?[ -][uU]nn?is?\b" replace="Émirats arabes unis" />
+<Typo word="Érythrée" find="\b[eéEÉ]rr?[iy]h?tt?h?r[ée]e?\b" replace="Érythrée" />
+<Typo word="Espagne" find="\bespagne\b" replace="Espagne" />
+<Typo word="Estonie" find="\b[eéèEÉÈ]stonn?ie\b" replace="Estonie" />
+<Typo word="États-Unis" find="\b[eéÉE]tats?(?:-|_| +)[uU]nis?\b" replace="États-Unis" />
+<Typo word="Éthiopie" find="\b[eéE]thiopie\b" replace="Éthiopie" />
+<Typo word="Fidji" find="\bfidji\b" replace="Fidji" />
+<Typo word="Finlande" find="\bfinlande\b" replace="Finlande" />
+<Typo word="France" find="\bfrance\b" replace="France" />
+<Typo word="Gabon" find="\bgabon\b" replace="Gabon" />
+<Typo word="Gambie" find="\bgambie\b" replace="Gambie" />
+<Typo word="Géorgie" find="\bgéorgie\b" replace="Géorgie" />
+<Typo word="Ghana" find="\bghana\b" replace="Ghana" />
+<Typo word="Gibraltar" find="\bgibraltar\b" replace="Gibraltar" />
+<Typo word="Grande-Bretagne" find="\b[gG]rande[ -][bB]retagne\b" replace="Grande-Bretagne" />
+<Typo word="Grèce" find="\bgrèce\b" replace="Grèce" />
+<Typo word="Groenland" find="\b[gG]r(oe|oë|ø)nlande?\b" replace="Gr$1nland" />
+<Typo word="Guatemala" find="\b[gG]u?att?([eé])mm?all?a\b" replace="Guat$1mala" />
+<Typo word="Guinée-Bissau" find="\b[gG]uinn?ée?[ -][bB]is[seaou]*\b" replace="Guinée-Bissau" />
+<Typo word="Guyana" find="\bguyana\b" replace="Guyana" />
+<Typo word="Haute-Volta" find="\b[hH]aute[ -][vV]olta\b" replace="Haute-Volta" />
+<Typo word="Honduras" find="\b[hH]o[mn]durr?as?\b" replace="Honduras" />
+<Typo word="Hongrie" find="\b[hH]ongrie?\b" replace="Hongrie" />
+<Typo word="Ile-de-France" find="\b[iI]le[ -]de[ -][fF]rance\b" replace="Ile-de-France" />
+<Typo word="Île-de-France" find="\b[îÎ]le[ -]de[ -][fF]rance\b" replace="Île-de-France" />
+<Typo word="Indochine" find="\b[iI]ndochinn?e\b" replace="Indochine" />
+<Typo word="Irlande/Islande" find="\bi([rs])lande\b" replace="I$1lande" />
+<Typo word="Italie" find="\bitalie\b" replace="Italie" />
+<Typo word="Itchkérie" find="\b[iI]t?chk[éeèëê]rr?ie?\b" replace="Itchkérie" />
+<Typo word="Jamaïque" find="\b[jJ]amm?a[iï]que\b" replace="Jamaïque" />
+<Typo word="Jordanie" find="\b[jJ]ordann?ie?\b" replace="Jordanie" />
+<Typo word="Kazakhstan" find="\b[kK]a[sz]z?ac?h?kh?stan\b" replace="Kazakhstan" />
+<Typo word="Kenya" find="\b[kK]enn?ya\b" replace="Kenya" />
+<Typo word="Kirghizistan" find="\b[kK]ih?rh?gg?h?i?[sz]i?h?s?tan\b" replace="Kirghizistan" />
+<Typo word="Kiribati" find="\b[kK]irr?ibb?h?att?h?i\b" replace="Kiribati" />
+<Typo word="Kosovo" find="\bkos(s?)ovo\b" replace="Kos$1ovo" />
+<Typo word="Koweït" find="\b[kK]oh?w[éeèëê][iîï]th?\b" replace="Koweït" />
+<Typo word="Kurdistan" find="\b[kK]urdh?isth?an\b" replace="Kurdistan" />
+<Typo word="Lesotho" find="\b[lL]e[sz]ott?h?o\b" replace="Lesotho" />
+<Typo word="Lettonie" find="\b[lL]ett?onn?ie?\b" replace="Lettonie" />
+<Typo word="Liban" find="\b[lL]ibb?an\b" replace="Liban" />
+<Typo word="Libéria" find="\b[lL]ibb?([ée])rr?ia\b" replace="Lib$1ria" />
+<Typo word="Libye" find="\b[lL][iy]b[iy]e\b" replace="Libye" />
+<Typo word="Liechtenstein" find="\b[lL]ie?chtens?th?[ae]i?n\b" replace="Liechtenstein" />
+<Typo word="Lituanie" find="\b[lL]itt?uann?ie?\b" replace="Lituanie" />
+<Typo word="Luxembourg" find="\bluxembourg\b" replace="Luxembourg" />
+<Typo word="Macao" find="\bmacao\b" replace="Macao" />
+<Typo word="Madagascar" find="\b[mM]add?agg?ascar\b" replace="Madagascar" />
+<Typo word="Malaisie" find="\b[mM]all?aisie\b" replace="Malaisie" />
+<Typo word="Malawi" find="\b[mM]all?awie?\b" replace="Malawi" />
+<Typo word="Maldives" find="\b[mM]aldives?\b" replace="Maldives" />
+<Typo word="Maroc" find="\bmaroc\b" replace="Maroc" />
+<Typo word="Maurice" find="\bmaurice\b" replace="Maurice" />
+<Typo word="Mauritanie" find="\b[mM]aurr?itt?ann?ie?\b" replace="Mauritanie" />
+<Typo word="Mayotte" find="\bmayotte\b" replace="Mayotte" />
+<Typo word="Mexique" find="\bmexique\b" replace="Mexique" />
+<Typo word="Micronésie" find="\b[mM]icronn?[éeèëê]sie?\b" replace="Micronésie" />
+<Typo word="Moldavie" find="\b[mM]oldavie?\b" replace="Moldavie" />
+<Typo word="Moldova" find="\bmoldova\b" replace="Moldova" />
+<Typo word="Mongolie" find="\b[mM]ongoll?ie?\b" replace="Mongolie" />
+<Typo word="Monténégro" find="\b[mM]o[mn]t[éeèëê]nn?[éeèëê]gros?\b" replace="Monténégro" />
+<Typo word="Mozambique" find="\b[mM]o[sz][ae][mn]biques?\b" replace="Mozambique" />
+<Typo word="Myanmar" find="\b[mM]ya[mn][mn]ar\b" replace="Myanmar" />
+<Typo word="Nauru" find="\bnauru\b" replace="Nauru" />
+<Typo word="Népal" find="\bnépal\b" replace="Népal" />
+<Typo word="Nicaragua" find="\b[nN]icc?arr?ag[uü]?[aä]s?\b" replace="Nicaragua" />
+<Typo word="Niger" find="\bniger\b" replace="Niger" />
+<Typo word="Nigéria" find="\bnig([ée])ria\b" replace="Nig$1ria" />
+<Typo word="Norvège" find="\b[nN]orv[éeèêë]ge\b" replace="Norvège" />
+<Typo word="Nouvelle-Calédonie" find="\b[nN]ouvell?es?[ -][cC]all[éeèêë]donn?ie?\b" replace="Nouvelle-Calédonie" />
+<Typo word="Nouvelle-Zélande" find="\b[nN]ouvell?es?[ -][zZ][éeèêë]ll?[ae]ndes?\b" replace="Nouvelle-Zélande" />
+<Typo word="Oman" find="\boman\b" replace="Oman" />
+<Typo word="Ossétie" find="\b[oO](?:c|ss?)étie?\b" replace="Ossétie" />
+<Typo word="Ouganda" find="\bouganda\b" replace="Ouganda" />
+<Typo word="Ouzbékistan" find="\b[oO]u?[sz]b[éeèêë][chk]*is?ts?[ae]n\b" replace="Ouzbékistan" />
+<Typo word="Pakistan" find="\b([pP])ac?kistan\b" replace="Pakistan" />
+<Typo word="Palaos" find="\bpala(os|u)\b" replace="Pala$1" />
+<Typo word="Palestine" find="\b[pP]all?estinn?e" replace="Palestine" />
+<Typo word="Papouasie-Nouvelle-Guinée" find="\b[pP]app?ouh?a[sz]ie?[ -][nN]ouvell?e[ -][gG]u?inn?ée?\b" replace="Papouasie-Nouvelle-Guinée" />
+<Typo word="Paraguay" find="\b[pP]arr?ag[uü?][aä]y\b" replace="Paraguay" />
+<Typo word="Pays-Bas" find="\b[pP]ays[ -][bB]as\b" replace="Pays-Bas" />
+<Typo word="Pays baltes" find="\b([pP])ays[ -][bB]altes\b" replace="$1ays baltes" />
+<Typo word="Pays basque" find="\b[pP]ays[ -][bB]asque\b" replace="Pays basque" />
+<Typo word="Pérou" find="\b[pP][eé]rou\b" replace="Pérou" />
+<Typo word="Philippines" find="\b([pP])hill?ipp?inn?(e?)(s?)\b" replace="$1hilippin$2$3" />
+<Typo word="Pologne" find="\b[pP]oll?ogne\b" replace="Pologne" />
+<Typo word="Porto Rico" find="\b[pP]orto[ -][rR]icc?o\b" replace="Porto Rico" />
+<Typo word="Portugal" find="\bportugal\b" replace="Portugal" />
+<Typo word="Puntland" find="\bpuntland\b" replace="Puntland" />
+<Typo word="Qatar" find="\b[qQ]u?atar\b" replace="Qatar" />
+<Typo word="Reykjavik" find="\b[rR]eykjavík\b" replace="Reykjavik" />
+<Typo word="Roumanie" find="\b[rR]oumm?ann?ie?\b" replace="Roumanie" />
+<Typo word="Royaume-Uni" find="\b[rR]oyaume-[uU]ni\b" replace="Royaume-Uni" />
+<Typo word="Russie" find="\brussie\b" replace="Russie" />
+<Typo word="Rwanda" find="\b[rR]wa[mn]da\b" replace="Rwanda" />
+<Typo word="Sahara occidental" find="\b[sS]ahara[ -][oO]cc?idd?ental\b" replace="Sahara occidental" />
+<Typo word="Salomon" find="\bsalomon\b" replace="Salomon" />
+<Typo word="Salvador" find="\bsalvador\b" replace="Salvador" />
+<Typo word="Samoa" find="\bsamoa\b" replace="Samoa" />
+<Typo word="Sénégal" find="\bsénégal\b" replace="Sénégal" />
+<Typo word="Serbie" find="\bserbie\b" replace="Serbie" />
+<Typo word="Seychelles" find="\b[sS][éeèêë][iy]chell?es?\b" replace="Seychelles" />
+<Typo word="Sierra Leone" find="\b[sS]ierr?a[ -][lL][éeèêë]onn?e\b" replace="Sierra Leone" />
+<Typo word="Singapour" find="\bsingapour\b" replace="Singapour" />
+<Typo word="Slovaquie/Slovénie" find="\bslov(aquie|énie)\b" replace="Slov$1" />
+<Typo word="Sri Lanka" find="\b[sS]ri[ -][lL]a[mn]c?ka\b" replace="Sri Lanka" />
+<Typo word="Somaliland" find="\b[sS]omm?all?ill?and\b" replace="Somaliland" />
+<Typo word="Suède" find="\b[sS]u[eéèêë]de\b" replace="Suède" />
+<Typo word="Suriname" find="\b[sS]urr?inn?amm?(e?)\b" replace="Surinam$1" />
+<Typo word="Swaziland" find="\b[sS]wazz?ill?ande?\b" replace="Swaziland" />
+<Typo word="Syrie" find="\bsyrie\b" replace="Syrie" />
+<Typo word="Tadjikistan" find="\b[tT]a[dj]*i[chk]*i[sth]*an\b" replace="Tadjikistan" />
+<Typo word="Taïwan" find="\bta([iï])wan\b" replace="Ta$1wan" />
+<Typo word="Tanzanie" find="\b[tT]anzanie?\b" replace="Tanzanie" />
+<Typo word="Tchad" find="\btchad\b" replace="Tchad" />
+<Typo word="Tchétchénie" find="\b[tT]ch[eéèêë]t?ch[eéèêë]nn?ie?\b" replace="Tchétchénie" />
+<Typo word="Tchécoslovaquie" find="\b[tT]ch[eéèêë][ck]*oslovaquie?\b" replace="Tchécoslovaquie" />
+<Typo word="Tchéquie" find="\b[tT]ch[eéèêë](?:[chk]*|qu)ie?\b" replace="Tchéquie" />
+<Typo word="Thaïlande" find="\b[tT]h?a[iï]ll?ande\b" replace="Thaïlande" />
+<Typo word="Timor" find="\btimor\b" replace="Timor" />
+<Typo word="Togo" find="\btogo\b" replace="Togo" />
+<Typo word="Transnistrie" find="\b[tT]ransi?nn?i?strie?\b" replace="Transnistrie" />
+<Typo word="Trinité-et-Tobago" find="\b[tT]rinn?i(dad|té)[ -]et[ -][tT]obb?agg?o\b" replace="Trini$1-et-Tobago" />
+<Typo word="Tunisie" find="\btunisie\b" replace="Tunisie" />
+<Typo word="Turkménistan" find="\b[tT]urc?km[eéèêë]?nis?tan\b" replace="Turkménistan" />
+<Typo word="Turquie" find="\b[tT]urc?quie\b" replace="Turquie" />
+<Typo word="Tuvalu" find="\btuvalu\b" replace="Tuvalu" />
+<Typo word="Ukraine" find="\bukraine\b" replace="Ukraine" />
+<Typo word="Union soviétique" find="\b[uU]nion[ -][sS]oviétique\b" replace="Union soviétique" />
+<Typo word="Uruguay" find="\b[uU]rr?ugg?u?a[iïy]\b" replace="Uruguay" />
+<Typo word="Vanuatu" find="\b[vV]ann?uatt?u\b" replace="Vanuatu" />
+<Typo word="Vatican" find="\b[vV]att?icc?an\b" replace="Vatican" />
+<Typo word="Venezuela" find="\b[vV][eéè]nn?[eéè]zu[eéè]ll?a\b" replace="Venezuela" />
+<Typo word="Wallis-et-Futuna" find="\b[wW]all?is[ -]et[ -][fF]utt?unn?a\b" replace="Wallis-et-Futuna" />
+<Typo word="Zambie" find="\b[zZ]a[mn]bie\b" replace="Zambie" />
+<Typo word="Zimbabwe" find="\b[zZ]i[mn]bab(?:ou|w)[eé]e?\b" replace="Zimbabwe" />
+<Typo word="Afrique" find="\b[aA]ff?rique\b" replace="Afrique" />
+<Typo word="Afrique du Sud" find="Afrique du sud" replace="Afrique du Sud" />
+<Typo word="Amérique" find="\b[aA]m[eéèêë]rique(s?)\b" replace="Amérique$1" />
+<Typo word="Amérique du Sud" find="Amérique du sud" replace="Amérique du Sud" />
+<Typo word="Amérique du Nord" find="Amérique du nord" replace="Amérique du Nord" />
+<Typo word="Antarctique" find="\b([aA]nta|[aA])rtique(s?)\b" replace="$1rctique$2" />
+<Typo word="Asie" find="\b[aA]sie\b" replace="Asie" />
+<Typo word="Asie du Sud-Est" find="Asie du sud-est" replace="Asie du Sud-Est" />
+<Typo word="Europe" find="\beurope\b" replace="Europe" />
+<Typo word="Europe de l'Est" find="\b([eE])urope de l(['’])[eE]st\b" replace="Europe de l$2Est" />
+<Typo word="Europe de l'Ouest" find="\b([eE])urope de l(['’])[oO]uest\b" replace="Europe de l$2Ouest" />
+<Typo word="Europe du Nord" find="Europe du nord" replace="Europe du Nord" />
+<Typo word="Europe du Sud" find="Europe du sud" replace="Europe du Sud" />
+<Typo word="Océanie" find="\b[oO]c[eéèêë]anie\b" replace="Océanie" />
+<Typo word="virgule sans espace après" find="(?&lt;=[^0-9 {'])( *),(?![\s&amp;])(?!&lt;br)(?!''')" replace="$1, " />
+<Typo word="virgule avec plusieurs espaces" find="(?&lt;=[^0-9 {]) *,( |&#160;) +(?!\s)" replace=", " />
+<Typo word="virgule avant apostrophes" find=",('+) +" replace="$1, " />
+<Typo word="virgule fin de ligne" find="(?&lt;=[^0-9 ]) +,$" replace="," />
+<Typo word="→" find="([^-])[-—–]&gt;" replace="$1→" />
+</Typos>

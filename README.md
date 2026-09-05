@@ -19,7 +19,7 @@ OviX est un outil de maintenance Wikipédia conçu pour détecter, analyser et r
 ### Prérequis
 - Python 3.8+
 - Node.js 16+ (pour le frontend)
-- Compte Wikipédia avec permissions bot
+- Compte Wikipédia
 
 ### Étapes
 

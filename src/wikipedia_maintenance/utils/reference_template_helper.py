@@ -146,13 +146,16 @@ class ReferenceTemplateHelper:
                     config_data = yaml.safe_load(f)
                     if config_data and 'domain_to_site_name' in config_data:
                         # Extract the site names from the YAML format
-                        # YAML format: "domain.com: [[Site Name]]" -> we want "domain.com": "[[Site Name]]"
-                        # We preserve the wiki link format [[...]] for use in |site= parameter
+                        # YAML format: "domain.com: [[Site Name]]" -> parsed as [['Site Name']]
+                        # We need to extract the inner string and reconstruct [[Site Name]]
                         mapping = {}
                         for domain, wiki_links in config_data['domain_to_site_name'].items():
                             if wiki_links and isinstance(wiki_links, list) and len(wiki_links) > 0:
-                                # Keep the wiki link format [[Site Name]] as-is
-                                site_name = wiki_links[0]
+                                inner = wiki_links[0]
+                                if isinstance(inner, list) and len(inner) > 0:
+                                    site_name = f"[[{inner[0]}]]"
+                                else:
+                                    site_name = str(inner)
                                 mapping[domain] = site_name
                         logger.info(f"Loaded {len(mapping)} domain->site name mappings from YAML")
                         return mapping

@@ -200,10 +200,15 @@ async def run_publication_worker(
                     config_data = yaml.safe_load(f)
                     if config_data and 'domain_to_site_name' in config_data:
                         # Extract the site names from the YAML format
-                        # YAML format: "domain.com: [[Site Name]]" -> we want "domain.com": "[[Site Name]]"
+                        # YAML format: "domain.com: [[Site Name]]" -> parsed as [['Site Name']]
+                        # We need to extract the inner string and reconstruct [[Site Name]]
                         for domain, wiki_links in config_data['domain_to_site_name'].items():
                             if wiki_links and isinstance(wiki_links, list) and len(wiki_links) > 0:
-                                site_names[domain] = wiki_links[0]
+                                inner = wiki_links[0]
+                                if isinstance(inner, list) and len(inner) > 0:
+                                    site_names[domain] = f"[[{inner[0]}]]"
+                                else:
+                                    site_names[domain] = str(inner)
             except Exception as e:
                 logger.warning(f"Could not load site names from config: {e}")
             

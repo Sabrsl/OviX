@@ -1,4 +1,4 @@
-# OviX - Bot Wikipedia Dead Linker
+# OviX
 
 **Attention** - Outil en cours de développement. OviX n'est pas encore déployé en production.
 

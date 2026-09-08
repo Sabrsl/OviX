@@ -526,10 +526,8 @@ class DomainEnrichmentService:
                 if not normalized:
                     continue
 
-                # Handle both string format and list format [[site_name]]
-                resolved_name = site_name
-                while isinstance(resolved_name, list) and len(resolved_name) > 0:
-                    resolved_name = resolved_name[0]
+                # Normalize site name to string format for consistent comparison
+                resolved_name = self._normalize_site_name(site_name)
 
                 existing[normalized] = resolved_name
 
@@ -539,6 +537,23 @@ class DomainEnrichmentService:
         except Exception as e:
             logger.error(f"Error loading existing domains: {e}")
             return {}
+
+    def _normalize_site_name(self, site_name: Any) -> str:
+        """
+        Normalize site name to string, handling list formats.
+        
+        Args:
+            site_name: Site name (string or list format)
+            
+        Returns:
+            Normalized string
+        """
+        if isinstance(site_name, list):
+            # Handle nested list format [['Site Name']]
+            while isinstance(site_name, list) and len(site_name) > 0:
+                site_name = site_name[0]
+            return str(site_name) if site_name else ""
+        return str(site_name) if site_name else ""
 
     def _check_conflict(self, domain: str, site_name: str) -> Optional[str]:
         """
@@ -551,10 +566,14 @@ class DomainEnrichmentService:
         Returns:
             Conflict reason or None if no conflict
         """
+        # Normalize the proposed site name
+        normalized_proposed = self._normalize_site_name(site_name)
+        
         # Check exact match
         if domain in self._existing_domains:
             existing_site = self._existing_domains[domain]
-            if existing_site != site_name:
+            normalized_existing = self._normalize_site_name(existing_site)
+            if normalized_existing != normalized_proposed:
                 return f"Domain already mapped to '{existing_site}'"
             # Same mapping, no conflict - will be marked as already_present
 
@@ -563,7 +582,8 @@ class DomainEnrichmentService:
             non_www_variant = domain[4:]
             if non_www_variant in self._existing_domains:
                 existing_site = self._existing_domains[non_www_variant]
-                if existing_site != site_name:
+                normalized_existing = self._normalize_site_name(existing_site)
+                if normalized_existing != normalized_proposed:
                     return f"Domain variant '{non_www_variant}' already mapped to '{existing_site}'"
         else:
             www_variant = f"www.{domain}"
@@ -610,6 +630,7 @@ class DomainEnrichmentService:
 
             # Use the first official website (could be enhanced to handle multiple)
             url = entity.official_websites[0]
+            # Normalize domain respecting user's keep_www choice from UI
             domain = self._normalize_domain(url, keep_www=keep_www)
             if not domain:
                 logger.debug(f"Could not normalize domain from {url}")

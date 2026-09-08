@@ -10,6 +10,7 @@ import {
   XCircle,
   CheckCircle,
 } from 'lucide-react'
+import Button from '../components/Button'
 
 interface Article {
   article_title: string
@@ -109,28 +110,14 @@ export default function PublishedDeadLinks() {
   const totalUncorrected = articles.reduce((sum, a) => sum + (a.uncorrected_count ?? 0), 0)
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
+    <div style={{ padding: '0 16px', maxWidth: '860px', margin: '0 auto' }}>
       {/* Header */}
       <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button
-            onClick={() => navigate(-1)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '8px 16px',
-              backgroundColor: '#1a1a1a',
-              border: '1px solid #2a2a2a',
-              borderRadius: '8px',
-              color: '#f5f5f5',
-              cursor: 'pointer',
-              fontSize: '13px'
-            }}
-          >
+          <Button variant="neutral" onClick={() => navigate(-1)}>
             <ArrowLeft style={{ width: '16px', height: '16px' }} />
             Retour
-          </button>
+          </Button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{
               width: '40px',
@@ -154,26 +141,10 @@ export default function PublishedDeadLinks() {
             </div>
           </div>
         </div>
-        <button
-          onClick={() => fetchData(filter)}
-          disabled={loading}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '8px 16px',
-            backgroundColor: '#1a1a1a',
-            border: '1px solid #2a2a2a',
-            borderRadius: '8px',
-            color: '#f5f5f5',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontSize: '13px',
-            opacity: loading ? 0.5 : 1
-          }}
-        >
+        <Button variant="neutral" onClick={() => fetchData(filter)} disabled={loading}>
           <RefreshCw style={{ width: '16px', height: '16px', animation: loading ? 'spin 1s linear infinite' : 'none' }} />
           Actualiser
-        </button>
+        </Button>
       </div>
 
       {/* Filter */}
@@ -186,36 +157,20 @@ export default function PublishedDeadLinks() {
         border: '1px solid #2a2a2a',
         borderRadius: '8px'
       }}>
-        <button
+        <Button
+          variant={filter === 'published' ? 'primary' : 'neutral'}
           onClick={() => setFilter('published')}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: filter === 'published' ? '#3b82f6' : 'transparent',
-            border: 'none',
-            borderRadius: '6px',
-            color: '#f5f5f5',
-            cursor: 'pointer',
-            fontSize: '13px',
-            fontWeight: filter === 'published' ? 600 : 400
-          }}
+          style={{ fontWeight: filter === 'published' ? 600 : 400 }}
         >
           Publiés
-        </button>
-        <button
+        </Button>
+        <Button
+          variant={filter === 'analyzed' ? 'primary' : 'neutral'}
           onClick={() => setFilter('analyzed')}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: filter === 'analyzed' ? '#3b82f6' : 'transparent',
-            border: 'none',
-            borderRadius: '6px',
-            color: '#f5f5f5',
-            cursor: 'pointer',
-            fontSize: '13px',
-            fontWeight: filter === 'analyzed' ? 600 : 400
-          }}
+          style={{ fontWeight: filter === 'analyzed' ? 600 : 400 }}
         >
           Analysés
-        </button>
+        </Button>
       </div>
 
       {/* Error */}
@@ -396,30 +351,18 @@ export default function PublishedDeadLinks() {
                         </div>
                       </td>
                       <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                        <button
+                        <Button
+                          variant="primary"
+                          style={{ margin: '0 auto' }}
                           onClick={() => navigate(
                             filter === 'published'
                               ? `/published-dead-links/${encodeURIComponent(article.article_title)}`
                               : `/analyzed-dead-links/${encodeURIComponent(article.article_title)}`
                           )}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: '#3b82f6',
-                            border: 'none',
-                            borderRadius: '6px',
-                            color: '#ffffff',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            fontWeight: 500,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            margin: '0 auto'
-                          }}
                         >
                           <ExternalLink style={{ width: '14px', height: '14px' }} />
                           Voir détails
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   ))}

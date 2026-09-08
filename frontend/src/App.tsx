@@ -22,6 +22,7 @@ import ArticleScheduler from './pages/ArticleScheduler'
 import PublishedDeadLinks from './pages/PublishedDeadLinks'
 import PublishedDeadLinksDetail from './pages/PublishedDeadLinksDetail'
 import AnalyzedDeadLinksDetail from './pages/AnalyzedDeadLinksDetail'
+import DomainManagement from './pages/DomainManagement'
 
 function App() {
   return (
@@ -49,6 +50,7 @@ function App() {
           <Route path="system/kill-switch" element={<SystemKillSwitch />} />
           <Route path="settings/wikipedia" element={<WikipediaConnection />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="settings/domains" element={<DomainManagement />} />
           <Route path="user-contributions" element={<UserContributions />} />
         </Route>
       </Routes>

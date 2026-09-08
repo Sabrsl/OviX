@@ -47,7 +47,7 @@ else:
 # Configure paths
 os.environ['PYWIKIBOT_DIR'] = str(PROJECT_ROOT)
 sys.path.insert(0, str(PROJECT_ROOT))
-sys.path.insert(0, str(PROJECT_ROOT / 'src'))
+sys.path.insert(0, str(PROJECT_ROOT / 'backend' / 'tests' / 'src'))
 
 # Configure logging
 log_dir = PROJECT_ROOT / "logs"
@@ -427,7 +427,9 @@ from backend.api.routes import (
     migration,
     stats_v2,
     stats_compare,
-    article_scheduler
+    article_scheduler,
+    domain_enrichment,
+    domain_management
 )
 
 # Register routes
@@ -446,6 +448,8 @@ app.include_router(migration.router, prefix="/api/migration", tags=["Migration"]
 app.include_router(stats_v2.router, tags=["Stats-V2"])
 app.include_router(stats_compare.router, tags=["Stats-Comparison"])
 app.include_router(article_scheduler.router, prefix="/api/article-scheduler", tags=["Article Scheduler"])
+app.include_router(domain_enrichment.router, prefix="/api/domain-enrichment", tags=["Domain Enrichment"])
+app.include_router(domain_management.router, prefix="/api/domain-management", tags=["Domain Management"])
 
 
 # ============================================================================

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { articleSchedulerApi } from '../api/system.api'
 import { articlesApi } from '../api/articles.api'
+import Button from '../components/Button'
 
 interface ArticleSchedulerConfig {
   article_count: number
@@ -140,15 +141,15 @@ export default function ArticleScheduler() {
   
   // Polling for real-time updates
   useEffect(() => {
-    if (isPolling) {
+    if (isPolling && schedulerStatus?.is_active) {
       const interval = setInterval(() => {
         fetchSchedulerStatus()
         fetchScheduledArticles()
-      }, 2000) // Poll every 2 seconds
-      
+      }, 5000) // Poll every 5 seconds instead of 2 seconds
+
       return () => clearInterval(interval)
     }
-  }, [isPolling, fetchSchedulerStatus, fetchScheduledArticles])
+  }, [isPolling, schedulerStatus?.is_active, fetchSchedulerStatus, fetchScheduledArticles])
   
   // Auto-start polling when scheduler becomes active
   useEffect(() => {
@@ -318,10 +319,10 @@ export default function ArticleScheduler() {
   
   if (loading) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out', maxWidth: '860px', margin: '0 auto', padding: '0 16px' }}>
         <div>
-          <h2 style={{ fontSize: '24px', fontWeight: 600, color: COLORS.textPrimary }}>Scheduler</h2>
-          <p style={{ color: COLORS.textSecondary, marginTop: '4px' }}>Traitement semi-automatique des articles en attente</p>
+          <h2 style={{ fontSize: '20px', fontWeight: 600, color: COLORS.textPrimary }}>Scheduler</h2>
+          <p style={{ color: COLORS.textSecondary, marginTop: '4px', fontSize: '13px' }}>Traitement semi-automatique des articles en attente</p>
         </div>
         <SkeletonBlock />
       </div>
@@ -355,7 +356,7 @@ export default function ArticleScheduler() {
         }
       `}</style>
       
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out', maxWidth: '860px', margin: '0 auto', padding: '0 16px' }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div>
@@ -364,44 +365,17 @@ export default function ArticleScheduler() {
               Traitement semi-automatique des articles en attente
             </p>
           </div>
-          <button
+          <Button
+            variant="neutral"
             onClick={() => {
               fetchSchedulerStatus()
               fetchArticlesToAnalyze()
             }}
             disabled={actionLoading}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 13px',
-              backgroundColor: COLORS.bgSubtle,
-              border: `1px solid ${COLORS.border}`,
-              borderRadius: '7px',
-              color: COLORS.textSecondary,
-              fontSize: '12px',
-              fontWeight: 500,
-              cursor: actionLoading ? 'not-allowed' : 'pointer',
-              opacity: actionLoading ? 0.6 : 1,
-              transition: 'background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.1s',
-            }}
-            onMouseEnter={(e) => {
-              if (actionLoading) return
-              e.currentTarget.style.borderColor = '#3a3a3a'
-              e.currentTarget.style.color = COLORS.textPrimary
-              e.currentTarget.style.backgroundColor = '#1f1f1f'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = COLORS.border
-              e.currentTarget.style.color = COLORS.textSecondary
-              e.currentTarget.style.backgroundColor = COLORS.bgSubtle
-            }}
-            onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
-            onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
           >
             <RefreshCw style={{ width: '12px', height: '12px' }} />
             Actualiser
-          </button>
+          </Button>
         </div>
 
         {/* Error message */}
@@ -495,34 +469,15 @@ export default function ArticleScheduler() {
                 <StatCard label="Publiés" value={schedulerStatus.articles_published} color={COLORS.success} />
                 <StatCard label="Erreurs" value={schedulerStatus.articles_error} color={COLORS.danger} />
               </div>
-              <button
+              <Button
+                variant="neutral"
                 onClick={() => {
                   setSchedulerStatus(null)
                 }}
-                style={{
-                  marginTop: '12px',
-                  padding: '6px 12px',
-                  backgroundColor: COLORS.bgSubtle,
-                  border: `1px solid ${COLORS.border}`,
-                  borderRadius: '6px',
-                  color: COLORS.textSecondary,
-                  fontSize: '11px',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.15s, border-color 0.15s, color 0.15s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#3a3a3a'
-                  e.currentTarget.style.color = COLORS.textPrimary
-                  e.currentTarget.style.backgroundColor = '#1f1f1f'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = COLORS.border
-                  e.currentTarget.style.color = COLORS.textSecondary
-                  e.currentTarget.style.backgroundColor = COLORS.bgSubtle
-                }}
+                style={{ marginTop: '12px', padding: '6px 12px', fontSize: '11px' }}
               >
                 Effacer les statistiques
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -584,22 +539,13 @@ export default function ArticleScheduler() {
                       e.currentTarget.style.boxShadow = 'none'
                     }}
                   />
-                  <button
+                  <Button
+                    variant="neutral"
                     onClick={() => setConfig({ ...config, article_count: availableArticlesCount })}
                     disabled={availableArticlesCount === 0}
-                    style={{
-                      padding: '8px 12px',
-                      backgroundColor: COLORS.bgSubtle,
-                      border: `1px solid ${COLORS.border}`,
-                      borderRadius: '6px',
-                      color: COLORS.textSecondary,
-                      fontSize: '12px',
-                      cursor: availableArticlesCount === 0 ? 'not-allowed' : 'pointer',
-                      opacity: availableArticlesCount === 0 ? 0.5 : 1
-                    }}
                   >
                     Tous
-                  </button>
+                  </Button>
                 </div>
                 <div style={{ fontSize: '11px', color: COLORS.textMuted, marginTop: '4px' }}>
                   {config.article_count} articles seront traités sur {availableArticlesCount} disponibles
@@ -745,172 +691,62 @@ export default function ArticleScheduler() {
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
             {!isActive ? (
               <>
-                <button
+                <Button
+                  variant="primary"
                   onClick={() => handleStart(config.article_count)}
                   disabled={actionLoading || availableArticlesCount === 0}
-                  style={{
-                    padding: '10px 20px',
-                    backgroundColor: COLORS.accent,
-                    border: 'none',
-                    borderRadius: '7px',
-                    color: '#ffffff',
-                    fontSize: '14px',
-                    fontWeight: 500,
-                    cursor: (actionLoading || availableArticlesCount === 0) ? 'not-allowed' : 'pointer',
-                    opacity: (actionLoading || availableArticlesCount === 0) ? 0.5 : 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    transition: 'filter 0.15s, transform 0.1s'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (actionLoading || availableArticlesCount === 0) return
-                    e.currentTarget.style.filter = 'brightness(1.1)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.filter = 'brightness(1)'
-                  }}
-                  onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
-                  onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                  style={{ padding: '10px 20px', fontSize: '14px' }}
                 >
                   <Play style={{ width: '16px', height: '16px' }} />
                   Analyser {config.article_count} articles
-                </button>
+                </Button>
                 
-                <button
+                <Button
+                  variant="danger"
                   onClick={() => {
                     if (confirm(`Vous êtes sur le point de lancer l'analyse de ${availableArticlesCount} articles. Continuer ?`)) {
                       handleStart(availableArticlesCount)
                     }
                   }}
                   disabled={actionLoading || availableArticlesCount === 0}
-                  style={{
-                    padding: '10px 20px',
-                    backgroundColor: COLORS.success,
-                    border: 'none',
-                    borderRadius: '7px',
-                    color: '#ffffff',
-                    fontSize: '14px',
-                    fontWeight: 500,
-                    cursor: (actionLoading || availableArticlesCount === 0) ? 'not-allowed' : 'pointer',
-                    opacity: (actionLoading || availableArticlesCount === 0) ? 0.5 : 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    transition: 'filter 0.15s, transform 0.1s'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (actionLoading || availableArticlesCount === 0) return
-                    e.currentTarget.style.filter = 'brightness(1.1)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.filter = 'brightness(1)'
-                  }}
-                  onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
-                  onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                  style={{ padding: '10px 20px', fontSize: '14px' }}
                 >
                   <Play style={{ width: '16px', height: '16px' }} />
                   Analyser tous
-                </button>
+                </Button>
               </>
             ) : isPaused ? (
-              <button
+              <Button
+                variant="neutral"
                 onClick={handleResume}
                 disabled={actionLoading}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: COLORS.success,
-                  border: 'none',
-                  borderRadius: '7px',
-                  color: '#ffffff',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  cursor: actionLoading ? 'not-allowed' : 'pointer',
-                  opacity: actionLoading ? 0.5 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  transition: 'filter 0.15s, transform 0.1s'
-                }}
-                onMouseEnter={(e) => {
-                  if (actionLoading) return
-                  e.currentTarget.style.filter = 'brightness(1.1)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.filter = 'brightness(1)'
-                }}
-                onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
-                onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                style={{ padding: '10px 20px', fontSize: '14px' }}
               >
                 <Play style={{ width: '16px', height: '16px' }} />
                 Reprendre
-              </button>
+              </Button>
             ) : (
-              <button
+              <Button
+                variant="primary"
                 onClick={handlePause}
                 disabled={actionLoading}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: COLORS.warning,
-                  border: 'none',
-                  borderRadius: '7px',
-                  color: '#ffffff',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  cursor: actionLoading ? 'not-allowed' : 'pointer',
-                  opacity: actionLoading ? 0.5 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  transition: 'filter 0.15s, transform 0.1s'
-                }}
-                onMouseEnter={(e) => {
-                  if (actionLoading) return
-                  e.currentTarget.style.filter = 'brightness(1.1)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.filter = 'brightness(1)'
-                }}
-                onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
-                onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                style={{ padding: '10px 20px', fontSize: '14px' }}
               >
                 <Pause style={{ width: '16px', height: '16px' }} />
                 Pause
-              </button>
+              </Button>
             )}
             
             {isActive && (
-              <button
+              <Button
+                variant="danger"
                 onClick={handleStop}
                 disabled={actionLoading}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: COLORS.danger,
-                  border: 'none',
-                  borderRadius: '7px',
-                  color: '#ffffff',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  cursor: actionLoading ? 'not-allowed' : 'pointer',
-                  opacity: actionLoading ? 0.5 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  transition: 'filter 0.15s, transform 0.1s'
-                }}
-                onMouseEnter={(e) => {
-                  if (actionLoading) return
-                  e.currentTarget.style.filter = 'brightness(1.1)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.filter = 'brightness(1)'
-                }}
-                onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
-                onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                style={{ padding: '10px 20px', fontSize: '14px' }}
               >
                 <Square style={{ width: '16px', height: '16px' }} />
                 Arrêter
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -943,10 +779,10 @@ export default function ArticleScheduler() {
                     alignItems: 'center',
                     gap: '4px',
                     padding: '3px 8px',
-                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                    backgroundColor: 'rgba(5, 150, 105, 0.15)',
+                    border: '1px solid rgba(5, 150, 105, 0.3)',
                     borderRadius: '4px',
-                    color: '#10b981',
+                    color: '#059669',
                     fontSize: '10px',
                     fontWeight: 500
                   }}>

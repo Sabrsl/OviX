@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { CheckCircle, XCircle, Clock, FileText, AlertTriangle } from 'lucide-react'
+import { CheckCircle, XCircle, Clock, FileText, AlertTriangle, RefreshCw } from 'lucide-react'
 import { publicationApi } from '../api/publication.api'
 import { historyApi } from '../api/history.api'
+import Button from '../components/Button'
 
 export default function PublicationPending() {
   const [publications, setPublications] = useState<any[]>([])
@@ -74,10 +75,10 @@ export default function PublicationPending() {
 
   if (error) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out', maxWidth: '860px', margin: '0 auto', padding: '0 16px' }}>
         <div>
-          <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#f5f5f5' }}>Publications en Attente</h2>
-          <p style={{ color: '#a0a0a0', marginTop: '4px' }}>Réviser et approuver les publications en attente</p>
+          <h2 style={{ fontSize: '20px', fontWeight: 600, color: '#f5f5f5' }}>Publications en Attente</h2>
+          <p style={{ color: '#a0a0a0', marginTop: '4px', fontSize: '13px' }}>Réviser et approuver les publications en attente</p>
         </div>
         <div style={{ display: 'flex', justifyContent: 'center', padding: '48px', backgroundColor: '#161616', borderRadius: '8px', border: '1px solid #2a2a2a' }}>
           <div style={{ textAlign: 'center', color: '#ef4444' }}>{error}</div>
@@ -87,18 +88,16 @@ export default function PublicationPending() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out', maxWidth: '860px', margin: '0 auto', padding: '0 16px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#f5f5f5' }}>Publications en Attente</h2>
-          <p style={{ color: '#a0a0a0', marginTop: '4px' }}>Réviser et approuver les publications en attente</p>
+          <h2 style={{ fontSize: '20px', fontWeight: 600, color: '#f5f5f5' }}>Publications en Attente</h2>
+          <p style={{ color: '#a0a0a0', marginTop: '4px', fontSize: '13px' }}>Réviser et approuver les publications en attente</p>
         </div>
-        <button
-          className="btn btn-secondary"
-          onClick={() => fetchPendingPublications()}
-        >
+        <Button variant="neutral" onClick={() => fetchPendingPublications()}>
+          <RefreshCw style={{ width: '14px', height: '14px' }} />
           Actualiser
-        </button>
+        </Button>
       </div>
 
       {/* Statistics */}
@@ -168,17 +167,17 @@ export default function PublicationPending() {
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <button 
-                    className="btn btn-secondary" 
+                  <Button
+                    variant="neutral"
                     style={{ fontSize: '12px', padding: '8px 12px' }}
                     onClick={() => {/* Handle review */}}
                   >
                     Réviser
-                  </button>
-                  <button 
-                    className="btn btn-primary" 
-                    style={{ 
-                      fontSize: '12px', 
+                  </Button>
+                  <Button
+                    variant="primary"
+                    style={{
+                      fontSize: '12px',
                       padding: '8px 12px',
                       opacity: publishedArticles.has(publication.article_title) ? 0.5 : 1,
                       cursor: publishedArticles.has(publication.article_title) ? 'not-allowed' : 'pointer'
@@ -187,14 +186,14 @@ export default function PublicationPending() {
                     onClick={() => {/* Handle approve */}}
                   >
                     {publishedArticles.has(publication.article_title) ? 'Déjà publié' : 'Approuver'}
-                  </button>
-                  <button 
-                    className="btn btn-danger" 
+                  </Button>
+                  <Button
+                    variant="danger"
                     style={{ fontSize: '12px', padding: '8px 12px' }}
                     onClick={() => {/* Handle reject */}}
                   >
                     Rejeter
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))}

@@ -20,9 +20,13 @@ import {
   Circle,
   Type,
   ExternalLink,
+  Globe,
 } from 'lucide-react'
 import { configApi, ConfigResponse, ConfigValidationResponse } from '../api/config.api'
 import { authApi } from '../api/auth.api'
+import Tooltip from '../components/Tooltip'
+import DomainEnrichmentSection from '../components/DomainEnrichmentSection'
+import Button from '../components/Button'
 
 // ---------------------------------------------------------------------------
 // Design tokens — identical palette to the original component.
@@ -42,9 +46,9 @@ const colors = {
   accent: '#3b82f6',
   accentSoft: 'rgba(59, 130, 246, 0.12)',
   accentRing: 'rgba(59, 130, 246, 0.18)',
-  success: '#10b981',
-  successSoft: 'rgba(16, 185, 129, 0.1)',
-  successBorder: 'rgba(16, 185, 129, 0.3)',
+  success: '#059669',
+  successSoft: 'rgba(5, 150, 105, 0.1)',
+  successBorder: 'rgba(5, 150, 105, 0.3)',
   error: '#ef4444',
   errorSoft: 'rgba(239, 68, 68, 0.1)',
   errorBorder: 'rgba(239, 68, 68, 0.3)',
@@ -69,7 +73,8 @@ interface TabDef {
   description: string
   icon: React.ComponentType<{ style?: React.CSSProperties }>
   section: string
-  fields: FieldDef[]
+  fields?: FieldDef[]
+  isCustom?: boolean
 }
 
 const TABS: TabDef[] = [
@@ -234,12 +239,20 @@ const TABS: TabDef[] = [
       { key: 'case_sensitive', label: 'Sensible à la casse', type: 'boolean' },
     ],
   },
+  {
+    id: 'domain_enrichment',
+    label: 'Enrichissement domaines',
+    description: 'Enrichissement automatique de domain_to_site_name depuis Wikidata.',
+    icon: Globe,
+    section: 'domain_to_site_name_enrichment',
+    isCustom: true,
+  },
 ]
 
 export default function Settings() {
   const navigate = useNavigate()
   const [config, setConfig] = useState<Record<string, any>>({})
-  const [loading, setLoading] = useState(true)
+  const [configLoading, setConfigLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [validationErrors, setValidationErrors] = useState<string[]>([])
   const [successMessage, setSuccessMessage] = useState('')
@@ -264,7 +277,7 @@ export default function Settings() {
   const loadConfig = async (isInitial = false) => {
     try {
       if (isInitial) {
-        setLoading(true)
+        setConfigLoading(true)
       }
       const response = await configApi.getConfig()
       if (response.success) {
@@ -275,7 +288,7 @@ export default function Settings() {
       console.error('Failed to load config:', error)
     } finally {
       if (isInitial) {
-        setLoading(false)
+        setConfigLoading(false)
       }
     }
   }
@@ -326,7 +339,7 @@ export default function Settings() {
     }
 
     try {
-      setLoading(true)
+      setConfigLoading(true)
       await configApi.resetConfig()
       await loadConfig()
       setSuccessMessage('Configuration réinitialisée')
@@ -335,23 +348,23 @@ export default function Settings() {
       console.error('Failed to reset config:', error)
       setValidationErrors(['Erreur lors de la réinitialisation'])
     } finally {
-      setLoading(false)
+      setConfigLoading(false)
     }
   }
 
   const isDirty = JSON.stringify(config) !== initialConfigRef.current
   const currentTab = TABS.find(t => t.id === activeTab) ?? TABS[0]
 
-  if (loading) {
+  if (configLoading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', maxWidth: '860px', margin: '0 auto', padding: '0 16px' }}>
         <RefreshCw className="animate-spin" style={{ width: '32px', height: '32px', color: colors.textDisabled }} />
       </div>
     )
   }
 
   return (
-    <div style={{ padding: '32px 24px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ padding: '16px', maxWidth: '860px', margin: '0 auto' }}>
       <style>{`
         @keyframes ovix-fade-in {
           from { opacity: 0; transform: translateY(4px); }
@@ -368,17 +381,6 @@ export default function Settings() {
         .ovix-nav-item:hover:not(.is-active) {
           background-color: ${colors.bgSubtle};
           color: ${colors.textPrimary};
-        }
-        .ovix-btn {
-          transition: background-color 150ms ease, border-color 150ms ease, opacity 150ms ease, transform 100ms ease;
-        }
-        .ovix-btn:active:not(:disabled) { transform: translateY(1px); }
-        .ovix-btn-ghost:hover:not(:disabled) {
-          background-color: ${colors.bgSubtle};
-          border-color: ${colors.borderStrong};
-        }
-        .ovix-btn-primary:hover:not(:disabled) {
-          background-color: #4a8ef8;
         }
         .ovix-field-row {
           transition: border-color 150ms ease;
@@ -441,53 +443,18 @@ export default function Settings() {
         </div>
 
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button
-            onClick={handleReset}
-            className="ovix-btn ovix-btn-ghost"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '9px 16px',
-              backgroundColor: colors.bgPanel,
-              color: colors.textPrimary,
-              border: `1px solid ${colors.border}`,
-              borderRadius: '7px',
-              cursor: 'pointer',
-              fontSize: '11.5px',
-              fontWeight: 500,
-            }}
-          >
+          <Button variant="neutral" onClick={handleReset}>
             <RefreshCw style={{ width: '14px', height: '14px' }} />
             Réinitialiser
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="ovix-btn ovix-btn-primary"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '9px 18px',
-              backgroundColor: colors.accent,
-              color: colors.white,
-              border: 'none',
-              borderRadius: '7px',
-              cursor: saving ? 'not-allowed' : 'pointer',
-              fontSize: '11.5px',
-              fontWeight: 500,
-              opacity: saving ? 0.6 : 1,
-              boxShadow: `0 1px 2px ${colors.shadow}`,
-            }}
-          >
+          </Button>
+          <Button variant="primary" onClick={handleSave} disabled={saving}>
             {saving ? (
               <RefreshCw className="animate-spin" style={{ width: '14px', height: '14px' }} />
             ) : (
               <Save style={{ width: '14px', height: '14px' }} />
             )}
             {saving ? 'Sauvegarde...' : 'Sauvegarder'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -498,13 +465,13 @@ export default function Settings() {
           style={{
             marginBottom: '20px',
             padding: '12px 16px',
-            backgroundColor: colors.successSoft,
-            border: `1px solid ${colors.successBorder}`,
+            backgroundColor: 'rgba(5, 150, 105, 0.1)',
+            border: '1px solid rgba(5, 150, 105, 0.3)',
             borderRadius: '8px',
             display: 'flex',
             alignItems: 'center',
             gap: '12px',
-            color: colors.success,
+            color: '#059669',
             fontSize: '11.5px',
           }}
         >
@@ -555,6 +522,7 @@ export default function Settings() {
             padding: '6px',
             position: 'sticky',
             top: '16px',
+            zIndex: 1,
           }}
         >
           {TABS.map(tab => {
@@ -571,54 +539,56 @@ export default function Settings() {
             )
             
             return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`ovix-nav-item${isActive ? ' is-active' : ''}`}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '9px 10px',
-                  backgroundColor: isActive ? colors.bgSubtle : 'transparent',
-                  color: isActive ? colors.textPrimary : colors.textMuted,
-                  border: 'none',
-                  borderRadius: '7px',
-                  cursor: 'pointer',
-                  fontSize: '11.5px',
-                  fontWeight: isActive ? 500 : 400,
-                  textAlign: 'left',
-                  position: 'relative',
-                }}
-              >
-                {isActive && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      left: 0,
-                      top: '20%',
-                      bottom: '20%',
-                      width: '2px',
-                      borderRadius: '2px',
-                      backgroundColor: colors.accent,
-                    }}
-                  />
-                )}
-                <Icon style={{ width: '14px', height: '14px', flexShrink: 0, color: isActive ? colors.accent : colors.textDisabled }} />
-                <span style={{ whiteSpace: 'nowrap' }}>{tab.label}</span>
-                {isAnalyzerEnabled && (
-                  <span
-                    style={{
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: '50%',
-                      backgroundColor: colors.success,
-                      marginLeft: 'auto',
-                      flexShrink: 0,
-                    }}
-                  />
-                )}
-              </button>
+              <Tooltip key={tab.id} content={tab.description} position="left" delay={400}>
+                <button
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`ovix-nav-item${isActive ? ' is-active' : ''}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '9px 10px',
+                    width: '100%',
+                    backgroundColor: isActive ? colors.bgSubtle : 'transparent',
+                    color: isActive ? colors.textPrimary : colors.textMuted,
+                    border: 'none',
+                    borderRadius: '7px',
+                    cursor: 'pointer',
+                    fontSize: '11.5px',
+                    fontWeight: isActive ? 500 : 400,
+                    textAlign: 'left',
+                    position: 'relative',
+                  }}
+                >
+                  {isActive && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: '20%',
+                        bottom: '20%',
+                        width: '2px',
+                        borderRadius: '2px',
+                        backgroundColor: colors.accent,
+                      }}
+                    />
+                  )}
+                  <Icon style={{ width: '14px', height: '14px', flexShrink: 0, color: isActive ? colors.accent : colors.textDisabled }} />
+                  <span style={{ whiteSpace: 'nowrap' }}>{tab.label}</span>
+                  {isAnalyzerEnabled && (
+                    <span
+                      style={{
+                        width: '6px',
+                        height: '6px',
+                        borderRadius: '50%',
+                        backgroundColor: '#059669',
+                        marginLeft: 'auto',
+                        flexShrink: 0,
+                      }}
+                    />
+                  )}
+                </button>
+              </Tooltip>
             )
           })}
         </nav>
@@ -646,8 +616,8 @@ export default function Settings() {
               <div style={{
                 marginBottom: '16px',
                 padding: '10px',
-                backgroundColor: authStatus.authenticated ? colors.successSoft : colors.errorSoft,
-                border: `1px solid ${authStatus.authenticated ? colors.successBorder : colors.errorBorder}`,
+                backgroundColor: authStatus.authenticated ? 'rgba(5, 150, 105, 0.1)' : colors.errorSoft,
+                border: `1px solid ${authStatus.authenticated ? 'rgba(5, 150, 105, 0.3)' : colors.errorBorder}`,
                 borderRadius: '6px',
                 display: 'flex',
                 alignItems: 'center',
@@ -656,46 +626,42 @@ export default function Settings() {
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   {authStatus.authenticated ? (
-                    <CheckCircle style={{ width: '14px', height: '14px', color: colors.success }} />
+                    <CheckCircle style={{ width: '14px', height: '14px', color: '#059669' }} />
                   ) : (
                     <AlertTriangle style={{ width: '14px', height: '14px', color: colors.error }} />
                   )}
-                  <span style={{ fontSize: '10px', color: authStatus.authenticated ? colors.success : colors.error }}>
-                    {authStatus.authenticated 
-                      ? `Connecté en tant que ${authStatus.username || 'utilisateur'}` 
+                  <span style={{ fontSize: '10px', color: authStatus.authenticated ? '#059669' : colors.error }}>
+                    {authStatus.authenticated
+                      ? `Connecté en tant que ${authStatus.username || 'utilisateur'}`
                       : 'Non connecté'}
                   </span>
                 </div>
-                <button
+                <Button
+                  variant="neutral"
                   onClick={() => navigate('/settings/wikipedia')}
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
                     padding: '4px 8px',
-                    backgroundColor: 'transparent',
-                    border: `1px solid ${authStatus.authenticated ? colors.success : colors.error}`,
-                    borderRadius: '4px',
-                    color: authStatus.authenticated ? colors.success : colors.error,
                     fontSize: '9px',
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    transition: 'background-color 150ms ease',
+                    backgroundColor: 'transparent',
+                    border: `1px solid ${authStatus.authenticated ? '#059669' : colors.error}`,
+                    color: authStatus.authenticated ? '#059669' : colors.error,
                   }}
-                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = authStatus.authenticated ? colors.successSoft : colors.errorSoft}
-                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                 >
                   <ExternalLink style={{ width: '10px', height: '10px' }} />
                   Gérer
-                </button>
+                </Button>
               </div>
             )}
-            <ConfigSection
-              section={currentTab.section}
-              config={config}
-              onChange={handleValueChange}
-              fields={currentTab.fields}
-            />
+            {currentTab.isCustom ? (
+              currentTab.id === 'domain_enrichment' && <DomainEnrichmentSection />
+            ) : (
+              <ConfigSection
+                section={currentTab.section}
+                config={config}
+                onChange={handleValueChange}
+                fields={currentTab.fields || []}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -720,6 +686,20 @@ function ConfigSection({ section, config, onChange, fields }: ConfigSectionProps
         const dependencyLabel = field.dependsOn ? fields.find(f => f.key === field.dependsOn)?.label : undefined
         const isLast = i === fields.length - 1
 
+        const labelNode = (
+          <label
+            htmlFor={`${section}-${field.key}`}
+            style={{
+              fontSize: '11px',
+              fontWeight: 500,
+              color: isDisabled ? colors.textDisabled : colors.textSecondary,
+              display: 'block',
+            }}
+          >
+            {field.label}
+          </label>
+        )
+
         return (
           <div
             key={field.key}
@@ -734,17 +714,13 @@ function ConfigSection({ section, config, onChange, fields }: ConfigSectionProps
             }}
           >
             <div style={{ maxWidth: '360px' }}>
-              <label
-                htmlFor={`${section}-${field.key}`}
-                style={{
-                  fontSize: '11px',
-                  fontWeight: 500,
-                  color: isDisabled ? colors.textDisabled : colors.textSecondary,
-                  display: 'block',
-                }}
-              >
-                {field.label}
-              </label>
+              {field.helper ? (
+                <Tooltip content={field.helper} position="top" delay={300}>
+                  {labelNode}
+                </Tooltip>
+              ) : (
+                labelNode
+              )}
               {isDisabled && dependencyLabel && (
                 <p style={{ fontSize: '9.5px', color: colors.textDisabled, margin: '3px 0 0' }}>
                   Nécessite « {dependencyLabel} »

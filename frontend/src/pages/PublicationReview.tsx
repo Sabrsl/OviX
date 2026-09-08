@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState, forwardRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, FileText, Eye, EyeOff, Send, ShieldCheck, Loader2 } from 'lucide-react'
 import { publicationApi } from '../api/publication.api'
 import { diffApi } from '../api/diff.api'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import Button from '../components/Button'
 
 // ============================================================
 // Types
@@ -55,18 +56,17 @@ const colors = {
   surfaceRaised: '#1a1a1a',
   border: '#2a2a2a',
   borderHover: '#3a3a3a',
-  borderFocus: '#6b8afd',
+  borderFocus: '#8a8a8a',
   text: '#f5f5f5',
   textMuted: '#a0a0a0',
   textFaint: '#666666',
-  accent: '#6b8afd',
   danger: '#ff6b6b',
   dangerBg: 'rgba(239, 68, 68, 0.08)',
   dangerBorder: 'rgba(239, 68, 68, 0.35)',
   warning: '#f59e0b',
   warningBg: 'rgba(245, 158, 11, 0.08)',
   warningBorder: 'rgba(245, 158, 11, 0.35)',
-  success: '#22c55e',
+  success: '#059669',
 }
 
 const transition = 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)'
@@ -82,17 +82,6 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '6px',
-  } as const,
-  backBtn: {
-    padding: '8px 14px',
-    backgroundColor: 'transparent',
-    border: `1px solid ${colors.border}`,
-    borderRadius: '7px',
-    color: colors.textMuted,
-    fontSize: '13px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    transition,
   } as const,
   emptyState: {
     display: 'flex',
@@ -140,20 +129,6 @@ const styles = {
     textTransform: 'uppercase',
     letterSpacing: '0.06em',
     margin: 0,
-  } as const,
-  toggleButton: {
-    padding: '7px 12px',
-    backgroundColor: colors.surfaceRaised,
-    border: `1px solid ${colors.border}`,
-    borderRadius: '7px',
-    color: colors.textMuted,
-    fontSize: '13px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '7px',
-    transition,
   } as const,
   diffBox: {
     backgroundColor: colors.bg,
@@ -205,18 +180,6 @@ const styles = {
   } as const,
   fieldFooter: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', gap: '12px' } as const,
   fieldHint: { fontSize: '12px', color: colors.textFaint, margin: 0 } as const,
-  resetButton: {
-    padding: '4px 9px',
-    fontSize: '12px',
-    fontWeight: 500,
-    backgroundColor: 'transparent',
-    border: `1px solid ${colors.border}`,
-    borderRadius: '5px',
-    color: colors.textMuted,
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-    transition,
-  } as const,
   checkboxRow: {
     display: 'flex',
     alignItems: 'center',
@@ -226,7 +189,7 @@ const styles = {
     borderRadius: '8px',
     border: `1px solid ${colors.border}`,
   } as const,
-  checkbox: { width: '16px', height: '16px', cursor: 'pointer', accentColor: colors.accent } as const,
+  checkbox: { width: '16px', height: '16px', cursor: 'pointer', accentColor: colors.textMuted } as const,
   checkboxLabel: { fontSize: '13.5px', color: colors.textMuted, cursor: 'pointer', userSelect: 'none' } as const,
   tip: {
     display: 'flex',
@@ -241,35 +204,6 @@ const styles = {
     lineHeight: 1.5,
   } as const,
   actions: { display: 'flex', gap: '10px', justifyContent: 'flex-end', flexWrap: 'wrap' } as const,
-  btnBase: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '8px',
-    padding: '9px 16px',
-    borderRadius: '8px',
-    fontSize: '13.5px',
-    fontWeight: 600,
-    cursor: 'pointer',
-    border: '1px solid transparent',
-    transition,
-  } as const,
-  btnSecondary: {
-    backgroundColor: colors.surfaceRaised,
-    border: `1px solid ${colors.border}`,
-    color: colors.textMuted,
-  } as const,
-  btnPrimary: {
-    backgroundColor: colors.accent,
-    border: `1px solid ${colors.accent}`,
-    color: '#0a0a0a',
-  } as const,
-  btnDanger: {
-    backgroundColor: colors.danger,
-    border: `1px solid ${colors.danger}`,
-    color: '#1a0000',
-  } as const,
-  btnDisabled: { opacity: 0.5, cursor: 'not-allowed' } as const,
   overlay: {
     position: 'fixed',
     inset: 0,
@@ -316,49 +250,6 @@ const keyframes = `
 @keyframes popIn { from { opacity: 0; transform: scale(0.96) translateY(4px) } to { opacity: 1; transform: scale(1) translateY(0) } }
 @keyframes spin { to { transform: rotate(360deg) } }
 `
-
-// ============================================================
-// Composants d'UI internes (boutons réutilisables, cohérents)
-// ============================================================
-
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'secondary' | 'primary' | 'danger'
-  loading?: boolean
-}
-
-const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'secondary', loading, disabled, children, style, ...rest },
-  ref
-) {
-  const variantStyle = variant === 'primary' ? styles.btnPrimary : variant === 'danger' ? styles.btnDanger : styles.btnSecondary
-  const isDisabled = disabled || loading
-  return (
-    <button
-      ref={ref}
-      type="button"
-      disabled={isDisabled}
-      style={{
-        ...styles.btnBase,
-        ...variantStyle,
-        ...(isDisabled ? styles.btnDisabled : {}),
-        ...style,
-      }}
-      onMouseEnter={(e) => {
-        if (isDisabled) return
-        e.currentTarget.style.filter = 'brightness(1.12)'
-        e.currentTarget.style.transform = 'translateY(-1px)'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.filter = 'none'
-        e.currentTarget.style.transform = 'none'
-      }}
-      {...rest}
-    >
-      {loading && <Loader2 style={{ width: 14, height: 14, ...styles.spin }} aria-hidden="true" />}
-      {children}
-    </button>
-  )
-})
 
 // ============================================================
 // Composant principal
@@ -484,7 +375,7 @@ export default function PublicationReview() {
           window.alert("Simulation réussie ! Aucune modification n'a été appliquée.")
         } else {
           window.alert('Publication réussie !')
-          navigate('/history/published')
+          navigate('/publication/history')
         }
       } else {
         setError(response.error || 'Erreur lors de la publication')
@@ -547,7 +438,7 @@ export default function PublicationReview() {
           <h2 style={styles.title}>Révision de Publication</h2>
           <p style={styles.subtitle}>{articleTitle}</p>
         </div>
-        <Button variant="secondary" style={styles.backBtn} onClick={() => navigate('/history/analyzed')}>
+        <Button variant="neutral" onClick={() => navigate('/analysis/history')}>
           Retour
         </Button>
       </div>
@@ -565,8 +456,8 @@ export default function PublicationReview() {
         <div
           style={{
             ...styles.banner,
-            backgroundColor: 'rgba(34, 197, 94, 0.08)',
-            border: '1px solid rgba(34, 197, 94, 0.3)',
+            backgroundColor: 'rgba(5, 150, 105, 0.08)',
+            border: '1px solid rgba(5, 150, 105, 0.3)',
             color: colors.success,
           }}
           role="status"
@@ -589,27 +480,14 @@ export default function PublicationReview() {
           <h3 id="diff-heading" style={styles.cardLabel}>
             Diff des modifications
           </h3>
-          <button
-            type="button"
-            style={styles.toggleButton}
-            onClick={() => setShowDiff(!showDiff)}
-            aria-pressed={showDiff}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = colors.borderHover
-              e.currentTarget.style.color = colors.text
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = colors.border
-              e.currentTarget.style.color = colors.textMuted
-            }}
-          >
+          <Button variant="neutral" onClick={() => setShowDiff(!showDiff)} aria-pressed={showDiff}>
             {showDiff ? (
               <EyeOff style={{ width: '15px', height: '15px' }} aria-hidden="true" />
             ) : (
               <Eye style={{ width: '15px', height: '15px' }} aria-hidden="true" />
             )}
             {showDiff ? 'Masquer' : 'Afficher'}
-          </button>
+          </Button>
         </div>
 
         {loadingDiff ? (
@@ -654,7 +532,7 @@ export default function PublicationReview() {
               aria-invalid={!canSubmit}
               onFocus={(e) => {
                 e.currentTarget.style.borderColor = colors.borderFocus
-                e.currentTarget.style.boxShadow = `0 0 0 3px rgba(107, 138, 253, 0.15)`
+                e.currentTarget.style.boxShadow = `0 0 0 3px rgba(255, 255, 255, 0.08)`
               }}
               onBlur={(e) => {
                 e.currentTarget.style.borderColor = colors.border
@@ -663,15 +541,9 @@ export default function PublicationReview() {
             />
             <div style={styles.fieldFooter}>
               <p style={styles.fieldHint}>Ce résumé sera affiché dans l'historique des modifications de l'article</p>
-              <button
-                type="button"
-                style={styles.resetButton}
-                onClick={() => setSummary(DEFAULT_SUMMARY)}
-                onMouseEnter={(e) => (e.currentTarget.style.borderColor = colors.borderHover)}
-                onMouseLeave={(e) => (e.currentTarget.style.borderColor = colors.border)}
-              >
+              <Button variant="neutral" onClick={() => setSummary(DEFAULT_SUMMARY)} style={{ padding: '4px 9px', fontSize: '12px' }}>
                 Réinitialiser
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -700,11 +572,16 @@ export default function PublicationReview() {
 
       {/* Actions */}
       <div style={styles.actions}>
-        <Button variant="secondary" onClick={validateBeforePublish} loading={validating} disabled={!canSubmit}>
+        <Button variant="neutral" onClick={validateBeforePublish} disabled={validating || !canSubmit}>
+          {validating && <Loader2 style={{ width: 14, height: 14, ...styles.spin }} aria-hidden="true" />}
           {validating ? 'Validation...' : 'Valider'}
         </Button>
-        <Button variant="primary" onClick={handlePublishClick} loading={loading} disabled={validating || !canSubmit}>
-          {!loading && <Send style={{ width: 14, height: 14 }} aria-hidden="true" />}
+        <Button variant="success" onClick={handlePublishClick} disabled={loading || validating || !canSubmit}>
+          {loading ? (
+            <Loader2 style={{ width: 14, height: 14, ...styles.spin }} aria-hidden="true" />
+          ) : (
+            <Send style={{ width: 14, height: 14 }} aria-hidden="true" />
+          )}
           {loading ? 'Publication...' : dryRun ? 'Simuler' : 'Publier'}
         </Button>
       </div>
@@ -745,10 +622,11 @@ export default function PublicationReview() {
               <span style={styles.dialogWarning}>Cette action est irréversible.</span>
             </div>
             <div style={styles.dialogActions}>
-              <Button variant="secondary" onClick={() => setShowConfirmDialog(false)} disabled={loading}>
+              <Button variant="neutral" onClick={() => setShowConfirmDialog(false)} disabled={loading}>
                 Annuler
               </Button>
-              <Button ref={confirmButtonRef} variant="danger" onClick={executePublish} loading={loading}>
+              <Button ref={confirmButtonRef} variant="danger" onClick={executePublish} disabled={loading}>
+                {loading && <Loader2 style={{ width: 14, height: 14, ...styles.spin }} aria-hidden="true" />}
                 {loading ? 'Publication...' : 'Confirmer la publication'}
               </Button>
             </div>

@@ -32,6 +32,7 @@ KNOWN_SECTIONS = {
     "dead_links_analyzer", "other", "publication_delays",
     "scheduler", "timeouts", "ai", "reference_enricher_analyzer",
     "references", "https_verification", "typography_xml_analyzer",
+    "domain_to_site_name_enrichment",
 }
 
 

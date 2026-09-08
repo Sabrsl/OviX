@@ -12,6 +12,7 @@ import {
   Link2,
   ShieldAlert,
 } from 'lucide-react'
+import Button from '../components/Button'
 
 interface DeadLink {
   url: string
@@ -94,24 +95,10 @@ export default function AnalyzedDeadLinksDetail() {
       {/* Header */}
       <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button
-            onClick={() => navigate('/published-dead-links?filter=analyzed')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '8px 16px',
-              backgroundColor: '#1a1a1a',
-              border: '1px solid #2a2a2a',
-              borderRadius: '8px',
-              color: '#f5f5f5',
-              cursor: 'pointer',
-              fontSize: '13px'
-            }}
-          >
+          <Button variant="neutral" onClick={() => navigate('/published-dead-links?filter=analyzed')}>
             <ArrowLeft style={{ width: '16px', height: '16px' }} />
             Retour
-          </button>
+          </Button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{
               width: '40px',
@@ -135,26 +122,10 @@ export default function AnalyzedDeadLinksDetail() {
             </div>
           </div>
         </div>
-        <button
-          onClick={fetchData}
-          disabled={loading}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '8px 16px',
-            backgroundColor: '#1a1a1a',
-            border: '1px solid #2a2a2a',
-            borderRadius: '8px',
-            color: '#f5f5f5',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontSize: '13px',
-            opacity: loading ? 0.5 : 1
-          }}
-        >
+        <Button variant="neutral" onClick={fetchData} disabled={loading}>
           <RefreshCw style={{ width: '16px', height: '16px', animation: loading ? 'spin 1s linear infinite' : 'none' }} />
           Actualiser
-        </button>
+        </Button>
       </div>
 
       {/* Error */}
@@ -275,28 +246,13 @@ export default function AnalyzedDeadLinksDetail() {
                 </div>
               </div>
             </div>
-            <a
-              href={getWikipediaUrl(data.article_title)}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 12px',
-                backgroundColor: '#3b82f6',
-                border: 'none',
-                borderRadius: '6px',
-                color: '#ffffff',
-                cursor: 'pointer',
-                fontSize: '12px',
-                fontWeight: 500,
-                textDecoration: 'none'
-              }}
+            <Button
+              variant="primary"
+              onClick={() => window.open(getWikipediaUrl(data.article_title), '_blank', 'noopener,noreferrer')}
             >
               <ExternalLink style={{ width: '14px', height: '14px' }} />
               Voir sur Wikipédia
-            </a>
+            </Button>
           </div>
 
           {/* Dead Links List */}

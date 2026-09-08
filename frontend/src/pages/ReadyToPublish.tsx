@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AlertTriangle, Search, RefreshCw, Inbox } from 'lucide-react'
 import { historyApi } from '../api/history.api'
+import Button from '../components/Button'
 
 interface ReadyToPublishItem {
   title: string
@@ -30,7 +31,7 @@ const COLORS = {
   textSecondary: '#a0a0a0',
   textMuted: '#666666',
   accent: '#3b82f6',
-  success: '#10b981',
+  success: '#059669',
   warning: '#f59e0b',
   danger: '#ef4444',
 } as const
@@ -149,7 +150,7 @@ export default function ReadyToPublish() {
   const formatNumber = (num: number) => (num ?? 0).toLocaleString('fr-FR')
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.35s ease-out' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.35s ease-out', maxWidth: '860px', margin: '0 auto', padding: '0 16px' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
         <div>
@@ -160,38 +161,7 @@ export default function ReadyToPublish() {
             Articles analysés avec corrections valides, prêts à publication
           </p>
         </div>
-        <button
-          onClick={() => loadReadyToPublish(false)}
-          disabled={refreshing || loading}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 13px',
-            backgroundColor: COLORS.bgSubtle,
-            border: `1px solid ${COLORS.border}`,
-            borderRadius: '7px',
-            color: COLORS.textSecondary,
-            fontSize: '12px',
-            fontWeight: 500,
-            cursor: refreshing || loading ? 'not-allowed' : 'pointer',
-            opacity: refreshing || loading ? 0.6 : 1,
-            transition: 'background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.1s',
-          }}
-          onMouseEnter={(e) => {
-            if (refreshing || loading) return
-            e.currentTarget.style.borderColor = '#3a3a3a'
-            e.currentTarget.style.color = COLORS.textPrimary
-            e.currentTarget.style.backgroundColor = '#1f1f1f'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = COLORS.border
-            e.currentTarget.style.color = COLORS.textSecondary
-            e.currentTarget.style.backgroundColor = COLORS.bgSubtle
-          }}
-          onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
-          onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-        >
+        <Button variant="neutral" onClick={() => loadReadyToPublish(false)} disabled={refreshing || loading}>
           <RefreshCw
             style={{
               width: '12px',
@@ -200,7 +170,7 @@ export default function ReadyToPublish() {
             }}
           />
           Actualiser
-        </button>
+        </Button>
       </div>
 
       {/* Statistics */}
@@ -257,30 +227,18 @@ export default function ReadyToPublish() {
           </div>
           <div style={{ display: 'flex', gap: '3px', backgroundColor: COLORS.bgInput, padding: '3px', borderRadius: '7px', border: `1px solid ${COLORS.border}` }}>
             {FILTERS.map(({ key, label }) => (
-              <button
+              <Button
                 key={key}
+                variant={filter === key ? 'primary' : 'neutral'}
                 onClick={() => setFilter(key)}
-                style={{
-                  padding: '6px 11px',
-                  backgroundColor: filter === key ? COLORS.accent : 'transparent',
-                  border: 'none',
-                  borderRadius: '5px',
-                  color: filter === key ? '#ffffff' : COLORS.textSecondary,
-                  fontSize: '12px',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  transition: 'background-color 0.15s, color 0.15s',
-                  whiteSpace: 'nowrap',
-                }}
-                onMouseEnter={(e) => {
-                  if (filter !== key) e.currentTarget.style.color = COLORS.textPrimary
-                }}
-                onMouseLeave={(e) => {
-                  if (filter !== key) e.currentTarget.style.color = COLORS.textSecondary
-                }}
+                style={
+                  filter === key
+                    ? { padding: '6px 11px', fontSize: '12px', backgroundColor: COLORS.accent, borderColor: COLORS.accent, color: '#ffffff' }
+                    : { padding: '6px 11px', fontSize: '12px', backgroundColor: 'transparent', border: 'none', color: COLORS.textSecondary }
+                }
               >
                 {label}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -373,36 +331,14 @@ export default function ReadyToPublish() {
             Affichage de {(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, filteredArticles.length)} sur {filteredArticles.length} articles
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <button
+            <Button
+              variant="neutral"
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
-              style={{
-                padding: '6px 12px',
-                backgroundColor: currentPage === 1 ? COLORS.bgInput : COLORS.bgSubtle,
-                border: `1px solid ${COLORS.border}`,
-                borderRadius: '6px',
-                color: currentPage === 1 ? COLORS.textMuted : COLORS.textSecondary,
-                fontSize: '12px',
-                fontWeight: 500,
-                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                opacity: currentPage === 1 ? 0.5 : 1,
-                transition: 'background-color 0.15s, color 0.15s',
-              }}
-              onMouseEnter={(e) => {
-                if (currentPage !== 1) {
-                  e.currentTarget.style.backgroundColor = '#1f1f1f'
-                  e.currentTarget.style.color = COLORS.textPrimary
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (currentPage !== 1) {
-                  e.currentTarget.style.backgroundColor = COLORS.bgSubtle
-                  e.currentTarget.style.color = COLORS.textSecondary
-                }
-              }}
+              style={{ padding: '6px 12px', fontSize: '12px' }}
             >
               Précédent
-            </button>
+            </Button>
 
             <div style={{ display: 'flex', gap: '4px' }}>
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -417,70 +353,32 @@ export default function ReadyToPublish() {
                   pageNum = currentPage - 2 + i
                 }
 
+                const isActive = currentPage === pageNum
                 return (
-                  <button
+                  <Button
                     key={pageNum}
+                    variant={isActive ? 'primary' : 'neutral'}
                     onClick={() => setCurrentPage(pageNum)}
-                    style={{
-                      padding: '6px 10px',
-                      backgroundColor: currentPage === pageNum ? COLORS.accent : COLORS.bgInput,
-                      border: `1px solid ${currentPage === pageNum ? COLORS.accent : COLORS.border}`,
-                      borderRadius: '6px',
-                      color: currentPage === pageNum ? '#ffffff' : COLORS.textSecondary,
-                      fontSize: '12px',
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                      transition: 'background-color 0.15s, color 0.15s',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (currentPage !== pageNum) {
-                        e.currentTarget.style.backgroundColor = '#1f1f1f'
-                        e.currentTarget.style.color = COLORS.textPrimary
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (currentPage !== pageNum) {
-                        e.currentTarget.style.backgroundColor = COLORS.bgInput
-                        e.currentTarget.style.color = COLORS.textSecondary
-                      }
-                    }}
+                    style={
+                      isActive
+                        ? { padding: '6px 10px', fontSize: '12px', backgroundColor: COLORS.accent, borderColor: COLORS.accent, color: '#ffffff' }
+                        : { padding: '6px 10px', fontSize: '12px', backgroundColor: COLORS.bgInput }
+                    }
                   >
                     {pageNum}
-                  </button>
+                  </Button>
                 )
               })}
             </div>
 
-            <button
+            <Button
+              variant="neutral"
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
               disabled={currentPage === totalPages}
-              style={{
-                padding: '6px 12px',
-                backgroundColor: currentPage === totalPages ? COLORS.bgInput : COLORS.bgSubtle,
-                border: `1px solid ${COLORS.border}`,
-                borderRadius: '6px',
-                color: currentPage === totalPages ? COLORS.textMuted : COLORS.textSecondary,
-                fontSize: '12px',
-                fontWeight: 500,
-                cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                opacity: currentPage === totalPages ? 0.5 : 1,
-                transition: 'background-color 0.15s, color 0.15s',
-              }}
-              onMouseEnter={(e) => {
-                if (currentPage !== totalPages) {
-                  e.currentTarget.style.backgroundColor = '#1f1f1f'
-                  e.currentTarget.style.color = COLORS.textPrimary
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (currentPage !== totalPages) {
-                  e.currentTarget.style.backgroundColor = COLORS.bgSubtle
-                  e.currentTarget.style.color = COLORS.textSecondary
-                }
-              }}
+              style={{ padding: '6px 12px', fontSize: '12px' }}
             >
               Suivant
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -638,7 +536,7 @@ function ArticleRow({
           width: '7px',
           height: '7px',
           borderRadius: '50%',
-          backgroundColor: article.human_verified ? '#10b981' : '#f59e0b',
+          backgroundColor: article.human_verified ? '#059669' : '#f59e0b',
         }}
       />
 
@@ -674,53 +572,16 @@ function ArticleRow({
       </div>
 
       <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-        <button
-          onClick={onView}
-          style={{
-            padding: '7px 12px',
-            backgroundColor: '#1a1a1a',
-            border: '1px solid #2a2a2a',
-            borderRadius: '6px',
-            color: '#a0a0a0',
-            fontSize: '12.5px',
-            fontWeight: 500,
-            cursor: 'pointer',
-            transition: 'background-color 0.15s, color 0.15s, transform 0.1s',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#222222'
-            e.currentTarget.style.color = '#f5f5f5'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#1a1a1a'
-            e.currentTarget.style.color = '#a0a0a0'
-          }}
-          onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.96)')}
-          onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-        >
+        <Button variant="neutral" onClick={onView} style={{ padding: '7px 12px', fontSize: '12.5px' }}>
           Voir
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="success"
           onClick={onPublish}
-          style={{
-            padding: '7px 12px',
-            backgroundColor: '#10b981',
-            border: '1px solid #10b981',
-            borderRadius: '6px',
-            color: '#ffffff',
-            fontSize: '12.5px',
-            fontWeight: 500,
-            cursor: 'pointer',
-            transition: 'filter 0.15s, transform 0.1s, box-shadow 0.15s',
-            boxShadow: hovered ? '0 3px 10px rgba(16, 185, 129, 0.22)' : 'none',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(1.1)')}
-          onMouseLeave={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
-          onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.96)')}
-          onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          style={{ padding: '7px 12px', fontSize: '12.5px' }}
         >
           Publier
-        </button>
+        </Button>
       </div>
     </div>
   )

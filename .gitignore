@@ -149,6 +149,7 @@ backend/data/*.json
 backend/data/automation_reports/
 backend/tests/test_results/
 backend/tests/*.json
+backend/tests/data/
 
 # -----------------------------------------------------
 # Config files with sensitive data

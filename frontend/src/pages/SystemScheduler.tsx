@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Clock, Play, Pause, Square } from 'lucide-react'
 import { systemApi } from '../api/system.api'
+import Button from '../components/Button'
 
 export default function SystemScheduler() {
   const [schedulerStatus, setSchedulerStatus] = useState<any>(null)
@@ -146,14 +147,14 @@ export default function SystemScheduler() {
   const runManualScheduler = async () => {
     const includeText = includeAnalyzed ? 'OUI' : 'NON'
     const liaText = liaMode ? 'OUI (IA)' : 'NON (Regex)'
-    
+
     if (!confirm(`Lancer l'automatisation complète ?\n\nCatégorie: ${configForm.category || 'Non configurée'}\nArticles à traiter: ${configForm.articles_to_process}\nInclure articles déjà analysés: ${includeText}\nMode IA: ${liaText}\n\nCela va:\n1. Récupérer les articles depuis Wikipédia\n2. Analyser tous les articles\n3. Corriger les liens morts\n4. Démarrer la publication progressive`)) {
       return
     }
 
     setManualRunLoading(true)
     setManualRunMessage('Lancement de l\'automatisation en cours...')
-    
+
     try {
       const result = await systemApi.runManualScheduler({
         include_analyzed: includeAnalyzed,
@@ -234,7 +235,7 @@ export default function SystemScheduler() {
         pollingIntervalRef.current = null
       }
     }
-    
+
     return () => {
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current)
@@ -246,11 +247,11 @@ export default function SystemScheduler() {
   // Stop polling when automation is complete (no active task)
   useEffect(() => {
     if (isPolling && automationStatus) {
-      const isCompleted = automationStatus.status === 'completed' || 
-                        automationStatus.status === 'failed' || 
+      const isCompleted = automationStatus.status === 'completed' ||
+                        automationStatus.status === 'failed' ||
                         automationStatus.status === 'interrupted' ||
                         automationStatus.status === 'not_initialized'
-      
+
       if (isCompleted) {
         setIsPolling(false)
         setManualRunMessage('Automatisation terminée')
@@ -269,10 +270,10 @@ export default function SystemScheduler() {
 
   if (error) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out', maxWidth: '860px', margin: '0 auto', padding: '0 16px' }}>
         <div>
-          <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#f5f5f5' }}>Planificateur</h2>
-          <p style={{ color: '#a0a0a0', marginTop: '4px' }}>Gérer le planificateur de publications</p>
+          <h2 style={{ fontSize: '20px', fontWeight: 600, color: '#f5f5f5' }}>Planificateur</h2>
+          <p style={{ color: '#a0a0a0', marginTop: '4px', fontSize: '13px' }}>Gérer le planificateur de publications</p>
         </div>
         <div style={{ display: 'flex', justifyContent: 'center', padding: '48px', backgroundColor: '#161616', borderRadius: '8px', border: '1px solid #2a2a2a' }}>
           <div style={{ textAlign: 'center', color: '#ef4444' }}>{error}</div>
@@ -301,10 +302,10 @@ export default function SystemScheduler() {
           50% { opacity: 0.5; transform: scale(1.2); }
         }
       `}</style>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out', maxWidth: '860px', margin: '0 auto', padding: '0 16px' }}>
       <div>
-        <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#f5f5f5' }}>Planificateur</h2>
-        <p style={{ color: '#a0a0a0', marginTop: '4px' }}>Gérer le planificateur de publications</p>
+        <h2 style={{ fontSize: '20px', fontWeight: 600, color: '#f5f5f5' }}>Planificateur</h2>
+        <p style={{ color: '#a0a0a0', marginTop: '4px', fontSize: '13px' }}>Gérer le planificateur de publications</p>
       </div>
 
       {/* Automation Status Card */}
@@ -319,10 +320,10 @@ export default function SystemScheduler() {
                 Statut de l'Automatisation
               </h3>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{ 
-                  width: '8px', 
-                  height: '8px', 
-                  backgroundColor: '#8b5cf6', 
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  backgroundColor: '#8b5cf6',
                   borderRadius: '50%',
                   animation: 'pulse 1.5s ease-in-out infinite'
                 }} />
@@ -354,7 +355,7 @@ export default function SystemScheduler() {
             </div>
             <div>
               <div style={{ fontSize: '12px', color: '#a0a0a0', marginBottom: '4px' }}>Articles publiés</div>
-              <div style={{ fontSize: '24px', fontWeight: 600, color: '#10b981' }}>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: '#059669' }}>
                 {automationStatus.articles_published || 0}
               </div>
             </div>
@@ -372,17 +373,17 @@ export default function SystemScheduler() {
       <div style={{ backgroundColor: '#161616', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
           <div style={{ padding: '12px', backgroundColor: '#161616', borderRadius: '8px' }}>
-            <Clock style={{ width: '24px', height: '24px', color: isActive ? '#10b981' : '#666666' }} />
+            <Clock style={{ width: '24px', height: '24px', color: isActive ? '#059669' : '#666666' }} />
           </div>
           <div style={{ flex: 1 }}>
             <h3 style={{ fontSize: '18px', fontWeight: 500, color: '#f5f5f5', marginBottom: '4px' }}>
               Statut du Planificateur
             </h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ 
-                width: '8px', 
-                height: '8px', 
-                backgroundColor: isPaused ? '#f59e0b' : (isActive ? '#10b981' : '#666666'), 
+              <div style={{
+                width: '8px',
+                height: '8px',
+                backgroundColor: isPaused ? '#f59e0b' : (isActive ? '#059669' : '#666666'),
                 borderRadius: '50%'
               }} />
               <span style={{ fontSize: '14px', color: '#a0a0a0' }}>
@@ -423,27 +424,15 @@ export default function SystemScheduler() {
         )}
 
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            className="btn btn-secondary"
-            onClick={() => fetchStatus()}
-            disabled={actionLoading}
-          >
+          <Button variant="neutral" onClick={() => fetchStatus()} disabled={actionLoading}>
             {actionLoading ? 'Chargement...' : 'Actualiser'}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant={isPolling ? 'success' : 'neutral'}
             onClick={() => setIsPolling(!isPolling)}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: isPolling ? '#10b981' : '#6b7280',
-              border: 'none',
-              borderRadius: '4px',
-              color: '#ffffff',
-              fontSize: '14px',
-              cursor: 'pointer'
-            }}
           >
             {isPolling ? 'Suivi actif' : 'Suivi inactif'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -454,20 +443,9 @@ export default function SystemScheduler() {
             Configuration
           </h3>
           {!editingConfig && (
-            <button
-              onClick={() => setEditingConfig(true)}
-              style={{
-                padding: '6px 12px',
-                backgroundColor: '#3b82f6',
-                border: 'none',
-                borderRadius: '4px',
-                color: '#ffffff',
-                fontSize: '12px',
-                cursor: 'pointer'
-              }}
-            >
+            <Button variant="primary" onClick={() => setEditingConfig(true)}>
               Modifier
-            </button>
+            </Button>
           )}
         </div>
 
@@ -552,24 +530,12 @@ export default function SystemScheduler() {
                 }}
               />
             </div>
-            <div style={{ gridColumn: 'span  2', display: 'flex', gap: '8px', marginTop: '8px' }}>
-              <button
-                onClick={updateConfig}
-                disabled={configLoading}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#10b981',
-                  border: 'none',
-                  borderRadius: '4px',
-                  color: '#ffffff',
-                  fontSize: '14px',
-                  cursor: configLoading ? 'not-allowed' : 'pointer',
-                  opacity: configLoading ? 0.5 : 1
-                }}
-              >
+            <div style={{ gridColumn: 'span 2', display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <Button variant="neutral" onClick={updateConfig} disabled={configLoading}>
                 {configLoading ? 'Sauvegarde...' : 'Sauvegarder'}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="neutral"
                 onClick={() => {
                   setEditingConfig(false)
                   if (schedulerConfig) {
@@ -583,18 +549,9 @@ export default function SystemScheduler() {
                     })
                   }
                 }}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#6b7280',
-                  border: 'none',
-                  borderRadius: '4px',
-                  color: '#ffffff',
-                  fontSize: '14px',
-                  cursor: 'pointer'
-                }}
               >
                 Annuler
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
@@ -611,7 +568,7 @@ export default function SystemScheduler() {
               <label style={{ display: 'block', fontSize: '14px', color: '#a0a0a0', marginBottom: '8px' }}>
                 Mode Dry-run
               </label>
-              <div style={{ fontSize: '24px', fontWeight: 600, color: schedulerConfig?.dry_run ? '#f59e0b' : '#10b981' }}>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: schedulerConfig?.dry_run ? '#f59e0b' : '#059669' }}>
                 {schedulerConfig?.dry_run ? 'Activé' : 'Désactivé'}
               </div>
             </div>
@@ -640,13 +597,13 @@ export default function SystemScheduler() {
         <h3 style={{ fontSize: '14px', fontWeight: 500, color: '#666666', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '16px' }}>
           Contrôles
         </h3>
-        
+
         {/* Automation Options */}
         <div style={{ marginBottom: '16px', padding: '16px', backgroundColor: '#0a0a0a', borderRadius: '6px', border: '1px solid #2a2a2a' }}>
           <h4 style={{ fontSize: '12px', fontWeight: 500, color: '#a0a0a0', marginBottom: '12px', textTransform: 'uppercase' }}>
             Options d'automatisation
           </h4>
-          
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
               <input
@@ -659,7 +616,7 @@ export default function SystemScheduler() {
                 Inclure les articles déjà analysés
               </span>
             </label>
-            
+
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
               <input
                 type="checkbox"
@@ -673,78 +630,47 @@ export default function SystemScheduler() {
             </label>
           </div>
         </div>
-        
+
         {manualRunMessage && (
-          <div style={{ 
-            padding: '12px', 
-            backgroundColor: 'rgba(16, 185, 129, 0.1)', 
-            border: '1px solid #10b981', 
-            borderRadius: '6px', 
+          <div style={{
+            padding: '12px',
+            backgroundColor: 'rgba(5, 150, 105, 0.1)',
+            border: '1px solid #059669',
+            borderRadius: '6px',
             marginBottom: '16px',
-            color: '#10b981',
+            color: '#059669',
             fontSize: '14px'
           }}>
             {manualRunMessage}
           </div>
         )}
-        
+
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           {!isActive ? (
-            <button
-              className="btn btn-primary"
-              onClick={startScheduler}
-              disabled={actionLoading}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-            >
+            <Button variant="primary" onClick={startScheduler} disabled={actionLoading} style={{ padding: '10px 20px', fontSize: '14px' }}>
               <Play style={{ width: '16px', height: '16px' }} />
               {actionLoading ? 'Démarrage...' : 'Démarrer'}
-            </button>
+            </Button>
           ) : isPaused ? (
-            <button
-              className="btn btn-primary"
-              onClick={resumeScheduler}
-              disabled={actionLoading}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-            >
+            <Button variant="primary" onClick={resumeScheduler} disabled={actionLoading} style={{ padding: '10px 20px', fontSize: '14px' }}>
               <Play style={{ width: '16px', height: '16px' }} />
               {actionLoading ? 'Reprise...' : 'Reprendre'}
-            </button>
+            </Button>
           ) : (
-            <button
-              className="btn btn-secondary"
-              onClick={pauseScheduler}
-              disabled={actionLoading}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-            >
+            <Button variant="neutral" onClick={pauseScheduler} disabled={actionLoading} style={{ padding: '10px 20px', fontSize: '14px' }}>
               <Pause style={{ width: '16px', height: '16px' }} />
               {actionLoading ? 'Pause...' : 'Pause'}
-            </button>
+            </Button>
           )}
-          <button
-            className="btn btn-danger"
-            onClick={stopScheduler}
-            disabled={actionLoading || !isActive}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-          >
+          <Button variant="danger" onClick={stopScheduler} disabled={actionLoading || !isActive} style={{ padding: '10px 20px', fontSize: '14px' }}>
             <Square style={{ width: '16px', height: '16px' }} />
             {actionLoading ? 'Arrêt...' : 'Arrêter'}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="neutral"
             onClick={runManualScheduler}
             disabled={manualRunLoading || actionLoading || (automationStatus && automationStatus.status === 'running')}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#8b5cf6',
-              border: 'none',
-              borderRadius: '6px',
-              color: '#ffffff',
-              fontSize: '14px',
-              cursor: (manualRunLoading || actionLoading || (automationStatus && automationStatus.status === 'running')) ? 'not-allowed' : 'pointer',
-              opacity: (manualRunLoading || actionLoading || (automationStatus && automationStatus.status === 'running')) ? 0.5 : 1,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
+            style={{ padding: '10px 20px', fontSize: '14px' }}
           >
             {manualRunLoading ? (
               <>
@@ -761,85 +687,42 @@ export default function SystemScheduler() {
             ) : (
               'Lancer manuellement'
             )}
-          </button>
+          </Button>
         </div>
 
         {/* Automation Controls */}
         {automationStatus && automationStatus.status === 'running' && (
-          <div style={{ 
-            marginTop: '16px', 
-            padding: '16px', 
-            backgroundColor: 'rgba(139, 92, 246, 0.1)', 
-            borderRadius: '6px', 
-            border: '1px solid #8b5cf6' 
+          <div style={{
+            marginTop: '16px',
+            padding: '16px',
+            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+            borderRadius: '6px',
+            border: '1px solid #8b5cf6'
           }}>
             <div style={{ fontSize: '14px', color: '#a0a0a0', marginBottom: '12px' }}>
               Automatisation en cours
             </div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               {automationStatus.status === 'paused' ? (
-                <button
-                  onClick={resumeAutomation}
-                  disabled={actionLoading}
-                  style={{
-                    padding: '8px 16px',
-                    backgroundColor: '#10b981',
-                    border: 'none',
-                    borderRadius: '4px',
-                    color: '#ffffff',
-                    fontSize: '14px',
-                    cursor: actionLoading ? 'not-allowed' : 'pointer',
-                    opacity: actionLoading ? 0.5 : 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px'
-                  }}
-                >
+                <Button variant="success" onClick={resumeAutomation} disabled={actionLoading}>
                   <Play style={{ width: '14px', height: '14px' }} />
                   Reprendre
-                </button>
+                </Button>
               ) : (
-                <button
+                <Button
+                  variant="neutral"
                   onClick={pauseAutomation}
                   disabled={actionLoading}
-                  style={{
-                    padding: '8px 16px',
-                    backgroundColor: '#f59e0b',
-                    border: 'none',
-                    borderRadius: '4px',
-                    color: '#ffffff',
-                    fontSize: '14px',
-                    cursor: actionLoading ? 'not-allowed' : 'pointer',
-                    opacity: actionLoading ? 0.5 : 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px'
-                  }}
+                  style={{ backgroundColor: '#f59e0b', color: '#ffffff', border: 'none' }}
                 >
                   <Pause style={{ width: '14px', height: '14px' }} />
                   Pause
-                </button>
+                </Button>
               )}
-              <button
-                onClick={stopAutomation}
-                disabled={actionLoading}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#ef4444',
-                  border: 'none',
-                  borderRadius: '4px',
-                  color: '#ffffff',
-                  fontSize: '14px',
-                  cursor: actionLoading ? 'not-allowed' : 'pointer',
-                  opacity: actionLoading ? 0.5 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
+              <Button variant="danger" onClick={stopAutomation} disabled={actionLoading}>
                 <Square style={{ width: '14px', height: '14px' }} />
                 Arrêter
-              </button>
+              </Button>
             </div>
           </div>
         )}

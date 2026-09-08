@@ -220,13 +220,13 @@ def test_acronym_false_positives():
         # "ONU" should only match the exact acronym
         ("{{Lien web|titre=Report on ONU activities|url=https://example.com}}", "ONU should match exactly", False),
         # "USA" should not match in "USAGE" (all caps)
-        ("{{Lien web|titre=USAGE STATISTICS|url=https://example.com}}", "USA should not match in 'USAGE'", True),
+        ("{{Lien web|titre=USAGE STATISTICS|url=https://example.com}}", "USA should not match in 'USAGE'", False),
         # "NASA" should not match in "NASA" (all caps but not in acronym list if we test)
         ("{{Lien web|titre=NASA STUDY|url=https://example.com}}", "NASA should match exactly", False),
         # "WHO" should not match in "WHOLE" (all caps)
-        ("{{Lien web|titre=WHOLE APPROACH|url=https://example.com}}", "WHO should not match in 'WHOLE'", True),
+        ("{{Lien web|titre=WHOLE APPROACH|url=https://example.com}}", "WHO should not match in 'WHOLE'", False),
         # "UN" should not match in "UNDER" (all caps)
-        ("{{Lien web|titre=UNDER DEVELOPMENT|url=https://example.com}}", "UN should not match in 'UNDER'", True),
+        ("{{Lien web|titre=UNDER DEVELOPMENT|url=https://example.com}}", "UN should not match in 'UNDER'", False),
     ]
     
     normalizer = CaseNormalizer(enabled=True)
@@ -246,9 +246,56 @@ def test_acronym_false_positives():
     
     print("[PASS] Acronym detection correctly avoids false positives")
 
+def test_domain_mapping():
+    """Test domain to site name mapping with www/non-www variants."""
+    print("\n" + "=" * 60)
+    print("DOMAIN MAPPING TEST")
+    print("=" * 60)
+    
+    normalizer = CaseNormalizer(enabled=True)
+    
+    # Test cases for domain mapping
+    test_cases = [
+        # Test with www prefix
+        ("{{Lien web|site=www.ici.radio-canada.ca|url=https://example.com}}", "Radio-Canada", "www.ici.radio-canada.ca should map to Radio-Canada"),
+        # Test without www prefix
+        ("{{Lien web|site=ici.radio-canada.ca|url=https://example.com}}", "Radio-Canada", "ici.radio-canada.ca should map to Radio-Canada"),
+        # Test with URL scheme
+        ("{{Lien web|site=https://www.ici.radio-canada.ca|url=https://example.com}}", "Radio-Canada", "https://www.ici.radio-canada.ca should map to Radio-Canada"),
+        # Test unmapped domain (should remain unchanged)
+        ("{{Lien web|site=unmapped.com|url=https://example.com}}", "unmapped.com", "Unmapped domain should remain unchanged"),
+    ]
+    
+    all_pass = True
+    for test_text, expected_site, description in test_cases:
+        print(f"\nTest: {description}")
+        print(f"Input: {test_text}")
+        result = normalizer.normalize_text(test_text)
+        print(f"Output: {result.normalized_text}")
+        
+        # Extract the site parameter from output
+        import re
+        site_match = re.search(r'\bsite=([^|}]+)', result.normalized_text)
+        actual_site = site_match.group(1) if site_match else None
+        
+        print(f"Expected site: {expected_site}")
+        print(f"Actual site: {actual_site}")
+        
+        if actual_site == expected_site:
+            print("[PASS]")
+        else:
+            print("[FAIL]")
+            all_pass = False
+    
+    if all_pass:
+        print("\n[PASS] Domain mapping works correctly with www/non-www variants")
+    else:
+        print("\n[FAIL] Domain mapping failed for some cases")
+
 if __name__ == "__main__":
     test_case_normalizer()
     test_idempotency()
     test_french_specific()
     test_yaml_loading()
     test_acronym_false_positives()
+    test_domain_mapping()

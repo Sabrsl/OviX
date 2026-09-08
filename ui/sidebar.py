@@ -651,7 +651,10 @@ def _render_automation_section(
         import time
         if 'last_auto_refresh' not in st.session_state:
             st.session_state.last_auto_refresh = 0
-        if time.time() - st.session_state.last_auto_refresh > 5:
+        # Refresh if automation is running OR if scheduler exists (to show logs)
+        if (st.session_state.automation_running or 
+            (st.session_state.automation_scheduler and st.session_state.automation_scheduler.is_running())) and \
+            time.time() - st.session_state.last_auto_refresh > 5:
             st.session_state.last_auto_refresh = time.time()
             st.rerun()
 

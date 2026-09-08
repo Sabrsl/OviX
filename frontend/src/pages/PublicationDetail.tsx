@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, CheckCircle, Clock, ExternalLink, FileText, Calendar, Hash, User, Globe, Edit, AlertTriangle, Search } from 'lucide-react'
 import { historyApi } from '../api/history.api'
+import Button from '../components/Button'
 
 interface PublishedArticle {
   title: string
@@ -105,7 +106,7 @@ export default function PublicationDetail() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', maxWidth: '860px', margin: '0 auto', padding: '0 16px' }}>
         <div style={{ textAlign: 'center', color: '#666666' }}>
           <Clock className="animate-spin" style={{ width: '40px', height: '40px', margin: '0 auto 16px' }} />
           <div>Chargement...</div>
@@ -116,25 +117,15 @@ export default function PublicationDetail() {
 
   if (error || !article) {
     return (
-      <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-        <button
+      <div style={{ padding: '0 16px', maxWidth: '860px', margin: '0 auto' }}>
+        <Button
+          variant="neutral"
           onClick={() => navigate('/publication/history')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '8px 16px',
-            backgroundColor: 'transparent',
-            color: '#a0a0a0',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '14px',
-            marginBottom: '24px'
-          }}
+          style={{ backgroundColor: 'transparent', border: 'none', color: '#a0a0a0', marginBottom: '24px' }}
         >
           <ArrowLeft style={{ width: '16px', height: '16px' }} />
           Retour à l'historique
-        </button>
+        </Button>
         <div style={{
           backgroundColor: '#161616',
           border: '1px solid #2a2a2a',
@@ -151,27 +142,17 @@ export default function PublicationDetail() {
   }
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ padding: '0 16px', maxWidth: '860px', margin: '0 auto' }}>
       {/* Header */}
       <div style={{ marginBottom: '32px' }}>
-        <button
+        <Button
+          variant="neutral"
           onClick={() => navigate('/publication/history')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '8px 16px',
-            backgroundColor: 'transparent',
-            color: '#a0a0a0',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '14px',
-            marginBottom: '16px'
-          }}
+          style={{ backgroundColor: 'transparent', border: 'none', color: '#a0a0a0', marginBottom: '16px' }}
         >
           <ArrowLeft style={{ width: '16px', height: '16px' }} />
           Retour à l'historique
-        </button>
+        </Button>
         
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
           <div style={{
@@ -253,7 +234,7 @@ export default function PublicationDetail() {
                       href={getRevisionUrl(article.title, article.revision_id)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      style={{ color: '#3b82f6', textDecoration: 'none' }}
+                      style={{ color: '#e0e0e0', textDecoration: 'none' }}
                     >
                       <ExternalLink style={{ width: '14px', height: '14px' }} />
                     </a>
@@ -291,26 +272,14 @@ export default function PublicationDetail() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
             <div>
-              <button
+              <Button
+                variant="neutral"
                 onClick={() => navigate(`/article/detail?title=${encodeURIComponent(article.title)}`)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  padding: '10px 16px',
-                  backgroundColor: '#1a1a1a',
-                  color: '#e0e0e0',
-                  border: '1px solid #2a2a2a',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  width: '100%'
-                }}
+                style={{ justifyContent: 'center', width: '100%', padding: '10px 16px' }}
               >
                 <Search style={{ width: '16px', height: '16px' }} />
                 Voir l'analyse
-              </button>
+              </Button>
             </div>
             <div>
               <div style={{ fontSize: '12px', color: '#666666', marginBottom: '4px' }}>Problèmes détectés</div>
@@ -336,84 +305,52 @@ export default function PublicationDetail() {
             href={getWikipediaUrl(article.title)}
             target="_blank"
             rel="noopener noreferrer"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '10px 16px',
-              backgroundColor: '#1a1a1a',
-              color: '#e0e0e0',
-              textDecoration: 'none',
-              borderRadius: '6px',
-              fontSize: '14px',
-              border: '1px solid #2a2a2a'
-            }}
+            style={{ textDecoration: 'none' }}
           >
-            <Globe style={{ width: '16px', height: '16px' }} />
-            Article Wikipédia
+            <Button variant="neutral">
+              <Globe style={{ width: '16px', height: '16px' }} />
+              Article Wikipédia
+            </Button>
           </a>
-          
+
           {article.revision_id !== null && article.revision_id !== undefined && getRevisionUrl(article.title, article.revision_id) && (
             <a
               href={getRevisionUrl(article.title, article.revision_id)}
               target="_blank"
               rel="noopener noreferrer"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '10px 16px',
-                backgroundColor: '#1a1a1a',
-                color: '#e0e0e0',
-                textDecoration: 'none',
-                borderRadius: '6px',
-                fontSize: '14px',
-                border: '1px solid #2a2a2a'
-              }}
+              style={{ textDecoration: 'none' }}
             >
-              <Hash style={{ width: '16px', height: '16px' }} />
-              Version publiée
+              <Button variant="neutral">
+                <Hash style={{ width: '16px', height: '16px' }} />
+                Version publiée
+              </Button>
             </a>
           )}
-          
-          <button
+
+          <Button
+            variant="neutral"
             onClick={() => {
               const text = `[[${article.title}]] - ${article.summary}`
               navigator.clipboard.writeText(text)
             }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '10px 16px',
-              backgroundColor: '#1a1a1a',
-              color: '#e0e0e0',
-              border: '1px solid #2a2a2a',
-              borderRadius: '6px',
-              fontSize: '14px',
-              cursor: 'pointer'
-            }}
           >
             <Edit style={{ width: '16px', height: '16px' }} />
             Copier lien wiki
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Technical Details */}
       <div style={{ backgroundColor: '#161616', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '20px' }}>
-        <button
+        <Button
+          variant="neutral"
           onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
             backgroundColor: 'transparent',
             border: 'none',
             color: '#a0a0a0',
             fontSize: '16px',
             fontWeight: 600,
-            cursor: 'pointer',
             padding: 0,
             marginBottom: showTechnicalDetails ? '16px' : '0'
           }}
@@ -423,7 +360,7 @@ export default function PublicationDetail() {
           <span style={{ marginLeft: '8px', fontSize: '12px' }}>
             {showTechnicalDetails ? '▼' : '▶'}
           </span>
-        </button>
+        </Button>
 
         {showTechnicalDetails && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>

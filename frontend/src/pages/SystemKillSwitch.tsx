@@ -1,6 +1,7 @@
 import { Shield, AlertTriangle } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { systemApi } from '../api/system.api'
+import Button from '../components/Button'
 
 const COLORS = {
   bgPanel: '#161616',
@@ -121,7 +122,7 @@ export default function SystemKillSwitch() {
   const isActive = killSwitchStatus?.enabled || false
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.35s ease-out' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.35s ease-out', maxWidth: '860px', margin: '0 auto', padding: '0 16px' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
         <div>
@@ -233,25 +234,12 @@ export default function SystemKillSwitch() {
                 </p>
 
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <SecondaryButton onClick={() => fetchStatus()} disabled={activating}>
+                  <Button variant="neutral" onClick={() => fetchStatus()} disabled={activating}>
                     {activating ? 'Chargement...' : 'Actualiser'}
-                  </SecondaryButton>
-                  <button
+                  </Button>
+                  <Button
+                    variant={isPolling ? 'success' : 'neutral'}
                     onClick={() => setIsPolling(!isPolling)}
-                    style={{
-                      padding: '9px 15px',
-                      backgroundColor: isPolling ? COLORS.success : COLORS.bgSubtle,
-                      border: `1px solid ${isPolling ? COLORS.success : COLORS.border}`,
-                      borderRadius: '6px',
-                      color: isPolling ? '#ffffff' : COLORS.textSecondary,
-                      fontSize: '12.5px',
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      transition: 'background-color 0.15s, border-color 0.15s, color 0.15s',
-                    }}
                   >
                     <span
                       style={{
@@ -263,7 +251,7 @@ export default function SystemKillSwitch() {
                       }}
                     />
                     {isPolling ? 'Suivi actif' : 'Suivi inactif'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -342,33 +330,22 @@ export default function SystemKillSwitch() {
 
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   {!isActive && !showReasonForm && (
-                    <SecondaryButton onClick={() => setShowReasonForm(true)}>
+                    <Button variant="neutral" onClick={() => setShowReasonForm(true)}>
                       Spécifier une raison
-                    </SecondaryButton>
+                    </Button>
                   )}
-                  <button
+                  <Button
+                    variant={isActive ? 'primary' : 'danger'}
                     onClick={isActive ? deactivateKillSwitch : activateKillSwitch}
                     disabled={activating || (!isActive && !showReasonForm)}
-                    style={{
-                      padding: '9px 16px',
-                      backgroundColor: isActive ? COLORS.accent : COLORS.danger,
-                      border: `1px solid ${isActive ? COLORS.accent : COLORS.danger}`,
-                      borderRadius: '6px',
-                      color: '#ffffff',
-                      fontSize: '12.5px',
-                      fontWeight: 500,
-                      cursor: activating || (!isActive && !showReasonForm) ? 'not-allowed' : 'pointer',
-                      opacity: activating || (!isActive && !showReasonForm) ? 0.5 : 1,
-                      transition: 'filter 0.15s',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (activating || (!isActive && !showReasonForm)) return
-                      e.currentTarget.style.filter = 'brightness(1.1)'
-                    }}
-                    onMouseLeave={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
+                    style={
+                      isActive
+                        ? { backgroundColor: COLORS.accent, borderColor: COLORS.accent, color: '#ffffff' }
+                        : { backgroundColor: COLORS.danger, borderColor: COLORS.danger, color: '#ffffff' }
+                    }
                   >
                     {activating ? 'Traitement...' : isActive ? "Désactiver l'arrêt d'urgence" : "Activer l'arrêt d'urgence"}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -403,48 +380,6 @@ function DetailRow({ label, value }: { label: string; value: string }) {
       <span style={{ color: COLORS.textSecondary, fontWeight: 500, flexShrink: 0 }}>{label} :</span>
       <span style={{ color: COLORS.textMuted }}>{value}</span>
     </div>
-  )
-}
-
-function SecondaryButton({
-  children,
-  onClick,
-  disabled,
-}: {
-  children: React.ReactNode
-  onClick: () => void
-  disabled?: boolean
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        padding: '9px 15px',
-        backgroundColor: COLORS.bgSubtle,
-        border: `1px solid ${COLORS.border}`,
-        borderRadius: '6px',
-        color: COLORS.textSecondary,
-        fontSize: '12.5px',
-        fontWeight: 500,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.6 : 1,
-        transition: 'background-color 0.15s, border-color 0.15s, color 0.15s',
-      }}
-      onMouseEnter={(e) => {
-        if (disabled) return
-        e.currentTarget.style.backgroundColor = '#1f1f1f'
-        e.currentTarget.style.borderColor = '#3a3a3a'
-        e.currentTarget.style.color = COLORS.textPrimary
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = COLORS.bgSubtle
-        e.currentTarget.style.borderColor = COLORS.border
-        e.currentTarget.style.color = COLORS.textSecondary
-      }}
-    >
-      {children}
-    </button>
   )
 }
 

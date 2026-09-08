@@ -359,9 +359,9 @@ def _render_publication_section(article):
         correction_types_key = f"{article.title}_correction_types"
         correction_types = st.session_state.get(correction_types_key, [])
         
-        # Use the edit_summaries module for random summary
-        from wikipedia_maintenance.utils.edit_summaries import get_random_summary
-        auto_summary = get_random_summary()
+        # Use the edit_summaries module for summary
+        from wikipedia_maintenance.utils.edit_summaries import get_summary
+        auto_summary = get_summary()
 
         if correction_types and st.session_state.publisher:
             auto_summary = st.session_state.publisher.generate_edit_summary(

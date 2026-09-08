@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, type CSSProperties, type FormEvent } from 'react'
 import { Globe, Lock, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
 import { authApi } from '../api/auth.api'
+import Tooltip from '../components/Tooltip'
+import Button from '../components/Button'
 
 const logger = {
   info: (msg: string, ...args: any[]) => console.log('[WikipediaConnection]', msg, ...args),
@@ -28,13 +30,19 @@ const STORAGE_KEYS = {
   remember: 'wp_remember',
 } as const
 
+// Injecté une seule fois au niveau module plutôt que dans le JSX du composant,
+// pour éviter toute duplication du <style> entre l'état "loading" et l'état final.
+const SPIN_KEYFRAMES = `@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`
+
 // ---- Styles centralisés (évite la répétition et facilite la maintenance) ----
 const styles: Record<string, CSSProperties> = {
   container: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '14px',
-    maxWidth: '360px',
+    gap: '24px',
+    maxWidth: '400px',
+    margin: '0 auto',
+    padding: '0 16px',
     fontFamily: 'inherit',
   },
   title: {
@@ -94,34 +102,15 @@ const inputBaseStyle: CSSProperties = {
   border: '1px solid #2a2a2a',
 }
 
-function getInputStyle(isFocused: boolean): CSSProperties {
+function getInputStyle(isFocused: boolean, isInvalid = false): CSSProperties {
+  const borderColor = isInvalid ? '#f87171' : isFocused ? '#3b82f6' : '#2a2a2a'
   return {
     ...inputBaseStyle,
-    border: `1px solid ${isFocused ? '#3b82f6' : '#2a2a2a'}`,
-    boxShadow: isFocused ? '0 0 0 3px rgba(59, 130, 246, 0.12)' : 'none',
+    border: `1px solid ${borderColor}`,
+    boxShadow: isFocused
+      ? `0 0 0 3px ${isInvalid ? 'rgba(248, 113, 113, 0.15)' : 'rgba(59, 130, 246, 0.12)'}`
+      : 'none',
   }
-}
-
-function getButtonStyle(variant: 'primary' | 'secondary', disabled: boolean): CSSProperties {
-  const base: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '6px',
-    padding: '8px 14px',
-    borderRadius: '5px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    opacity: disabled ? 0.6 : 1,
-    transition: 'background-color 0.15s ease, border-color 0.15s ease',
-    border: 'none',
-  }
-
-  if (variant === 'primary') {
-    return { ...base, backgroundColor: '#2563eb', color: '#fff' }
-  }
-  return { ...base, backgroundColor: 'transparent', color: '#f5f5f5', border: '1px solid #333333' }
 }
 
 // ---- Sous-composants ----
@@ -205,6 +194,10 @@ export default function WikipediaConnection() {
   const [remember, setRemember] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [focusedField, setFocusedField] = useState<string | null>(null)
+  const [touched, setTouched] = useState<{ username: boolean; password: boolean }>({
+    username: false,
+    password: false,
+  })
 
   useEffect(() => {
     try {
@@ -270,7 +263,7 @@ export default function WikipediaConnection() {
   useEffect(() => {
     const validateSession = async () => {
       if (!authStatus?.authenticated) return // Ne valider que si on pense être connecté
-      
+
       try {
         const validation = await authApi.validateSession()
         if (!validation.valid || !validation.authenticated) {
@@ -285,7 +278,7 @@ export default function WikipediaConnection() {
 
     // Première validation après 10 minutes
     const initialTimeout = setTimeout(validateSession, 600000)
-    
+
     // Ensuite toutes les 2 heures
     const interval = setInterval(validateSession, 7200000)
 
@@ -313,6 +306,7 @@ export default function WikipediaConnection() {
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault()
+    setTouched({ username: true, password: true })
     if (!username.trim() || !password) {
       setError('Veuillez remplir tous les champs')
       return
@@ -362,6 +356,10 @@ export default function WikipediaConnection() {
     }
   }
 
+  const usernameInvalid = touched.username && !username.trim()
+  const passwordInvalid = touched.password && !password
+  const isSubmitDisabled = loggingIn
+
   if (loading) {
     return (
       <div style={styles.container}>
@@ -384,7 +382,7 @@ export default function WikipediaConnection() {
           <Spinner size={13} />
           <span style={{ color: '#666666', fontSize: '11.5px' }}>Chargement...</span>
         </div>
-        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        <style>{SPIN_KEYFRAMES}</style>
       </div>
     )
   }
@@ -432,11 +430,21 @@ export default function WikipediaConnection() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 onFocus={() => setFocusedField('username')}
-                onBlur={() => setFocusedField(null)}
+                onBlur={() => {
+                  setFocusedField(null)
+                  setTouched((t) => ({ ...t, username: true }))
+                }}
                 placeholder="Votre nom d'utilisateur"
                 autoComplete="username"
-                style={getInputStyle(focusedField === 'username')}
+                aria-invalid={usernameInvalid}
+                aria-describedby={usernameInvalid ? 'wp-username-error' : undefined}
+                style={getInputStyle(focusedField === 'username', usernameInvalid)}
               />
+              {usernameInvalid && (
+                <p id="wp-username-error" style={{ fontSize: '10px', color: '#f87171', margin: '4px 0 0' }}>
+                  Le nom d'utilisateur est requis
+                </p>
+              )}
             </div>
 
             <div>
@@ -449,11 +457,21 @@ export default function WikipediaConnection() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onFocus={() => setFocusedField('password')}
-                onBlur={() => setFocusedField(null)}
+                onBlur={() => {
+                  setFocusedField(null)
+                  setTouched((t) => ({ ...t, password: true }))
+                }}
                 placeholder="Votre mot de passe"
                 autoComplete="current-password"
-                style={getInputStyle(focusedField === 'password')}
+                aria-invalid={passwordInvalid}
+                aria-describedby={passwordInvalid ? 'wp-password-error' : undefined}
+                style={getInputStyle(focusedField === 'password', passwordInvalid)}
               />
+              {passwordInvalid && (
+                <p id="wp-password-error" style={{ fontSize: '10px', color: '#f87171', margin: '4px 0 0' }}>
+                  Le mot de passe est requis
+                </p>
+              )}
             </div>
 
             <div>
@@ -476,27 +494,30 @@ export default function WikipediaConnection() {
               </select>
             </div>
 
-            <label
-              htmlFor="remember"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                fontSize: '11px',
-                color: '#999999',
-                cursor: 'pointer',
-                userSelect: 'none',
-              }}
-            >
-              <input
-                type="checkbox"
-                id="remember"
-                checked={remember}
-                onChange={(e) => setRemember(e.target.checked)}
-                style={{ width: 12, height: 12, accentColor: '#3b82f6', cursor: 'pointer' }}
-              />
-              Se souvenir de mes identifiants
-            </label>
+            <Tooltip content="Seuls le nom d'utilisateur et la langue sont enregistrés. Le mot de passe n'est jamais sauvegardé." position="top" delay={300}>
+              <label
+                htmlFor="remember"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '11px',
+                  color: '#999999',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  width: 'fit-content',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  id="remember"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  style={{ width: 12, height: 12, accentColor: '#3b82f6', cursor: 'pointer' }}
+                />
+                Se souvenir de mes identifiants
+              </label>
+            </Tooltip>
 
             {error && (
               <div style={styles.errorBox} role="alert">
@@ -504,10 +525,10 @@ export default function WikipediaConnection() {
               </div>
             )}
 
-            <button type="submit" disabled={loggingIn} style={getButtonStyle('primary', loggingIn)}>
+            <Button type="submit" disabled={isSubmitDisabled} variant="primary">
               {loggingIn ? <Spinner /> : <Globe style={{ width: 12, height: 12 }} aria-hidden />}
               {loggingIn ? 'Connexion...' : 'Se connecter'}
-            </button>
+            </Button>
           </form>
         </div>
       )}
@@ -522,14 +543,14 @@ export default function WikipediaConnection() {
             </div>
           )}
 
-          <button onClick={handleLogout} disabled={loggingIn} style={getButtonStyle('secondary', loggingIn)}>
+          <Button onClick={handleLogout} disabled={loggingIn} variant="neutral">
             {loggingIn ? <Spinner /> : <Lock style={{ width: 12, height: 12 }} aria-hidden />}
             {loggingIn ? 'Déconnexion...' : 'Se déconnecter'}
-          </button>
+          </Button>
         </div>
       )}
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <style>{SPIN_KEYFRAMES}</style>
     </div>
   )
 }

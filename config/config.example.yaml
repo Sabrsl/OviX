@@ -159,3 +159,62 @@ ai:
 # API URLs configuration
 api_urls:
   gemini: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+
+# Domain to site name enrichment configuration
+domain_to_site_name_enrichment:
+  enabled: true
+  dry_run_default: true  # If true, only analyze without writing to YAML
+  
+  # Categories to process (sorted by priority)
+  categories:
+    # Priority 1 - Médias
+    - wiki: fr
+      category: "Média français"
+      priority: 1
+    - wiki: fr
+      category: "Agence de presse"
+      priority: 1
+    - wiki: fr
+      category: "Presse écrite"
+      priority: 1
+    - wiki: fr
+      category: "Média en ligne"
+      priority: 1
+    
+    # Priority 2 - Technologie
+    - wiki: fr
+      category: "Entreprise de télécommunications"
+      priority: 2
+    - wiki: fr
+      category: "Entreprise informatique"
+      priority: 2
+    - wiki: fr
+      category: "Site web"
+      priority: 2
+    
+    # Priority 3 - Entreprises
+    - wiki: fr
+      category: "Entreprise française"
+      priority: 3
+    - wiki: fr
+      category: "Entreprise par pays"
+      priority: 3
+    
+    # Priority 4 - Radio / Télévision
+    - wiki: fr
+      category: "Radio française"
+      priority: 4
+    - wiki: fr
+      category: "Chaîne de télévision française"
+      priority: 4
+    
+    # Priority 5 - Bibliothèques / Documentation
+    - wiki: fr
+      category: "Bibliothèque"
+      priority: 5
+    - wiki: fr
+      category: "Bibliothèque nationale"
+      priority: 5
+    - wiki: fr
+      category: "Bibliothèque universitaire"
+      priority: 5

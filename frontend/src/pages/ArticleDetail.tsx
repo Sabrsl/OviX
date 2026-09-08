@@ -23,6 +23,7 @@ import { diffApi } from '../api/diff.api'
 import { publicationApi } from '../api/publication.api'
 import { articlesApi } from '../api/articles.api'
 import { AnalyzerBadges } from '../components/AnalyzerBadges'
+import Button from '../components/Button'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -137,19 +138,16 @@ function NavButton({
 }) {
   const Icon = direction === 'prev' ? ChevronLeft : ChevronRight
   return (
-    <button
-      type="button"
+    <Button
+      variant="neutral"
       onClick={onClick}
       disabled={disabled}
-      aria-label={direction === 'prev' ? 'Article précédent' : 'Article suivant'}
-      className={`flex items-center gap-1.5 rounded-md border border-neutral-800 px-2.5 py-1.5 text-xs transition-colors
-        ${disabled ? 'cursor-not-allowed text-neutral-600' : 'cursor-pointer text-neutral-300 hover:bg-neutral-800'}
-        bg-neutral-900`}
+      style={{ padding: '6px 10px', fontSize: '11px' }}
     >
       {direction === 'prev' && <Icon className="h-4 w-4" />}
       {direction === 'prev' ? 'Précédent' : 'Suivant'}
       {direction === 'next' && <Icon className="h-4 w-4" />}
-    </button>
+    </Button>
   )
 }
 
@@ -233,6 +231,22 @@ export default function ArticleDetail() {
     setTempSummary(editSummary)
     setIsEditingSummary(false)
   }
+
+  // Auto-save summary when user edits it
+  useEffect(() => {
+    if (isEditingSummary && articleTitle && tempSummary !== editSummary) {
+      const saveTimeout = setTimeout(async () => {
+        try {
+          await articlesApi.updateArticleSummary(articleTitle, tempSummary)
+          setEditSummary(tempSummary)
+        } catch (err) {
+          console.error('Failed to auto-save summary:', err)
+        }
+      }, 1000) // Save after 1 second of inactivity
+
+      return () => clearTimeout(saveTimeout)
+    }
+  }, [tempSummary, isEditingSummary, articleTitle, editSummary])
 
   const requestIdRef = useRef(0)
 
@@ -803,14 +817,10 @@ export default function ArticleDetail() {
         <div className="flex flex-col items-center gap-3 rounded-lg border border-red-900/40 bg-neutral-900 p-12 text-center text-sm">
           <AlertTriangle className="h-6 w-6 text-red-500" />
           <div className="text-red-400">{error}</div>
-          <button
-            type="button"
-            onClick={() => fetchArticleDetails()}
-            className="mt-2 flex items-center gap-2 rounded-md border border-neutral-800 bg-neutral-800 px-3.5 py-2 text-xs text-neutral-200 hover:bg-neutral-700"
-          >
+          <Button variant="neutral" onClick={() => fetchArticleDetails()} style={{ marginTop: '8px' }}>
             <RefreshCw className="h-4 w-4" />
             Réessayer
-          </button>
+          </Button>
         </div>
       </PageShell>
     )
@@ -904,15 +914,13 @@ export default function ArticleDetail() {
             </div>
           )}
 
-          <a
-            href={getWikipediaUrl(articleTitle!)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 rounded-md bg-blue-500/10 px-3 py-1.5 text-xs text-blue-500 transition-colors hover:bg-blue-500/20"
+          <Button
+            variant="primary"
+            onClick={() => window.open(getWikipediaUrl(articleTitle!), '_blank', 'noopener,noreferrer')}
           >
             <ExternalLink className="h-4 w-4" />
             Voir sur Wikipédia
-          </a>
+          </Button>
 
           <span className={`flex items-center gap-2 text-xs font-medium ${
             article.status === 'published' ? 'text-green-500' :
@@ -1020,24 +1028,14 @@ export default function ArticleDetail() {
               {formatCharacterCount(editedCharCount)} caractères
             </div>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleCancelManualEdit}
-                disabled={savingEdit}
-                className="flex items-center gap-1.5 rounded-md border border-neutral-800 bg-neutral-800 px-3 py-1.5 text-[11px] text-neutral-200 transition-colors hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
+              <Button variant="neutral" onClick={handleCancelManualEdit} disabled={savingEdit} style={{ padding: '6px 12px', fontSize: '11px' }}>
                 <X className="h-3.5 w-3.5" />
                 Annuler
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveManualEdit}
-                disabled={savingEdit}
-                className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-              >
+              </Button>
+              <Button variant="primary" onClick={handleSaveManualEdit} disabled={savingEdit} style={{ padding: '6px 12px', fontSize: '11px' }}>
                 {savingEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                 {savingEdit ? 'Enregistrement...' : 'Enregistrer'}
-              </button>
+              </Button>
             </div>
           </div>
           <textarea
@@ -1057,15 +1055,10 @@ export default function ArticleDetail() {
             <div className="text-xs text-neutral-500">
               🔴 texte barré = supprimé · 🟢 texte en gras = ajouté
             </div>
-            <button
-              type="button"
-              onClick={handleRegenerateDiff}
-              disabled={regeneratingDiff}
-              className="flex items-center gap-1.5 rounded-md border border-neutral-800 bg-neutral-800 px-3 py-1.5 text-[11px] text-neutral-200 transition-colors hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
+            <Button variant="neutral" onClick={handleRegenerateDiff} disabled={regeneratingDiff} style={{ padding: '6px 12px', fontSize: '11px' }}>
               <RefreshCw className={`h-3.5 w-3.5 ${regeneratingDiff ? 'animate-spin' : ''}`} />
               {regeneratingDiff ? 'Régénération...' : 'Régénérer'}
-            </button>
+            </Button>
           </div>
           <div
             className="diff-content max-h-[500px] overflow-auto rounded-md border border-neutral-800 bg-black p-4 text-xs leading-relaxed"
@@ -1082,15 +1075,14 @@ export default function ArticleDetail() {
               <div className="flex-1 rounded-md border border-neutral-800 bg-black p-4 text-xs text-neutral-300">
                 {editSummary || "Correction de liens morts via OVIX"}
               </div>
-              <button
-                type="button"
+              <Button
+                variant="neutral"
                 onClick={handleStartEditSummary}
                 disabled={publishing}
-                className="shrink-0 rounded-md border border-neutral-800 bg-neutral-800 p-2 text-neutral-400 transition-colors hover:bg-neutral-700 hover:text-neutral-200 disabled:cursor-not-allowed disabled:opacity-50"
-                title="Modifier le résumé"
+                style={{ padding: '8px', flexShrink: 0 }}
               >
                 <Edit className="h-3.5 w-3.5" />
-              </button>
+              </Button>
             </div>
           ) : (
             <div className="flex flex-col gap-2">
@@ -1103,24 +1095,14 @@ export default function ArticleDetail() {
                 rows={3}
               />
               <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={handleCancelSummary}
-                  disabled={publishing}
-                  className="flex items-center gap-1.5 rounded-md border border-neutral-800 bg-neutral-800 px-3 py-1.5 text-[11px] text-neutral-200 transition-colors hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
+                <Button variant="neutral" onClick={handleCancelSummary} disabled={publishing} style={{ padding: '6px 12px', fontSize: '11px' }}>
                   <X className="h-3.5 w-3.5" />
                   Annuler
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveSummary}
-                  disabled={publishing}
-                  className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-                >
+                </Button>
+                <Button variant="primary" onClick={handleSaveSummary} disabled={publishing} style={{ padding: '6px 12px', fontSize: '11px' }}>
                   <Save className="h-3.5 w-3.5" />
                   Enregistrer
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -1132,15 +1114,15 @@ export default function ArticleDetail() {
         <div className="flex flex-wrap items-center gap-3">
           {correctedContent && (
             <>
-              <button
-                type="button"
+              <Button
+                variant="primary"
                 onClick={handlePublish}
                 disabled={isPublished || publishing || isEditing}
-                className="flex items-center gap-2 rounded-md bg-blue-600 px-3.5 py-2 text-xs font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ padding: '8px 14px', fontSize: '12px' }}
               >
                 {publishing && <Loader2 className="h-4 w-4 animate-spin" />}
                 {publishing ? 'Publication en cours...' : isPublished ? 'Déjà publié' : 'Publier'}
-              </button>
+              </Button>
 
               <label className="flex items-center gap-2 text-xs text-neutral-400">
                 <input
@@ -1155,35 +1137,35 @@ export default function ArticleDetail() {
             </>
           )}
 
-          <button
-            type="button"
+          <Button
+            variant="primary"
             onClick={handleReanalyze}
             disabled={reanalyzing || isEditing}
-            className="flex items-center gap-2 rounded-md bg-amber-600 px-3.5 py-2 text-xs font-medium text-white transition-colors hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ padding: '8px 14px', fontSize: '12px' }}
           >
             {reanalyzing && <Loader2 className="h-4 w-4 animate-spin" />}
             {reanalyzing ? 'Analyse en cours...' : 'Réanalyser'}
-          </button>
+          </Button>
 
-          <button
-            type="button"
+          <Button
+            variant="neutral"
             onClick={handleStartManualEdit}
             disabled={isPublished || isEditing}
-            className="flex items-center gap-2 rounded-md border border-neutral-800 bg-neutral-800 px-3.5 py-2 text-xs text-neutral-200 transition-colors hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ padding: '8px 14px', fontSize: '12px' }}
           >
             <Edit className="h-4 w-4" />
             Modifier manuellement
-          </button>
+          </Button>
 
-          <button
-            type="button"
+          <Button
+            variant="danger"
             onClick={handleIgnore}
             disabled={isPublished || ignoring || isEditing}
-            className="flex items-center gap-2 rounded-md border border-red-900/40 bg-red-950/30 px-3.5 py-2 text-xs text-red-400 transition-colors hover:bg-red-950/50 disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ padding: '8px 14px', fontSize: '12px' }}
           >
             {ignoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
             {ignoring ? 'Ignor en cours...' : 'Ignorer'}
-          </button>
+          </Button>
         </div>
       </InfoCard>
 
@@ -1214,23 +1196,13 @@ export default function ArticleDetail() {
               <span className="text-red-400 font-semibold">Cette action est irréversible.</span>
             </p>
             <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowConfirmDialog(false)}
-                disabled={publishing}
-                className="flex items-center gap-2 rounded-md border border-neutral-700 bg-neutral-800 px-4 py-2 text-sm text-neutral-200 transition-colors hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
+              <Button variant="neutral" onClick={() => setShowConfirmDialog(false)} disabled={publishing}>
                 Annuler
-              </button>
-              <button
-                type="button"
-                onClick={executePublish}
-                disabled={publishing}
-                className="flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
-              >
+              </Button>
+              <Button variant="danger" onClick={executePublish} disabled={publishing}>
                 {publishing && <Loader2 className="h-4 w-4 animate-spin" />}
                 {publishing ? 'Publication...' : 'Confirmer la publication'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

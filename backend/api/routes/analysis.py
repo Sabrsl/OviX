@@ -992,10 +992,7 @@ async def run_analysis_worker(
                     stats_by_analyzer["manual_review"] += 1
                     continue  # Skip for corrected_links_count
                     
-                if i.extra and i.extra.get('repair_status') in dead_link_repair_statuses:
-                    if 'dead' in i.issue_type.lower():
-                        dead_links_corrected_count += 1
-                elif i.extra and i.extra.get('repair_status') in enrichment_statuses:
+                if i.extra and i.extra.get('repair_status') in enrichment_statuses:
                     if 'reference_enrichment' in i.issue_type.lower():
                         enrichment_count += 1
                 # Count new reference analyzer corrections
@@ -1004,6 +1001,33 @@ async def run_analysis_worker(
                 # Count HTTP to HTTPS conversions
                 elif i.issue_type == 'http_link':
                     enrichment_count += 1
+            
+            # Count dead links by analyzing actual content changes (same logic as get_summary_from_issues)
+            import re
+            archive_patterns = [
+                (r'https://web\.archive\.org/web/(\d+)/(https?://[^\s\)]+)', 'web.archive.org'),
+                (r'https://wikiwix\.cache/([^/]+)/([^/]+)', 'wikiwix'),
+                (r'https://arquivo\.pt/wayback/(\d+)/https?://([^\s\)]+)', 'arquivo.pt'),
+            ]
+            
+            archive_matches = []
+            original_archive_matches = []
+            
+            for pattern, provider in archive_patterns:
+                matches = re.findall(pattern, corrected_content)
+                for match in matches:
+                    timestamp, url = match
+                    archive_matches.append((timestamp, url, provider))
+            
+                matches = re.findall(pattern, original_content)
+                for match in matches:
+                    timestamp, url = match
+                    original_archive_matches.append((timestamp, url, provider))
+            
+            archive_set = set(archive_matches)
+            original_set = set(original_archive_matches)
+            new_matches = archive_set - original_set
+            dead_links_corrected_count = len(new_matches)
             
             logger.info(f"Dead links corrected: {dead_links_corrected_count}, Enrichments: {enrichment_count}")
             logger.info(f"Stats by analyzer: {stats_by_analyzer}")
@@ -1182,7 +1206,18 @@ async def run_analysis_worker(
                         break
         else:
             typo_corrections_count = 0
-        
+
+        # Generate edit summary from issues for display in article details
+        edit_summary = None
+        try:
+            from wikipedia_maintenance.utils.edit_summaries import get_summary_from_issues
+            edit_summary = get_summary_from_issues(issues, original_content, corrected_content)
+            logger.info(f"Generated edit summary from issues: {edit_summary}")
+            logger.info(f"Edit summary type: {type(edit_summary)}, is None: {edit_summary is None}")
+        except Exception as e:
+            logger.warning(f"Failed to generate edit summary from issues: {e}", exc_info=True)
+            edit_summary = f"Analysis completed with {len(issues)} issues"
+
         # Clean up any incomplete analysis results for this article before storing new result
         try:
             cursor = db.conn.cursor()
@@ -1205,7 +1240,7 @@ async def run_analysis_worker(
             status="pending",  # Awaiting decision (publish/ignore/reject)
             mode=mode,
             changes_count=len(issues),
-            summary=f"Analysis completed with {len(issues)} issues",
+            summary=edit_summary,  # Use generated edit summary instead of generic message
             original_content=original_content,
             corrected_content=corrected_content,
             character_count=len(original_content) if original_content else 0,
@@ -1223,6 +1258,8 @@ async def run_analysis_worker(
             typo_corrections_count=typo_corrections_count,
             stats_by_analyzer=json.dumps(stats_by_analyzer)  # Store detailed analyzer stats
         )
+
+        logger.info(f"Analysis result saved with summary: {edit_summary}")
 
         # Update article status in articles_to_analyze table to 'analyzed'
         try:

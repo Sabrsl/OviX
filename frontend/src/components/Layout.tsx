@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -12,9 +12,13 @@ import {
   ChevronRight,
   AlertTriangle,
   CheckCircle,
-  X
+  X,
+  Menu,
+  Pin
 } from 'lucide-react'
 import { authApi } from '../api/auth.api'
+import { systemApi } from '../api/system.api'
+import Tooltip from './Tooltip'
 
 const navigation = [
   {
@@ -59,9 +63,32 @@ const navigation = [
     children: [
       { name: 'Wikipedia', href: '/settings/wikipedia' },
       { name: 'Général', href: '/settings' },
+      { name: 'Gestion des domaines', href: '/settings/domains' },
     ],
   },
 ]
+
+const LS_SIDEBAR_COLLAPSED = 'ovix_sidebar_collapsed'
+const LS_SIDEBAR_PINNED = 'ovix_sidebar_pinned'
+
+function readBoolPref(key: string, fallback: boolean): boolean {
+  if (typeof window === 'undefined') return fallback
+  try {
+    const raw = localStorage.getItem(key)
+    return raw === null ? fallback : raw === 'true'
+  } catch {
+    return fallback
+  }
+}
+
+function writeBoolPref(key: string, value: boolean) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(key, String(value))
+  } catch {
+    // ignore storage errors (private mode, quota, etc.)
+  }
+}
 
 export default function Layout() {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
@@ -70,7 +97,17 @@ export default function Layout() {
   const [authError, setAuthError] = useState<string | null>(() => localStorage.getItem('wp_auth_error') || null)
   const [authSuccess, setAuthSuccess] = useState<string | null>(null)
   const [killSwitchError, setKillSwitchError] = useState<string | null>(null)
+  const [killSwitchStatus, setKillSwitchStatus] = useState<any>(null)
+  const [killSwitchLoading, setKillSwitchLoading] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readBoolPref(LS_SIDEBAR_COLLAPSED, false))
+  const [sidebarPinned, setSidebarPinned] = useState(() => readBoolPref(LS_SIDEBAR_PINNED, false))
+  const [sidebarHovered, setSidebarHovered] = useState(false)
+  const hoverCloseTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const location = useLocation()
+
+  // Sidebar is visually "open" (full width, labels + children visible) when:
+  // pinned, or explicitly expanded, or temporarily hovered while collapsed.
+  const sidebarOpen = sidebarPinned || !sidebarCollapsed || sidebarHovered
 
   const fetchAuthStatus = async (showLoading = false) => {
     try {
@@ -95,12 +132,34 @@ export default function Layout() {
     }
   }
 
+  const fetchKillSwitchStatus = async () => {
+    try {
+      setKillSwitchLoading(true)
+      const status = await systemApi.getKillSwitchStatus()
+      setKillSwitchStatus(status)
+    } catch (err) {
+      console.error('Failed to fetch kill switch status:', err)
+      // Don't block UI on error, just set default state
+      setKillSwitchStatus({ enabled: false })
+    } finally {
+      setKillSwitchLoading(false)
+    }
+  }
+
   useEffect(() => {
     // Only show loading on initial load, not on navigation
     const isInitialLoad = authStatus === null
     fetchAuthStatus(isInitialLoad)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location])
+
+  // Fetch kill switch status periodically
+  useEffect(() => {
+    fetchKillSwitchStatus()
+    const interval = setInterval(fetchKillSwitchStatus, 3600000) // Poll every 1 hour
+    return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Watch for auth status changes to show success message only on actual login
   useEffect(() => {
@@ -158,6 +217,49 @@ export default function Layout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Persist sidebar preferences
+  useEffect(() => {
+    writeBoolPref(LS_SIDEBAR_COLLAPSED, sidebarCollapsed)
+  }, [sidebarCollapsed])
+
+  useEffect(() => {
+    writeBoolPref(LS_SIDEBAR_PINNED, sidebarPinned)
+  }, [sidebarPinned])
+
+  // Clear any pending hover-close timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverCloseTimeout.current) clearTimeout(hoverCloseTimeout.current)
+    }
+  }, [])
+
+  const handleSidebarMouseEnter = useCallback(() => {
+    if (hoverCloseTimeout.current) {
+      clearTimeout(hoverCloseTimeout.current)
+      hoverCloseTimeout.current = null
+    }
+    if (sidebarCollapsed && !sidebarPinned) {
+      setSidebarHovered(true)
+    }
+  }, [sidebarCollapsed, sidebarPinned])
+
+  const handleSidebarMouseLeave = useCallback(() => {
+    // Small delay avoids flicker when the cursor briefly crosses the edge
+    hoverCloseTimeout.current = setTimeout(() => {
+      setSidebarHovered(false)
+    }, 120)
+  }, [])
+
+  const togglePinned = useCallback(() => {
+    setSidebarPinned((prev) => {
+      const next = !prev
+      // Toggling should also drive the collapsed flag: pinned = fully open, unpinned = rail mode.
+      setSidebarCollapsed(next ? false : true)
+      setSidebarHovered(false)
+      return next
+    })
+  }, [])
+
   const toggleExpanded = useCallback((name: string) => {
     setExpandedItems(prev => {
       const newExpanded = new Set(prev)
@@ -199,158 +301,204 @@ export default function Layout() {
   const wikiConnected = Boolean(authStatus?.authenticated)
   const wikiDotColor = authLoading ? '#666666' : (wikiConnected ? '#10b981' : '#ef4444')
 
+  // Visually collapsed = rail mode (icons only), used for layout decisions below.
+  const isRailMode = sidebarCollapsed && !sidebarOpen
+
   return (
     <div style={{ display: 'flex', height: '100vh', backgroundColor: '#0a0a0a' }}>
       {/* Sidebar */}
-      <aside style={{ width: '240px', flexShrink: 0, backgroundColor: '#111111', borderRight: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column' }}>
-        {/* Logo */}
-        <div style={{ height: '56px', flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 20px', borderBottom: '1px solid var(--border-subtle)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-            <div style={{
-              width: '28px',
-              height: '28px',
-              backgroundColor: '#3b82f6',
-              borderRadius: '8px',
+      <aside
+        style={{
+          width: sidebarOpen ? '240px' : '60px',
+          flexShrink: 0,
+          backgroundColor: '#111111',
+          borderRight: '1px solid var(--border-subtle)',
+          display: 'flex',
+          flexDirection: 'column',
+          transition: 'width 0.2s ease-in-out',
+          position: 'relative',
+          zIndex: 10
+        }}
+        onMouseEnter={handleSidebarMouseEnter}
+        onMouseLeave={handleSidebarMouseLeave}
+      >
+        {/* Toggle Sidebar Button */}
+        <Tooltip content={sidebarPinned ? 'Réduire le menu' : 'Fixer le menu ouvert'} position="right">
+          <button
+            onClick={togglePinned}
+            aria-pressed={sidebarPinned}
+            aria-label={sidebarPinned ? 'Réduire le menu' : 'Fixer le menu ouvert'}
+            style={{
+              position: 'absolute',
+              top: '60px',
+              right: '-10px',
+              width: '18px',
+              height: '18px',
+              backgroundColor: sidebarPinned ? '#3b82f6' : '#161616',
+              border: sidebarPinned ? '1px solid #3b82f6' : '1px solid #2a2a2a',
+              borderRadius: '50%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 0 0 1px rgba(59, 130, 246, 0.3), 0 2px 8px rgba(59, 130, 246, 0.25)',
-              flexShrink: 0
-            }}>
-              <Globe style={{ width: '17px', height: '17px', color: 'white' }} />
-            </div>
-            <span style={{ fontSize: '15px', fontWeight: 700, color: '#f5f5f5', letterSpacing: '0.02em' }}>OVIX</span>
-          </div>
-        </div>
+              cursor: 'pointer',
+              zIndex: 20,
+              transition: 'all 0.2s ease',
+              color: sidebarPinned ? '#ffffff' : '#a0a0a0'
+            }}
+            onMouseEnter={(e) => {
+              if (!sidebarPinned) {
+                e.currentTarget.style.backgroundColor = '#1a1a1a'
+                e.currentTarget.style.color = '#f5f5f5'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!sidebarPinned) {
+                e.currentTarget.style.backgroundColor = '#161616'
+                e.currentTarget.style.color = '#a0a0a0'
+              }
+            }}
+          >
+            {sidebarPinned ? <Pin style={{ width: '9px', height: '9px', fill: 'currentColor' }} /> : <Menu style={{ width: '10px', height: '10px' }} />}
+          </button>
+        </Tooltip>
 
         {/* Navigation */}
-        <nav style={{ flex: 1, padding: '10px 10px', overflowY: 'auto' }}>
+        <nav style={{ flex: 1, padding: isRailMode ? '10px 8px' : '10px 10px', overflowY: 'auto', overflowX: 'hidden' }}>
           {navigation.map((item) => {
             const Icon = item.icon
             const hasChildren = item.children && item.children.length > 0
             const isExpanded = expandedItems.has(item.name)
             const active = isActive(item.href || '') || isParentActive(item.children)
+            const showChildren = hasChildren && isExpanded && sidebarOpen
 
             return (
               <div key={item.name} style={{ marginBottom: '2px' }}>
                 {item.href && !hasChildren ? (
-                  <Link
-                    to={item.href}
-                    style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '7px 10px',
-                      fontSize: '13px',
-                      fontWeight: 500,
-                      borderRadius: '6px',
-                      transition: 'background-color 0.15s, color 0.15s',
-                      backgroundColor: active ? '#161616' : 'transparent',
-                      color: active ? '#3b82f6' : '#a0a0a0',
-                      textDecoration: 'none',
-                      cursor: 'pointer',
-                      position: 'relative',
-                      boxSizing: 'border-box'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!active) {
-                        e.currentTarget.style.backgroundColor = 'rgba(22, 22, 22, 0.5)'
-                        e.currentTarget.style.color = '#f5f5f5'
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!active) {
-                        e.currentTarget.style.backgroundColor = 'transparent'
-                        e.currentTarget.style.color = '#a0a0a0'
-                      }
-                    }}
-                  >
-                    {active && (
-                      <span style={{
-                        position: 'absolute',
-                        left: '-10px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        width: '3px',
-                        height: '16px',
-                        borderRadius: '0 3px 3px 0',
-                        backgroundColor: '#3b82f6'
-                      }} />
-                    )}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                      <Icon style={{ width: '14px', height: '14px', flexShrink: 0 }} />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
-                    </div>
-                  </Link>
+                  <Tooltip content={isRailMode ? item.name : ''} position="right">
+                    <Link
+                      to={item.href}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: isRailMode ? 'center' : 'space-between',
+                        padding: isRailMode ? '8px' : '7px 10px',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        borderRadius: '6px',
+                        transition: 'background-color 0.15s, color 0.15s',
+                        backgroundColor: active ? '#161616' : 'transparent',
+                        color: active ? '#3b82f6' : '#a0a0a0',
+                        textDecoration: 'none',
+                        cursor: 'pointer',
+                        position: 'relative',
+                        boxSizing: 'border-box'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!active) {
+                          e.currentTarget.style.backgroundColor = 'rgba(22, 22, 22, 0.5)'
+                          e.currentTarget.style.color = '#f5f5f5'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!active) {
+                          e.currentTarget.style.backgroundColor = 'transparent'
+                          e.currentTarget.style.color = '#a0a0a0'
+                        }
+                      }}
+                    >
+                      {active && !isRailMode && (
+                        <span style={{
+                          position: 'absolute',
+                          left: '-10px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          width: '3px',
+                          height: '16px',
+                          borderRadius: '0 3px 3px 0',
+                          backgroundColor: '#3b82f6'
+                        }} />
+                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: isRailMode ? '0' : '10px', minWidth: 0 }}>
+                        <Icon style={{ width: '14px', height: '14px', flexShrink: 0 }} />
+                        {sidebarOpen && (
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+                        )}
+                      </div>
+                    </Link>
+                  </Tooltip>
                 ) : (
-                  <button
-                    onClick={() => hasChildren && toggleExpanded(item.name)}
-                    aria-expanded={isExpanded}
-                    style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '7px 10px',
-                      fontSize: '13px',
-                      fontWeight: 500,
-                      borderRadius: '6px',
-                      transition: 'background-color 0.15s, color 0.15s',
-                      backgroundColor: active ? '#161616' : 'transparent',
-                      color: active ? '#3b82f6' : '#a0a0a0',
-                      border: 'none',
-                      cursor: 'pointer',
-                      position: 'relative',
-                      boxSizing: 'border-box'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!active) {
-                        e.currentTarget.style.backgroundColor = 'rgba(22, 22, 22, 0.5)'
-                        e.currentTarget.style.color = '#f5f5f5'
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!active) {
-                        e.currentTarget.style.backgroundColor = 'transparent'
-                        e.currentTarget.style.color = '#a0a0a0'
-                      }
-                    }}
-                  >
-                    {active && (
-                      <span style={{
-                        position: 'absolute',
-                        left: '-10px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        width: '3px',
-                        height: '16px',
-                        borderRadius: '0 3px 3px 0',
-                        backgroundColor: '#3b82f6'
-                      }} />
-                    )}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                      <Icon style={{ width: '14px', height: '14px', flexShrink: 0 }} />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
-                    </div>
-                    {hasChildren && (
-                      <ChevronRight
-                        style={{
-                          width: '14px',
-                          height: '14px',
-                          flexShrink: 0,
-                          transition: 'transform 0.2s',
-                          transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)'
-                        }}
-                      />
-                    )}
-                  </button>
+                  <Tooltip content={isRailMode ? item.name : ''} position="right">
+                    <button
+                      onClick={() => hasChildren && sidebarOpen && toggleExpanded(item.name)}
+                      aria-expanded={isExpanded}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: isRailMode ? 'center' : 'space-between',
+                        padding: isRailMode ? '8px' : '7px 10px',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        borderRadius: '6px',
+                        transition: 'background-color 0.15s, color 0.15s',
+                        backgroundColor: active ? '#161616' : 'transparent',
+                        color: active ? '#3b82f6' : '#a0a0a0',
+                        border: 'none',
+                        cursor: 'pointer',
+                        position: 'relative',
+                        boxSizing: 'border-box'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!active) {
+                          e.currentTarget.style.backgroundColor = 'rgba(22, 22, 22, 0.5)'
+                          e.currentTarget.style.color = '#f5f5f5'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!active) {
+                          e.currentTarget.style.backgroundColor = 'transparent'
+                          e.currentTarget.style.color = '#a0a0a0'
+                        }
+                      }}
+                    >
+                      {active && !isRailMode && (
+                        <span style={{
+                          position: 'absolute',
+                          left: '-10px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          width: '3px',
+                          height: '16px',
+                          borderRadius: '0 3px 3px 0',
+                          backgroundColor: '#3b82f6'
+                        }} />
+                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: isRailMode ? '0' : '10px', minWidth: 0 }}>
+                        <Icon style={{ width: '14px', height: '14px', flexShrink: 0 }} />
+                        {sidebarOpen && (
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+                        )}
+                      </div>
+                      {hasChildren && sidebarOpen && (
+                        <ChevronRight
+                          style={{
+                            width: '14px',
+                            height: '14px',
+                            flexShrink: 0,
+                            transition: 'transform 0.2s',
+                            transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)'
+                          }}
+                        />
+                      )}
+                    </button>
+                  </Tooltip>
                 )}
 
-                {hasChildren && (
+                {hasChildren && sidebarOpen && (
                   <div style={{
                     display: 'grid',
-                    gridTemplateRows: isExpanded ? '1fr' : '0fr',
+                    gridTemplateRows: showChildren ? '1fr' : '0fr',
                     transition: 'grid-template-rows 0.2s ease',
                   }}>
                     <div style={{ overflow: 'hidden' }}>
@@ -407,23 +555,25 @@ export default function Layout() {
         </nav>
 
         {/* Wikipedia Status */}
-        <div style={{ padding: '12px', flexShrink: 0, borderTop: '1px solid var(--border-subtle)' }}>
-          <Link
-            to="/settings/wikipedia"
-            style={{ textDecoration: 'none' }}
-          >
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '10px', 
-              padding: '7px 10px', 
-              backgroundColor: '#161616', 
-              borderRadius: '7px',
-              cursor: 'pointer',
-              transition: 'background-color 0.15s ease'
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1a1a1a'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#161616'}
+        <div style={{ padding: isRailMode ? '12px 8px' : '12px', flexShrink: 0, borderTop: '1px solid var(--border-subtle)' }}>
+          <Tooltip content={isRailMode ? (wikiConnected ? 'Wikipédia connecté' : 'Wikipédia déconnecté') : ''} position="right">
+            <Link
+              to="/settings/wikipedia"
+              style={{ textDecoration: 'none' }}
+            >
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: isRailMode ? '0' : '10px',
+                padding: isRailMode ? '8px' : '7px 10px',
+                backgroundColor: '#161616',
+                borderRadius: '7px',
+                cursor: 'pointer',
+                transition: 'background-color 0.15s ease',
+                justifyContent: isRailMode ? 'center' : 'flex-start'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1a1a1a'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#161616'}
             >
               <span style={{ position: 'relative', display: 'flex', width: '6px', height: '6px', flexShrink: 0 }}>
                 {wikiConnected && !authLoading && (
@@ -444,14 +594,17 @@ export default function Layout() {
                   backgroundColor: wikiDotColor
                 }} />
               </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '11px', fontWeight: 500, color: '#f5f5f5' }}>Wikipédia</div>
-                <div style={{ fontSize: '10.5px', color: wikiConnected && !authLoading ? '#10b981' : '#666666' }}>
-                  {authLoading ? 'Chargement...' : (wikiConnected ? 'Opérationnel' : 'Inactif')}
+              {sidebarOpen && (
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '11px', fontWeight: 500, color: '#f5f5f5' }}>Wikipédia</div>
+                  <div style={{ fontSize: '10.5px', color: wikiConnected && !authLoading ? '#10b981' : '#666666' }}>
+                    {authLoading ? 'Chargement...' : (wikiConnected ? 'Connecté' : 'Déconnecté')}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
-          </Link>
+            </Link>
+          </Tooltip>
         </div>
       </aside>
 
@@ -599,26 +752,33 @@ export default function Layout() {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
             {/* OVIX Status */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 8px', backgroundColor: '#161616', borderRadius: '5px' }}>
-              <span style={{ position: 'relative', display: 'flex', width: '5px', height: '5px', flexShrink: 0 }}>
-                <span style={{
-                  position: 'absolute',
-                  inset: 0,
-                  borderRadius: '50%',
-                  backgroundColor: '#10b981',
-                  opacity: 0.75,
-                  animation: 'ovix-pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite'
-                }} />
-                <span style={{ position: 'relative', width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#10b981' }} />
-              </span>
-              <span style={{ fontSize: '10px', fontWeight: 500, color: '#f5f5f5' }}>Opérationnel</span>
-            </div>
+            <Tooltip 
+              content={killSwitchStatus?.enabled 
+                ? "Système arrêté" 
+                : "Système opérationnel"}
+              position="bottom"
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 8px', backgroundColor: '#161616', borderRadius: '5px', cursor: 'help' }}>
+                <span style={{ fontSize: '10px', fontWeight: 500, color: killSwitchStatus?.enabled ? '#666666' : '#10b981' }}>
+                  {killSwitchLoading ? 'Chargement...' : (killSwitchStatus?.enabled ? 'Arrêté' : 'Opérationnel')}
+                </span>
+              </div>
+            </Tooltip>
 
             {/* Kill Switch Status */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 8px', backgroundColor: '#161616', borderRadius: '5px' }}>
-              <Shield style={{ width: '11px', height: '11px', color: '#666666', flexShrink: 0 }} />
-              <span style={{ fontSize: '10px', fontWeight: 500, color: '#666666' }}>Inactif</span>
-            </div>
+            <Tooltip 
+              content={killSwitchStatus?.enabled 
+                ? "Arrêt d'urgence activé" 
+                : "Arrêt d'urgence désactivé"}
+              position="bottom"
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 8px', backgroundColor: '#161616', borderRadius: '5px', cursor: 'help' }}>
+                <Shield style={{ width: '11px', height: '11px', color: killSwitchStatus?.enabled ? '#ef4444' : '#666666', flexShrink: 0 }} />
+                <span style={{ fontSize: '10px', fontWeight: 500, color: killSwitchStatus?.enabled ? '#ef4444' : '#666666' }}>
+                  {killSwitchLoading ? 'Chargement...' : (killSwitchStatus?.enabled ? 'Actif' : 'Inactif')}
+                </span>
+              </div>
+            </Tooltip>
           </div>
         </header>
 

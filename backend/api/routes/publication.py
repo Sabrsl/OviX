@@ -186,6 +186,11 @@ async def run_publication_worker(
         # Update publisher settings
         publisher.set_dry_run(dry_run)
         
+        # Preserve user-provided summary as the default
+        user_provided_summary = summary
+        DEFAULT_PLACEHOLDER = "Correction de liens morts via OVIX"
+        computed_summary = None
+        
         # Generate detailed edit summary with URL mapping for dead links
         try:
             import re
@@ -206,9 +211,10 @@ async def run_publication_worker(
                             if wiki_links and isinstance(wiki_links, list) and len(wiki_links) > 0:
                                 inner = wiki_links[0]
                                 if isinstance(inner, list) and len(inner) > 0:
-                                    site_names[domain] = f"[[{inner[0]}]]"
+                                    # Normalize domain to lowercase for consistent matching
+                                    site_names[domain.lower()] = f"[[{inner[0]}]]"
                                 else:
-                                    site_names[domain] = str(inner)
+                                    site_names[domain.lower()] = str(inner)
             except Exception as e:
                 logger.warning(f"Could not load site names from config: {e}")
             
@@ -341,12 +347,13 @@ async def run_publication_worker(
                     else:
                         logger.warning(f"Still got archive domain after unwrapping: {final_domain}, original_url={original_url}")
                         # In this case, just show the archive name without the dead site
-                        dead_link_mapping.append(f"{site_names.get(provider, provider)} ({readable_date})")
+                        dead_link_mapping.append(f"{site_names.get(provider.lower(), provider)} ({readable_date})")
                         continue
                 
                 # Use site name from config if available (includes Wikipedia internal links for archive sites)
                 # Otherwise use provider name
-                dead_site_name = site_names.get(clean_domain, clean_domain)
+                # Try with and without www. prefix, normalized to lowercase
+                dead_site_name = site_names.get(clean_domain.lower(), site_names.get(f"www.{clean_domain}".lower(), clean_domain))
                 
                 # Extract the archive URL with timestamp for the summary using existing archive_patterns
                 # Reuse the same patterns defined above for consistency
@@ -370,7 +377,7 @@ async def run_publication_worker(
                 
                 # Fallback to provider name if we couldn't extract timestamp
                 if not archive_url_with_timestamp:
-                    archive_url_with_timestamp = site_names.get(provider, provider)
+                    archive_url_with_timestamp = site_names.get(provider.lower(), provider)
                 
                 logger.info(f"Dead link mapping: dead_site={dead_site_name}, archive_url={archive_url_with_timestamp}, clean_domain={clean_domain}, original_url={original_url}")
                 
@@ -438,8 +445,16 @@ async def run_publication_worker(
                         if not original_template_match or not re.search(r'\|\s*consulté le\s*=', original_template_match.group(0), re.IGNORECASE):
                             mapping_parts.append(f"consulté le {consulte_value}")
                     
+                    # Check for brisé le parameter (dead link marking)
+                    brise_le_match = re.search(r'\|\s*brisé le\s*=\s*([^|\}]+)', template, re.IGNORECASE)
+                    if brise_le_match:
+                        brise_le_value = brise_le_match.group(1).strip()
+                        # Check if brisé le is new
+                        if not original_template_match or not re.search(r'\|\s*brisé le\s*=', original_template_match.group(0), re.IGNORECASE):
+                            mapping_parts.append(f"brisé le {brise_le_value}")
+                    
                     if mapping_parts:
-                        # Format: ajouté site : xxxx - consulté le xxxxx
+                        # Format: ajouté site : xxxx - consulté le xxxxx - brisé le xxxxx
                         enrichment_mapping.append(" - ".join(mapping_parts))
                     # Si on ne peut pas extraire les valeurs exactes, on ne met rien
                 
@@ -466,6 +481,12 @@ async def run_publication_worker(
                             consulte_value = consulte_match.group(1).strip()
                             mapping_parts.append(f"consulté le {consulte_value}")
                         
+                        # Check for brisé le parameter (dead link marking)
+                        brise_le_match = re.search(r'\|\s*brisé le\s*=\s*([^|\}]+)', template, re.IGNORECASE)
+                        if brise_le_match:
+                            brise_le_value = brise_le_match.group(1).strip()
+                            mapping_parts.append(f"brisé le {brise_le_value}")
+                        
                         if mapping_parts:
                             enrichment_mapping.append(" - ".join(mapping_parts))
                 
@@ -475,15 +496,16 @@ async def run_publication_worker(
             
             # Detect correction type by comparing original vs corrected content
             correction_types = []
-            
+
             # Check for dead link replacements (new archive URLs)
             if new_archive_urls > 0:
                 correction_types.extend(['dead_link'] * new_archive_urls)
-            
+
             # Check for reference enrichments
             if enrichment_mapping:
-                correction_types.append('reference_enrichment')
-            
+                enrichment_count = sum(1 for mapping in enrichment_mapping for _ in mapping.split(" - "))
+                correction_types.extend(['reference_enrichment'] * enrichment_count)
+
             # Check for case normalization (case changes without URL changes)
             if original_content and corrected_content:
                 # Simple heuristic: if content is similar but case differs
@@ -493,57 +515,86 @@ async def run_publication_worker(
                 elif corrected_content != original_content and new_archive_urls == 0 and not enrichment_mapping:
                     # Content changed but no new archive URLs or enrichments
                     correction_types.append('correction')
-            
+
+            # Count all correction types for the comment
+            from collections import Counter
+            correction_counts = Counter(correction_types)
+
             # Use centralized summary generation system with detailed corrections info
             # The system automatically handles dead links, enrichments, case normalization, etc.
-            
+
             # Determine which corrections are present
-            has_dead_links = 'dead_link' in correction_types and dead_link_mapping
-            has_enrichment = 'reference_enrichment' in correction_types and enrichment_mapping
-            
+            has_dead_links = 'dead_link' in correction_counts and dead_link_mapping
+            has_enrichment = 'reference_enrichment' in correction_counts and enrichment_mapping
+
+            # Build comment with all analyzer counts
+            comment_parts = []
+            if 'dead_link' in correction_counts:
+                comment_parts.append(f"liens morts ({correction_counts['dead_link']})")
+            if 'reference_enrichment' in correction_counts:
+                comment_parts.append(f"enrichissement réf ({correction_counts['reference_enrichment']})")
+            if 'case_normalization' in correction_counts:
+                comment_parts.append(f"casse ({correction_counts['case_normalization']})")
+            if 'http_link' in correction_counts:
+                comment_parts.append(f"HTTPS ({correction_counts['http_link']})")
+            if 'bare_url' in correction_counts:
+                comment_parts.append(f"liens nus ({correction_counts['bare_url']})")
+            if 'duplicate_refs' in correction_counts:
+                comment_parts.append(f"doublons ({correction_counts['duplicate_refs']})")
+            if 'uppercase_parameter' in correction_counts:
+                comment_parts.append(f"majuscules ({correction_counts['uppercase_parameter']})")
+            if 'invalid_isbn' in correction_counts:
+                comment_parts.append(f"ISBN ({correction_counts['invalid_isbn']})")
+            if 'template_type' in correction_counts:
+                comment_parts.append(f"modèles ({correction_counts['template_type']})")
+            if 'broken_link' in correction_counts:
+                comment_parts.append(f"liens brisés ({correction_counts['broken_link']})")
+            if 'typo' in correction_counts:
+                comment_parts.append(f"typo ({correction_counts['typo']})")
+            if 'correction' in correction_counts:
+                comment_parts.append(f"corrections ({correction_counts['correction']})")
+
             # Case 1: Only dead links
             if has_dead_links and not has_enrichment:
-                base_summary = publisher.generate_edit_summary(
-                    num_corrections=len(dead_link_mapping),
-                    correction_types=['dead_link']
-                )
+                from wikipedia_maintenance.utils.edit_summaries import get_summary
+                # Don't pass counts to get_summary to avoid count in main summary
+                issue_types = {k: 1 for k in correction_counts.keys()}
+                base_summary = get_summary(issue_types=issue_types)
                 links_str = ", ".join([f"{m}" for m in dead_link_mapping[:2]])
                 if len(dead_link_mapping) > 2:
                     links_str += "..."
-                summary = f"{base_summary} : {links_str}"
-                logger.info(f"Generated dead link summary: {summary}")
-            
+                comment = " ; ".join(comment_parts) + f" : {links_str}" if comment_parts else ""
+                computed_summary = f"{base_summary} : {comment}" if comment else base_summary
+                logger.info(f"Generated dead link summary: {computed_summary}")
+
             # Case 2: Only enrichment
             elif has_enrichment and not has_dead_links:
-                from wikipedia_maintenance.utils.edit_summaries import REFERENCE_ENRICHMENT_EDIT_SUMMARIES, get_random_summary
-                base_summary = get_random_summary(REFERENCE_ENRICHMENT_EDIT_SUMMARIES)
+                from wikipedia_maintenance.utils.edit_summaries import get_summary
+                # Don't pass counts to get_summary to avoid count in main summary
+                issue_types = {k: 1 for k in correction_counts.keys()}
+                base_summary = get_summary(issue_types=issue_types)
                 enrichment_str = ", ".join([f"{m}" for m in enrichment_mapping[:2]])
                 if len(enrichment_mapping) > 2:
                     enrichment_str += "..."
-                summary = f"{base_summary} : {enrichment_str}"
-                logger.info(f"Generated enrichment summary: {summary}")
-            
+                comment = " ; ".join(comment_parts) + f" : {enrichment_str}" if comment_parts else ""
+                computed_summary = f"{base_summary} : {comment}" if comment else base_summary
+                logger.info(f"Generated enrichment summary: {computed_summary}")
+
             # Case 3: Both dead links and enrichment (mixed)
             elif has_dead_links and has_enrichment:
-                # Use dead link base summary (includes "Vérifiabilité (OviX)")
-                dead_base = publisher.generate_edit_summary(
-                    num_corrections=len(dead_link_mapping),
-                    correction_types=['dead_link']
-                )
+                from wikipedia_maintenance.utils.edit_summaries import get_summary
+                # Don't pass counts to get_summary to avoid count in main summary
+                issue_types = {k: 1 for k in correction_counts.keys()}
+                base_summary = get_summary(issue_types=issue_types)
                 links_str = ", ".join([f"{m}" for m in dead_link_mapping[:2]])
                 if len(dead_link_mapping) > 2:
                     links_str += "..."
-                dead_link_part = f"{dead_base} : {links_str}"
-                
-                # Add enrichment without repeating "Vérifiabilité (OviX)"
                 enrichment_str = ", ".join([f"{m}" for m in enrichment_mapping[:2]])
                 if len(enrichment_mapping) > 2:
                     enrichment_str += "..."
-                enrichment_part = f"enrichissement réf : {enrichment_str}"
-                
-                # Combine with single "Vérifiabilité (OviX)"
-                summary = f"{dead_link_part} ; {enrichment_part}"
-                logger.info(f"Generated mixed summary: {summary}")
+                comment = " ; ".join(comment_parts) + f" : {links_str} ; {enrichment_str}" if comment_parts else ""
+                computed_summary = f"{base_summary} : {comment}" if comment else base_summary
+                logger.info(f"Generated mixed summary: {computed_summary}")
             
             # Case 4: Other corrections (fallback)
             else:
@@ -551,12 +602,23 @@ async def run_publication_worker(
                     num_corrections=1,
                     correction_types=correction_types if correction_types else ['correction']
                 )
-                summary = professional_summary
-                logger.info(f"Generated standard summary: {summary}")
+                computed_summary = professional_summary
+                logger.info(f"Generated standard summary: {computed_summary}")
                 
         except Exception as e:
             logger.warning(f"Could not generate detailed summary, using provided: {e}")
-            # Use provided summary as fallback
+            computed_summary = None
+        
+        # Final decision: prioritize user-provided summary
+        if user_provided_summary and user_provided_summary.strip() and user_provided_summary.strip() != DEFAULT_PLACEHOLDER:
+            summary = user_provided_summary
+            logger.info(f"Using user-provided summary: {summary}")
+        elif computed_summary:
+            summary = computed_summary
+            logger.info(f"Using computed summary: {summary}")
+        else:
+            summary = user_provided_summary or f"Maintenance — Test [[Utilisateur:OviXCore|OviX]]"
+            logger.info(f"Using fallback summary: {summary}")
         
         # Perform publication
         update_publication_job(

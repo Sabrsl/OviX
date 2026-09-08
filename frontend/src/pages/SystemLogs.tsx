@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { logsApi } from '../api/logs.api'
 import { LogEntry } from '../api/types'
+import Button from '../components/Button'
 
 const LEVELS = ['ALL', 'CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG'] as const
 type LevelFilter = typeof LEVELS[number]
@@ -150,21 +151,19 @@ export default function SystemLogs() {
           )}
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button
-            className="btn btn-secondary"
+          <Button
+            variant="neutral"
             onClick={() => fetchLogs({ page: 1 })}
             disabled={loading || refreshing}
-            aria-busy={loading || refreshing}
           >
             {loading || refreshing ? 'Actualisation…' : 'Actualiser'}
-          </button>
-          <button
-            className={`btn ${autoRefresh ? 'btn-primary' : 'btn-ghost'}`}
+          </Button>
+          <Button
+            variant={autoRefresh ? 'success' : 'neutral'}
             onClick={() => setAutoRefresh((v) => !v)}
-            aria-pressed={autoRefresh}
           >
             {autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -173,23 +172,18 @@ export default function SystemLogs() {
         {LEVELS.map((lvl) => {
           const active = levelFilter === lvl
           return (
-            <button
+            <Button
               key={lvl}
+              variant={active ? 'primary' : 'neutral'}
               onClick={() => setLevelFilter(lvl)}
               style={{
                 padding: '6px 12px',
-                borderRadius: '6px',
                 fontSize: '12px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                border: `1px solid ${active ? '#3a3a3a' : '#2a2a2a'}`,
-                backgroundColor: active ? '#1f1f1f' : '#161616',
-                color: active ? '#f5f5f5' : '#a0a0a0',
-                transition: 'all 0.15s ease-in-out',
+                border: `1px solid ${active ? '#3a3a3a' : '#232323'}`,
               }}
             >
               {lvl}
-            </button>
+            </Button>
           )
         })}
       </div>
@@ -221,9 +215,9 @@ export default function SystemLogs() {
           }}
         >
           <div style={{ textAlign: 'center', color: '#ef4444' }}>{error}</div>
-          <button className="btn btn-secondary" onClick={() => fetchLogs({ page: currentPage })}>
+          <Button variant="neutral" onClick={() => fetchLogs({ page: currentPage })}>
             Réessayer
-          </button>
+          </Button>
         </div>
       ) : (
         <div
@@ -288,25 +282,25 @@ export default function SystemLogs() {
                     borderTop: '1px solid #1a1a1a',
                   }}
                 >
-                  <button
-                    className="btn btn-secondary"
+                  <Button
+                    variant="neutral"
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1 || loading}
                     style={{ padding: '6px 12px', fontSize: '12px' }}
                   >
                     ←
-                  </button>
+                  </Button>
                   <span style={{ color: '#a0a0a0', fontSize: '12px' }}>
                     Page {currentPage} / {totalPages} ({totalLogs} logs)
                   </span>
-                  <button
-                    className="btn btn-secondary"
+                  <Button
+                    variant="neutral"
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage >= totalPages || loading}
                     style={{ padding: '6px 12px', fontSize: '12px' }}
                   >
                     →
-                  </button>
+                  </Button>
                 </div>
               )}
             </>

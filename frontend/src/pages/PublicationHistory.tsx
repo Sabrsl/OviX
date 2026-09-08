@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { CheckCircle, Clock, FileText, RefreshCw, AlertCircle, XCircle } from 'lucide-react'
 import { historyApi } from '../api/history.api'
+import Button from '../components/Button'
 
 const COLORS = {
   bgPanel: '#161616',
@@ -12,7 +13,6 @@ const COLORS = {
   textPrimary: '#f5f5f5',
   textSecondary: '#a0a0a0',
   textMuted: '#666666',
-  accent: '#3b82f6',
   success: '#10b981',
   warning: '#f59e0b',
   danger: '#ef4444',
@@ -153,7 +153,7 @@ export default function PublicationHistory() {
   const isBusy = loading || refreshing
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.35s ease-out' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.35s ease-out', maxWidth: '860px', margin: '0 auto', padding: '0 16px' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
         <div>
@@ -164,41 +164,10 @@ export default function PublicationHistory() {
             Voir l'historique des publications et statistiques
           </p>
         </div>
-        <button
+        <Button
+          variant="neutral"
           onClick={() => fetchHistory(false)}
           disabled={isBusy}
-          aria-busy={refreshing}
-          aria-label="Actualiser l'historique"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 13px',
-            backgroundColor: COLORS.bgSubtle,
-            border: `1px solid ${COLORS.border}`,
-            borderRadius: '7px',
-            color: COLORS.textSecondary,
-            fontSize: '12px',
-            fontWeight: 500,
-            cursor: isBusy ? 'not-allowed' : 'pointer',
-            opacity: isBusy ? 0.6 : 1,
-            transition: 'background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.1s',
-          }}
-          onMouseEnter={(e) => {
-            if (isBusy) return
-            e.currentTarget.style.borderColor = COLORS.borderHover
-            e.currentTarget.style.color = COLORS.textPrimary
-            e.currentTarget.style.backgroundColor = COLORS.bgSubtleHover
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = COLORS.border
-            e.currentTarget.style.color = COLORS.textSecondary
-            e.currentTarget.style.backgroundColor = COLORS.bgSubtle
-          }}
-          onMouseDown={(e) => {
-            if (!isBusy) e.currentTarget.style.transform = 'scale(0.97)'
-          }}
-          onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
         >
           <RefreshCw
             style={{
@@ -208,7 +177,7 @@ export default function PublicationHistory() {
             }}
           />
           Actualiser
-        </button>
+        </Button>
       </div>
 
       {/* Statistics */}
@@ -216,7 +185,7 @@ export default function PublicationHistory() {
         <StatCard label="Total" value={stats.total} color={COLORS.textPrimary} delay={0} loading={loading} />
         <StatCard label="Publiés" value={stats.published} color={COLORS.success} delay={40} loading={loading} />
         <StatCard label="Dry-run" value={stats.dryRun} color={COLORS.warning} delay={80} loading={loading} />
-        <StatCard label="Modifications" value={stats.changes} color={COLORS.accent} delay={120} loading={loading} />
+        <StatCard label="Modifications" value={stats.changes} color={COLORS.textPrimary} delay={120} loading={loading} />
       </div>
 
       {/* Filters */}
@@ -237,34 +206,20 @@ export default function PublicationHistory() {
           }}
         >
           {FILTERS.map((f) => (
-            <button
+            <Button
               key={f}
-              role="tab"
-              aria-selected={filter === f}
-              onClick={() => {
-                setFilter(f)
-              }}
+              variant={filter === f ? 'primary' : 'neutral'}
+              onClick={() => setFilter(f)}
               style={{
-                padding: '6px 13px',
-                backgroundColor: filter === f ? COLORS.accent : 'transparent',
+                backgroundColor: filter === f ? undefined : 'transparent',
                 border: 'none',
-                borderRadius: '5px',
-                color: filter === f ? '#ffffff' : COLORS.textSecondary,
-                fontSize: '12px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                transition: 'background-color 0.15s, color 0.15s',
+                padding: '6px 13px',
+                fontWeight: filter === f ? 600 : 500,
                 whiteSpace: 'nowrap',
-              }}
-              onMouseEnter={(e) => {
-                if (filter !== f) e.currentTarget.style.color = COLORS.textPrimary
-              }}
-              onMouseLeave={(e) => {
-                if (filter !== f) e.currentTarget.style.color = COLORS.textSecondary
               }}
             >
               {FILTER_LABELS[f]}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -288,25 +243,9 @@ export default function PublicationHistory() {
         >
           <AlertCircle style={{ width: '15px', height: '15px', flexShrink: 0, marginTop: '1px' }} />
           <div style={{ flex: 1 }}>{error}</div>
-          <button
-            onClick={() => fetchHistory(false)}
-            style={{
-              flexShrink: 0,
-              background: 'transparent',
-              border: `1px solid rgba(239, 68, 68, 0.4)`,
-              borderRadius: '5px',
-              color: COLORS.danger,
-              fontSize: '11.5px',
-              fontWeight: 500,
-              padding: '4px 9px',
-              cursor: 'pointer',
-              transition: 'background-color 0.15s',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.12)')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-          >
+          <Button variant="danger" onClick={() => fetchHistory(false)} style={{ flexShrink: 0, padding: '4px 9px', fontSize: '11.5px' }}>
             Réessayer
-          </button>
+          </Button>
         </div>
       )}
 
@@ -353,31 +292,13 @@ export default function PublicationHistory() {
               : 'Aucune publication ne correspond aux filtres actuels.'}
           </div>
           {items.length > 0 && filter !== 'all' && (
-            <button
+            <Button
+              variant="neutral"
               onClick={() => setFilter('all')}
-              style={{
-                marginTop: '14px',
-                background: 'transparent',
-                border: `1px solid ${COLORS.border}`,
-                borderRadius: '6px',
-                color: COLORS.textSecondary,
-                fontSize: '11.5px',
-                fontWeight: 500,
-                padding: '6px 12px',
-                cursor: 'pointer',
-                transition: 'border-color 0.15s, color 0.15s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = COLORS.borderHover
-                e.currentTarget.style.color = COLORS.textPrimary
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = COLORS.border
-                e.currentTarget.style.color = COLORS.textSecondary
-              }}
+              style={{ marginTop: '14px', backgroundColor: 'transparent', fontSize: '11.5px', padding: '6px 12px' }}
             >
               Réinitialiser les filtres
-            </button>
+            </Button>
           )}
         </div>
       ) : (
@@ -397,65 +318,23 @@ export default function PublicationHistory() {
           {/* Pagination */}
           {(history?.total ?? 0) > PAGE_SIZE && (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
-              <button
+              <Button
+                variant="neutral"
                 onClick={() => canGoPrev && setPage((p) => Math.max(1, p - 1))}
                 disabled={!canGoPrev || isBusy}
-                aria-label="Page précédente"
-                style={{
-                  padding: '8px 14px',
-                  backgroundColor: COLORS.bgSubtle,
-                  border: `1px solid ${COLORS.border}`,
-                  borderRadius: '7px',
-                  color: !canGoPrev ? COLORS.textMuted : COLORS.textSecondary,
-                  fontSize: '12.5px',
-                  fontWeight: 500,
-                  cursor: !canGoPrev || isBusy ? 'not-allowed' : 'pointer',
-                  opacity: !canGoPrev || isBusy ? 0.5 : 1,
-                  transition: 'background-color 0.15s, color 0.15s',
-                }}
-                onMouseEnter={(e) => {
-                  if (!canGoPrev || isBusy) return
-                  e.currentTarget.style.backgroundColor = COLORS.bgSubtleHover
-                  e.currentTarget.style.color = COLORS.textPrimary
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = COLORS.bgSubtle
-                  e.currentTarget.style.color = COLORS.textSecondary
-                }}
               >
                 Précédent
-              </button>
+              </Button>
               <span style={{ fontSize: '12.5px', color: COLORS.textSecondary, fontVariantNumeric: 'tabular-nums' }}>
                 Page {page} / {totalPages}
               </span>
-              <button
+              <Button
+                variant="neutral"
                 onClick={() => canGoNext && setPage((p) => p + 1)}
                 disabled={!canGoNext || isBusy}
-                aria-label="Page suivante"
-                style={{
-                  padding: '8px 14px',
-                  backgroundColor: COLORS.bgSubtle,
-                  border: `1px solid ${COLORS.border}`,
-                  borderRadius: '7px',
-                  color: !canGoNext ? COLORS.textMuted : COLORS.textSecondary,
-                  fontSize: '12.5px',
-                  fontWeight: 500,
-                  cursor: !canGoNext || isBusy ? 'not-allowed' : 'pointer',
-                  opacity: !canGoNext || isBusy ? 0.5 : 1,
-                  transition: 'background-color 0.15s, color 0.15s',
-                }}
-                onMouseEnter={(e) => {
-                  if (!canGoNext || isBusy) return
-                  e.currentTarget.style.backgroundColor = COLORS.bgSubtleHover
-                  e.currentTarget.style.color = COLORS.textPrimary
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = COLORS.bgSubtle
-                  e.currentTarget.style.color = COLORS.textSecondary
-                }}
               >
                 Suivant
-              </button>
+              </Button>
             </div>
           )}
         </>

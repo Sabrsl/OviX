@@ -4,6 +4,7 @@ import { CheckCircle, XCircle, Clock, FileText, RefreshCw, Eye, AlertTriangle, S
 import { historyApi } from '../api/history.api'
 import { articlesApi } from '../api/articles.api'
 import { systemApi } from '../api/system.api'
+import Button from '../components/Button'
 
 // ---------------------------------------------------------------------------
 // Types (kept loose/optional-safe on purpose: upstream payloads are `any`,
@@ -41,7 +42,7 @@ const STATUS_META: Record<Status, { label: string; color: string; icon: typeof C
   rejected: { label: 'Refusé', color: '#ef4444', icon: XCircle },
   ignored: { label: 'Ignoré', color: '#666666', icon: Clock },
   error: { label: 'Erreur', color: '#ef4444', icon: XCircle },
-  analyzing: { label: 'Analyse…', color: '#3b82f6', icon: Loader2 },
+  analyzing: { label: 'Analyse…', color: '#e0e0e0', icon: Loader2 },
 }
 
 function safeDate(value?: string): Date | null {
@@ -303,10 +304,10 @@ export default function AnalyzedHistory() {
   // ---- Loading state -------------------------------------------------------
   if (loading) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out', maxWidth: '860px', margin: '0 auto', padding: '0 16px' }}>
         <div>
-          <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#f5f5f5' }}>Historique d'analyse</h2>
-          <p style={{ color: '#a0a0a0', marginTop: '4px' }}>Voir les articles analysés et leur statut</p>
+          <h2 style={{ fontSize: '20px', fontWeight: 600, color: '#f5f5f5' }}>Historique d'analyse</h2>
+          <p style={{ color: '#a0a0a0', marginTop: '4px', fontSize: '13px' }}>Voir les articles analysés et leur statut</p>
         </div>
         <SkeletonBlock />
       </div>
@@ -316,10 +317,10 @@ export default function AnalyzedHistory() {
   // ---- Hard error state (analyzed history itself failed) -------------------
   if (error) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out', maxWidth: '860px', margin: '0 auto', padding: '0 16px' }}>
         <div>
-          <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#f5f5f5' }}>Historique d'analyse</h2>
-          <p style={{ color: '#a0a0a0', marginTop: '4px' }}>Voir les articles analysés et leur statut</p>
+          <h2 style={{ fontSize: '20px', fontWeight: 600, color: '#f5f5f5' }}>Historique d'analyse</h2>
+          <p style={{ color: '#a0a0a0', marginTop: '4px', fontSize: '13px' }}>Voir les articles analysés et leur statut</p>
         </div>
         <div style={{
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px',
@@ -332,40 +333,26 @@ export default function AnalyzedHistory() {
             </div>
             <div style={{ fontSize: '14px', color: '#a0a0a0', maxWidth: '420px' }}>{error}</div>
           </div>
-          <button
-            className="btn btn-secondary"
-            onClick={() => fetchHistory(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-          >
+          <Button variant="neutral" onClick={() => fetchHistory(true)}>
             <RefreshCw style={{ width: '16px', height: '16px' }} />
             Réessayer
-          </button>
+          </Button>
         </div>
       </div>
     )
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', animation: 'fadeIn 0.2s ease-in-out' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.2s ease-in-out', maxWidth: '860px', margin: '0 auto', padding: '0 16px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
         <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#f5f5f5' }}>Articles Analysés</h2>
-          <p style={{ color: '#a0a0a0', marginTop: '2px', fontSize: '12px' }}>Voir les articles analysés et leur statut</p>
+          <h2 style={{ fontSize: '20px', fontWeight: 600, color: '#f5f5f5' }}>Articles Analysés</h2>
+          <p style={{ color: '#a0a0a0', marginTop: '4px', fontSize: '13px' }}>Voir les articles analysés et leur statut</p>
         </div>
-        <button
-          className="btn btn-secondary"
-          onClick={() => fetchHistory(true)}
-          disabled={refreshing}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '6px',
-            opacity: refreshing ? 0.6 : 1,
-            cursor: refreshing ? 'not-allowed' : 'pointer',
-            fontSize: '12px'
-          }}
-        >
-          <RefreshCw style={{ width: '13px', height: '13px', animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} />
+        <Button variant="neutral" onClick={() => fetchHistory(true)} disabled={refreshing} style={{ fontSize: '13px' }}>
+          <RefreshCw style={{ width: '14px', height: '14px', animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} />
           {refreshing ? 'Actualisation…' : 'Actualiser'}
-        </button>
+        </Button>
       </div>
 
       {partialWarning && (
@@ -379,7 +366,7 @@ export default function AnalyzedHistory() {
       )}
 
       {/* Filters */}
-      <div style={{ backgroundColor: '#161616', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '12px 14px' }}>
+      <div style={{ backgroundColor: '#161616', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <h3 style={{ fontSize: '10px', fontWeight: 600, color: '#666666', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Filtres
@@ -387,7 +374,7 @@ export default function AnalyzedHistory() {
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              style={{ background: 'none', border: 'none', color: '#3b82f6', fontSize: '11px', cursor: 'pointer', padding: 0 }}
+              style={{ background: 'none', border: 'none', color: '#e0e0e0', fontSize: '11px', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
             >
               Réinitialiser
             </button>
@@ -477,7 +464,7 @@ export default function AnalyzedHistory() {
 
       {/* History List */}
       {normalizedItems.length === 0 ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '32px', backgroundColor: '#161616', borderRadius: '8px', border: '1px solid #2a2a2a' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '48px', backgroundColor: '#161616', borderRadius: '8px', border: '1px solid #2a2a2a' }}>
           <div style={{ textAlign: 'center', color: '#666666' }}>
             <FileText style={{ width: '36px', height: '36px', color: '#2a2a2a', margin: '0 auto 12px' }} />
             <div style={{ fontSize: '13px', marginBottom: '4px', color: '#a0a0a0' }}>
@@ -489,18 +476,14 @@ export default function AnalyzedHistory() {
                 : 'Commencez par analyser des articles pour voir l\'historique.'}
             </div>
             {hasActiveFilters && (
-              <button
-                onClick={clearFilters}
-                className="btn btn-secondary"
-                style={{ fontSize: '11px' }}
-              >
+              <Button variant="neutral" onClick={clearFilters} style={{ fontSize: '11px' }}>
                 Réinitialiser les filtres
-              </button>
+              </Button>
             )}
           </div>
         </div>
       ) : (
-        <div style={{ backgroundColor: '#161616', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '14px 16px' }}>
+        <div style={{ backgroundColor: '#161616', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '20px' }}>
           <div style={{ fontSize: '11px', color: '#666666', marginBottom: '10px' }}>
             Affichage de {normalizedItems.length} article{normalizedItems.length > 1 ? 's' : ''}
             {hasActiveFilters && totalCount !== normalizedItems.length ? ` sur ${totalCount}` : ''}
@@ -522,35 +505,25 @@ export default function AnalyzedHistory() {
               paddingTop: '16px', 
               borderTop: '1px solid #2a2a2a' 
             }}>
-              <button
+              <Button
+                variant="neutral"
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="btn btn-secondary"
-                style={{ 
-                  fontSize: '12px', 
-                  padding: '6px 12px',
-                  opacity: page === 1 ? 0.5 : 1,
-                  cursor: page === 1 ? 'not-allowed' : 'pointer'
-                }}
+                style={{ fontSize: '12px', padding: '6px 12px' }}
               >
                 Précédent
-              </button>
+              </Button>
               <span style={{ fontSize: '12px', color: '#a0a0a0' }}>
                 Page {page}
               </span>
-              <button
+              <Button
+                variant="neutral"
                 onClick={() => setPage(p => p + 1)}
                 disabled={normalizedItems.length < PAGE_SIZE}
-                className="btn btn-secondary"
-                style={{ 
-                  fontSize: '12px', 
-                  padding: '6px 12px',
-                  opacity: normalizedItems.length < PAGE_SIZE ? 0.5 : 1,
-                  cursor: normalizedItems.length < PAGE_SIZE ? 'not-allowed' : 'pointer'
-                }}
+                style={{ fontSize: '12px', padding: '6px 12px' }}
               >
                 Suivant
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -617,9 +590,9 @@ function HistoryRow({ item, onOpen }: { item: HistoryItem; onOpen: (item: Histor
         outlineOffset: '2px',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = '#3b82f6'
+        e.currentTarget.style.borderColor = '#4a4a4a'
         e.currentTarget.style.transform = 'translateY(-2px)'
-        e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.1)'
+        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.25)'
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.borderColor = '#2a2a2a'
@@ -627,7 +600,7 @@ function HistoryRow({ item, onOpen }: { item: HistoryItem; onOpen: (item: Histor
         e.currentTarget.style.boxShadow = 'none'
       }}
       onFocus={(e) => {
-        e.currentTarget.style.borderColor = '#3b82f6'
+        e.currentTarget.style.borderColor = '#4a4a4a'
       }}
       onBlur={(e) => {
         e.currentTarget.style.borderColor = '#2a2a2a'

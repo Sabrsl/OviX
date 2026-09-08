@@ -58,11 +58,11 @@ export function ArticleWorkflow({ articles = [] }: ArticleWorkflowProps) {
   }
 
   return (
-    <div style={{ padding: '24px', backgroundColor: '#0d0d0d', minHeight: '100vh' }}>
-      <h1 style={{ 
-        fontSize: '28px', 
-        fontWeight: 600, 
-        color: '#fff',
+    <div style={{ padding: '0 16px', maxWidth: '860px', margin: '0 auto' }}>
+      <h1 style={{
+        fontSize: '20px',
+        fontWeight: 600,
+        color: '#f5f5f5',
         marginBottom: '24px'
       }}>
         Workflow

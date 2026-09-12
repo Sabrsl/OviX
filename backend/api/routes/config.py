@@ -32,7 +32,7 @@ KNOWN_SECTIONS = {
     "dead_links_analyzer", "other", "publication_delays",
     "scheduler", "timeouts", "ai", "reference_enricher_analyzer",
     "references", "https_verification", "typography_xml_analyzer",
-    "domain_to_site_name_enrichment",
+    "domain_to_site_name_enrichment", "daily_collection",
 }
 
 
@@ -307,6 +307,44 @@ def _validate_config_data(config_data: Dict[str, Any]) -> tuple[list, list]:
     elif "reference_enricher_analyzer" in config_data:
         errors.append("reference_enricher_analyzer section must be a mapping")
 
+    # Validate dead_links_analyzer section
+    dead_links = config_data.get("dead_links_analyzer")
+    if isinstance(dead_links, dict):
+        if "timeout" in dead_links:
+            if not isinstance(dead_links["timeout"], (int, float)) or isinstance(
+                dead_links["timeout"], bool
+            ):
+                errors.append("dead_links_analyzer.timeout must be a number")
+            elif dead_links["timeout"] <= 0:
+                errors.append("dead_links_analyzer.timeout must be positive")
+        if "max_retries" in dead_links:
+            if not isinstance(dead_links["max_retries"], int) or isinstance(
+                dead_links["max_retries"], bool
+            ):
+                errors.append("dead_links_analyzer.max_retries must be an integer")
+            elif dead_links["max_retries"] < 0:
+                errors.append("dead_links_analyzer.max_retries must be >= 0")
+        if "max_checks_per_article" in dead_links:
+            if not isinstance(dead_links["max_checks_per_article"], int) or isinstance(
+                dead_links["max_checks_per_article"], bool
+            ):
+                errors.append("dead_links_analyzer.max_checks_per_article must be an integer")
+            elif dead_links["max_checks_per_article"] < 1:
+                errors.append("dead_links_analyzer.max_checks_per_article must be at least 1")
+        if "enable_auto_repair" in dead_links and not isinstance(dead_links["enable_auto_repair"], bool):
+            errors.append("dead_links_analyzer.enable_auto_repair must be a boolean")
+        if "assume_wikipedia_patch_deployed" in dead_links and not isinstance(dead_links["assume_wikipedia_patch_deployed"], bool):
+            errors.append("dead_links_analyzer.assume_wikipedia_patch_deployed must be a boolean")
+        if "confidence_threshold" in dead_links:
+            if not isinstance(dead_links["confidence_threshold"], (int, float)) or isinstance(dead_links["confidence_threshold"], bool):
+                errors.append("dead_links_analyzer.confidence_threshold must be a number")
+            elif dead_links["confidence_threshold"] < 0 or dead_links["confidence_threshold"] > 1:
+                errors.append("dead_links_analyzer.confidence_threshold must be between 0 and 1")
+        if "prefer_redirect_over_archive" in dead_links and not isinstance(dead_links["prefer_redirect_over_archive"], bool):
+            errors.append("dead_links_analyzer.prefer_redirect_over_archive must be a boolean")
+    elif "dead_links_analyzer" in config_data:
+        errors.append("dead_links_analyzer section must be a mapping")
+
     # Validate references section
     references = config_data.get("references")
     if isinstance(references, dict):
@@ -369,6 +407,61 @@ def _validate_config_data(config_data: Dict[str, Any]) -> tuple[list, list]:
                 errors.append("https_verification.ttl_failed must be at least 1")
     elif "https_verification" in config_data:
         errors.append("https_verification section must be a mapping")
+
+    # Validate api_throttling section
+    api_throttle = config_data.get("api_throttling")
+    if isinstance(api_throttle, dict):
+        numeric_fields = ["max_requests_per_minute", "max_requests_per_minute_max", "max_requests_per_minute_min",
+                         "maxlag", "min_delay", "min_delay_max", "min_delay_min", "retry_backoff_factor", "retry_delay"]
+        for field in numeric_fields:
+            if field in api_throttle:
+                if not isinstance(api_throttle[field], (int, float)) or isinstance(api_throttle[field], bool):
+                    errors.append(f"api_throttling.{field} must be a number")
+                elif api_throttle[field] < 0:
+                    errors.append(f"api_throttling.{field} must be non-negative")
+        if "max_retries" in api_throttle:
+            if not isinstance(api_throttle["max_retries"], int) or isinstance(api_throttle["max_retries"], bool):
+                errors.append("api_throttling.max_retries must be an integer")
+            elif api_throttle["max_retries"] < 0:
+                errors.append("api_throttling.max_retries must be non-negative")
+        if "random_delay" in api_throttle and not isinstance(api_throttle["random_delay"], bool):
+            errors.append("api_throttling.random_delay must be a boolean")
+    elif "api_throttling" in config_data:
+        errors.append("api_throttling section must be a mapping")
+
+    # Validate scheduler section
+    scheduler = config_data.get("scheduler")
+    if isinstance(scheduler, dict):
+        numeric_fields = ["daily_limit", "working_hours_start", "working_hours_end"]
+        for field in numeric_fields:
+            if field in scheduler:
+                if not isinstance(scheduler[field], (int, float)) or isinstance(scheduler[field], bool):
+                    errors.append(f"scheduler.{field} must be a number")
+                elif scheduler[field] < 0:
+                    errors.append(f"scheduler.{field} must be non-negative")
+    elif "scheduler" in config_data:
+        errors.append("scheduler section must be a mapping")
+
+    # Validate daily_collection section
+    daily_coll = config_data.get("daily_collection")
+    if isinstance(daily_coll, dict):
+        if "enabled" in daily_coll and not isinstance(daily_coll["enabled"], bool):
+            errors.append("daily_collection.enabled must be a boolean")
+        numeric_fields = ["batch_size", "max_articles"]
+        for field in numeric_fields:
+            if field in daily_coll:
+                if not isinstance(daily_coll[field], (int, float)) or isinstance(daily_coll[field], bool):
+                    errors.append(f"daily_collection.{field} must be a number")
+                elif daily_coll[field] < 0:
+                    errors.append(f"daily_collection.{field} must be non-negative")
+        if "category" in daily_coll and not isinstance(daily_coll["category"], str):
+            errors.append("daily_collection.category must be a string")
+        if "exclude_analyzed" in daily_coll and not isinstance(daily_coll["exclude_analyzed"], bool):
+            errors.append("daily_collection.exclude_analyzed must be a boolean")
+        if "exclude_published" in daily_coll and not isinstance(daily_coll["exclude_published"], bool):
+            errors.append("daily_collection.exclude_published must be a boolean")
+    elif "daily_collection" in config_data:
+        errors.append("daily_collection section must be a mapping")
 
     # Non-blocking heads-up for unknown top-level sections (helps catch typos in the UI)
     unknown_sections = set(config_data.keys()) - KNOWN_SECTIONS

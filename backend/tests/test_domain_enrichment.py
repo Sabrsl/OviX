@@ -13,9 +13,8 @@ import sys
 from pathlib import Path
 
 # Add project root to path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
-sys.path.insert(0, str(project_root / "src"))
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root / "backend" / "src"))
 
 from wikipedia_maintenance.utils.wikidata_client import WikidataClient, WikidataEntity
 from wikipedia_maintenance.utils.domain_enrichment_service import (

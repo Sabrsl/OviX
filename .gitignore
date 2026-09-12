@@ -131,14 +131,9 @@ tmp/
 # -----------------------------------------------------
 data/api_cache/
 data/*.json
+data/*.ctrl
 apicache/
 apicache-py3/
-data/scheduler_state.json
-data/automation_state.json
-data/pending_publish_queue.json
-published_articles.json
-published_articles_archive.json
-analyzed_articles.json
 data/automation_reports/
 *.json.bak
 .cache/
@@ -180,4 +175,3 @@ output*.txt
 protected_test*.txt
 protected_zones_test.txt
 test_output.txt
-throttle.ctrl

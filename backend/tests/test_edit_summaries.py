@@ -3,7 +3,7 @@ Test pour vérifier les formats de résumés d'édition
 """
 import sys
 import io
-sys.path.insert(0, r'C:\Users\badza\Desktop\Sabrsl_dead_linker_Bot\src')
+sys.path.insert(0, r'C:\Users\badza\Desktop\Sabrsl_dead_linker_Bot\backend\src')
 
 # Forcer l'encodage UTF-8 pour la sortie console
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')

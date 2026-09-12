@@ -19,8 +19,8 @@ import os
 from pathlib import Path
 
 # Add src to path
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root / 'src'))
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root / 'backend' / 'src'))
 sys.path.insert(0, str(project_root))
 
 from wikipedia_maintenance.orchestrator.automation_orchestrator import AutomationOrchestrator

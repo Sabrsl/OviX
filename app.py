@@ -38,7 +38,7 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 # Add src to path FIRST (before importing wikipedia_maintenance)
-sys.path.insert(0, str(Path(__file__).parent / 'src'))
+sys.path.insert(0, str(Path(__file__).parent / 'backend' / 'src'))
 
 # Import categories config and published tracker
 sys.path.insert(0, str(Path(__file__).parent))

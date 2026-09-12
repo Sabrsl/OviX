@@ -12,7 +12,7 @@ import {
   BarChart3,
   ShieldCheck,
   FileText,
-  Link2,
+  Link as LinkIcon,
   Sparkles,
   Lock,
   Clock,
@@ -25,7 +25,6 @@ import {
 import { configApi, ConfigResponse, ConfigValidationResponse } from '../api/config.api'
 import { authApi } from '../api/auth.api'
 import Tooltip from '../components/Tooltip'
-import DomainEnrichmentSection from '../components/DomainEnrichmentSection'
 import Button from '../components/Button'
 
 // ---------------------------------------------------------------------------
@@ -103,6 +102,26 @@ const TABS: TabDef[] = [
     ],
   },
   {
+    id: 'api_throttling',
+    label: 'API Throttling',
+    description: 'Configuration avancée du throttling des requêtes API.',
+    icon: Gauge,
+    section: 'api_throttling',
+    fields: [
+      { key: 'max_requests_per_minute', label: 'Requêtes max par minute', type: 'number' },
+      { key: 'max_requests_per_minute_max', label: 'Requêtes max par minute (max)', type: 'number' },
+      { key: 'max_requests_per_minute_min', label: 'Requêtes max par minute (min)', type: 'number' },
+      { key: 'max_retries', label: 'Tentatives max', type: 'number' },
+      { key: 'maxlag', label: 'Maxlag', type: 'number' },
+      { key: 'min_delay', label: 'Délai minimum (s)', type: 'number' },
+      { key: 'min_delay_max', label: 'Délai minimum (max)', type: 'number' },
+      { key: 'min_delay_min', label: 'Délai minimum (min)', type: 'number' },
+      { key: 'random_delay', label: 'Délai aléatoire', type: 'boolean' },
+      { key: 'retry_backoff_factor', label: 'Facteur de backoff', type: 'number' },
+      { key: 'retry_delay', label: 'Délai de retry (s)', type: 'number' },
+    ],
+  },
+  {
     id: 'ui',
     label: 'Interface',
     description: 'Apparence et comportement par défaut de l\u2019interface.',
@@ -157,6 +176,35 @@ const TABS: TabDef[] = [
       { key: 'https_verification', label: 'Vérification HTTPS (s)', type: 'number' },
       { key: 'wayback_cdx', label: 'Wayback CDX (s)', type: 'number' },
       { key: 'archive_org', label: 'Archive.org (s)', type: 'number' },
+      { key: 'archive_check', label: 'Vérification archive (s)', type: 'number' },
+      { key: 'connection_check', label: 'Vérification connexion (s)', type: 'number' },
+    ],
+  },
+  {
+    id: 'scheduler',
+    label: 'Planificateur',
+    description: 'Configuration du planificateur de tâches.',
+    icon: Clock,
+    section: 'scheduler',
+    fields: [
+      { key: 'daily_limit', label: 'Limite quotidienne', type: 'number' },
+      { key: 'working_hours_start', label: 'Heure de début', type: 'number' },
+      { key: 'working_hours_end', label: 'Heure de fin', type: 'number' },
+    ],
+  },
+  {
+    id: 'daily_collection',
+    label: 'Collecte quotidienne',
+    description: 'Configuration de la collecte automatique d\'articles.',
+    icon: BarChart3,
+    section: 'daily_collection',
+    fields: [
+      { key: 'enabled', label: 'Activée', type: 'boolean' },
+      { key: 'batch_size', label: 'Taille du batch', type: 'number' },
+      { key: 'category', label: 'Catégorie', type: 'text' },
+      { key: 'max_articles', label: 'Max articles', type: 'number' },
+      { key: 'exclude_analyzed', label: 'Exclure analysés', type: 'boolean' },
+      { key: 'exclude_published', label: 'Exclure publiés', type: 'boolean' },
     ],
   },
   {
@@ -183,7 +231,7 @@ const TABS: TabDef[] = [
     id: 'references',
     label: 'Références',
     description: 'Contrôles appliqués aux références bibliographiques.',
-    icon: Link2,
+    icon: LinkIcon,
     section: 'references',
     fields: [
       { key: 'check_bare_refs', label: 'Vérifier références nues', type: 'boolean' },
@@ -194,6 +242,22 @@ const TABS: TabDef[] = [
       { key: 'check_broken_links', label: 'Vérifier liens brisés', type: 'boolean' },
       { key: 'use_wayback_api', label: 'Utiliser API Wayback', type: 'boolean' },
       { key: 'link_check_timeout', label: 'Timeout vérification lien (s)', type: 'number' },
+    ],
+  },
+  {
+    id: 'dead_links',
+    label: 'Liens morts',
+    description: 'Configuration de l\'analyseur de liens morts (DeadLinkAnalyzer).',
+    icon: LinkIcon,
+    section: 'dead_links_analyzer',
+    fields: [
+      { key: 'timeout', label: 'Timeout vérification (s)', type: 'number' },
+      { key: 'max_retries', label: 'Tentatives max', type: 'number' },
+      { key: 'max_checks_per_article', label: 'Max vérifications par article', type: 'number' },
+      { key: 'enable_auto_repair', label: 'Réparation automatique', type: 'boolean' },
+      { key: 'assume_wikipedia_patch_deployed', label: 'Assumer patch Wikipedia déployé', type: 'boolean' },
+      { key: 'confidence_threshold', label: 'Seuil de confiance', type: 'number' },
+      { key: 'prefer_redirect_over_archive', label: 'Préférer redirect à archive', type: 'boolean' },
     ],
   },
   {
@@ -238,14 +302,6 @@ const TABS: TabDef[] = [
       { key: 'ignore_protected_areas', label: 'Ignorer zones protégées', type: 'boolean' },
       { key: 'case_sensitive', label: 'Sensible à la casse', type: 'boolean' },
     ],
-  },
-  {
-    id: 'domain_enrichment',
-    label: 'Enrichissement domaines',
-    description: 'Enrichissement automatique de domain_to_site_name depuis Wikidata.',
-    icon: Globe,
-    section: 'domain_to_site_name_enrichment',
-    isCustom: true,
   },
 ]
 
@@ -530,10 +586,11 @@ export default function Settings() {
             const isActive = activeTab === tab.id
             
             // Check if this tab is an analyzer and if it's enabled
-            const isAnalyzerTab = ['analysis', 'references', 'reference_enricher', 'https_verification', 'typography_xml'].includes(tab.id)
+            const isAnalyzerTab = ['analysis', 'dead_links', 'references', 'reference_enricher', 'https_verification', 'typography_xml'].includes(tab.id)
             const sectionConfig = config[tab.section] || {}
             const isAnalyzerEnabled = isAnalyzerTab && (
               tab.id === 'analysis' ? sectionConfig.enable_dead_link_analyzer !== false :
+              tab.id === 'dead_links' ? sectionConfig.enable_auto_repair !== false :
               tab.id === 'references' ? (sectionConfig.check_bare_refs || sectionConfig.check_duplicate_refs || sectionConfig.check_uppercase_refs || sectionConfig.check_isbn_format || sectionConfig.check_template_type || sectionConfig.check_broken_links) :
               sectionConfig.enabled !== false
             )
@@ -652,16 +709,12 @@ export default function Settings() {
                 </Button>
               </div>
             )}
-            {currentTab.isCustom ? (
-              currentTab.id === 'domain_enrichment' && <DomainEnrichmentSection />
-            ) : (
-              <ConfigSection
-                section={currentTab.section}
-                config={config}
-                onChange={handleValueChange}
-                fields={currentTab.fields || []}
-              />
-            )}
+            <ConfigSection
+              section={currentTab.section}
+              config={config}
+              onChange={handleValueChange}
+              fields={currentTab.fields || []}
+            />
           </div>
         </div>
       </div>

@@ -20,6 +20,20 @@ rate_limiting:
   max_requests_per_second: 2.0
   burst: 5
 
+# API throttling configuration (advanced)
+api_throttling:
+  max_requests_per_minute: 10
+  max_requests_per_minute_max: 15
+  max_requests_per_minute_min: 10
+  max_retries: 5
+  maxlag: 10
+  min_delay: 11.5
+  min_delay_max: 15
+  min_delay_min: 8
+  random_delay: true
+  retry_backoff_factor: 2
+  retry_delay: 5
+
 # Analysis configuration
 analysis:
   enabled_analyzers:
@@ -46,6 +60,15 @@ database:
     synchronous: NORMAL
     cache_size: -64000
 
+# Daily article collection configuration
+daily_collection:
+  batch_size: 100
+  category: Article à wikifier/Liste complète
+  enabled: true
+  exclude_analyzed: true
+  exclude_published: true
+  max_articles: 500
+
 # UI configuration
 ui:
   theme: dark
@@ -53,6 +76,20 @@ ui:
   auto_expand_high_severity: true
   show_diff_by_default: true
   compact_view: false
+
+# Safety configuration
+safety:
+  dry_run_default: true
+  require_confirmation: true
+  max_article_batch_size: 50
+  max_edits_per_session: 100
+  max_change_bytes: 50000
+  excluded_namespaces:
+    - 0
+    - 4
+    - 10
+  enforce_edit_summary: true
+  default_edit_summary: Corrections automatiques ([[Projet:Maintenance]])
 
 # Safety configuration
 safety:
@@ -113,6 +150,57 @@ references:
   use_wayback_api: false
   link_check_timeout: 5.0
 
+# References analyzer configuration
+references:
+  check_bare_refs: true
+  check_duplicate_refs: true
+  check_uppercase_refs: true
+  check_isbn_format: true
+  check_template_type: true
+  check_broken_links: false
+  use_wayback_api: false
+  link_check_timeout: 5.0
+
+# Dead link analyzer configuration
+dead_links_analyzer:
+  timeout: 10  # Link check timeout in seconds
+  max_retries: 3  # Maximum retry attempts for failed checks
+  max_checks_per_article: 6  # Maximum URLs to check per article
+  enable_auto_repair: true  # Whether to automatically repair dead links
+  assume_wikipedia_patch_deployed: false  # Whether to assume Wikipedia Lua patch is deployed
+
+  # Advanced configuration
+  archive_search:
+    enabled: true
+    health_check_interval: 300
+    wayback_enabled: true
+  candidate_search:
+    enabled: true
+    max_candidates: 3
+    same_domain_only: true
+    try_http_fallback: true
+  confidence_threshold: 0.95
+  prefer_redirect_over_archive: true
+  repair:
+    fail_on_ambiguity: true
+    replace_url_only: true
+    require_minimal_diff: true
+  validation:
+    min_confidence_threshold: 0.7
+    require_archive_evidence: true
+    require_same_domain: true
+    require_title_match: true
+    require_unique_candidate: true
+
+# Reference enricher analyzer configuration
+reference_enricher_analyzer:
+  enabled: true  # Whether to enable the reference enricher analyzer
+  timeout: 10  # Link check timeout in seconds
+  max_retries: 3  # Maximum retry attempts for failed checks
+  max_checks_per_article: 50  # Maximum URLs to check per article
+  enable_site_fill: true  # Whether to auto-fill |site= parameter
+  enable_consulte_le_fill: true  # Whether to auto-fill |consulté le= parameter
+
 # HTTPS verification configuration
 https_verification:
   enabled: false
@@ -147,6 +235,8 @@ timeouts:
   https_verification: 10.0
   wayback_cdx: 5.0
   archive_org: 10.0
+  archive_check: 5.0
+  connection_check: 5.0
 
 # AI/LLM configuration for Gemini
 ai:
@@ -159,6 +249,22 @@ ai:
 # API URLs configuration
 api_urls:
   gemini: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+  wikipedia: https://{lang}.wikipedia.org/w/api.php
+
+# Other configuration
+other:
+  user_agent: OviX/3.2
+
+# Publication delays configuration
+publication_delays:
+  max_delay_minutes: 7
+  min_delay_minutes: 4
+
+# Scheduler configuration
+scheduler:
+  daily_limit: 500
+  working_hours_end: 23
+  working_hours_start: 0
 
 # Domain to site name enrichment configuration
 domain_to_site_name_enrichment:

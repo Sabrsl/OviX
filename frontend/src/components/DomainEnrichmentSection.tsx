@@ -6,8 +6,9 @@
  * displaying progress, and previewing/writing changes.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Play, Pause, Square, RefreshCw, Save, AlertCircle, CheckCircle2, X } from 'lucide-react'
+import { useCallback, useEffect, useState, useRef } from 'react'
+import { Link } from 'react-router-dom'
+import { Play, Pause, Square, RefreshCw, Eye, RotateCcw, Settings, CheckCircle, AlertTriangle, X, Save } from 'lucide-react'
 import {
   domainEnrichmentApi,
   CategoryConfig,
@@ -76,6 +77,9 @@ export default function DomainEnrichmentSection() {
   const [customCategory, setCustomCategory] = useState<string>('')
   const [customWiki, setCustomWiki] = useState<string>('fr')
   const [keepWww, setKeepWww] = useState(false)
+  const [sequentialWrite, setSequentialWrite] = useState(false)
+  const [categoryList, setCategoryList] = useState<string>('')
+  const [useCategoryList, setUseCategoryList] = useState(false)
 
   const mountedRef = useRef(true)
   const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -129,16 +133,38 @@ export default function DomainEnrichmentSection() {
       setPendingAction('start')
       const maxPagesNum = maxPages ? parseInt(maxPages, 10) : undefined
       
-      // Use custom category if provided, otherwise use defaults
-      const categories = customCategory.trim()
-        ? [{ wiki: customWiki, category: customCategory.trim(), priority: 1 }]
-        : DEFAULT_CATEGORIES
+      // Parse category list if enabled, otherwise use custom category or defaults
+      let categories: CategoryConfig[]
+      if (useCategoryList && categoryList.trim()) {
+        // Parse category list (one per line, format: "wiki:category" or just "category")
+        const lines = categoryList.trim().split('\n').filter(line => line.trim())
+        categories = lines.map((line, index) => {
+          const parts = line.split(':').map(p => p.trim())
+          // Check if first part is a namespace prefix (not a wiki code)
+          const namespacePrefixes = ['catégorie', 'category', 'wikipedia', 'file', 'image', 'template', 'modèle']
+          if (parts.length === 2 && !namespacePrefixes.includes(parts[0].toLowerCase())) {
+            return { wiki: parts[0], category: parts[1], priority: index + 1 }
+          } else {
+            // Either single part or namespace prefix - use default wiki and strip namespace if present
+            let categoryName = line
+            if (parts.length > 1 && namespacePrefixes.includes(parts[0].toLowerCase())) {
+              categoryName = parts.slice(1).join(':').trim()
+            }
+            return { wiki: customWiki, category: categoryName, priority: index + 1 }
+          }
+        })
+      } else if (customCategory.trim()) {
+        categories = [{ wiki: customWiki, category: customCategory.trim(), priority: 1 }]
+      } else {
+        categories = DEFAULT_CATEGORIES
+      }
       
       await domainEnrichmentApi.startEnrichment({
         categories,
         dry_run: dryRun,
         max_pages: maxPagesNum,
         keep_www: keepWww,
+        sequential_write: sequentialWrite,
       })
       await loadStatus()
     } catch (error) {
@@ -247,7 +273,7 @@ export default function DomainEnrichmentSection() {
   const spinningIconStyle = { ...iconStyle, animation: 'de-spin 0.8s linear infinite' }
 
   return (
-    <div>
+    <div style={{ maxWidth: '860px', margin: '0 auto' }}>
       <style>{`
         @keyframes de-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
@@ -270,9 +296,9 @@ export default function DomainEnrichmentSection() {
           }}
         >
           {notice.type === 'success' ? (
-            <CheckCircle2 style={iconStyle} />
+            <CheckCircle style={iconStyle} />
           ) : (
-            <AlertCircle style={iconStyle} />
+            <AlertTriangle style={iconStyle} />
           )}
           <span style={{ flex: 1 }}>{notice.message}</span>
           <button
@@ -309,7 +335,7 @@ export default function DomainEnrichmentSection() {
             color: colors.error,
           }}
         >
-          <AlertCircle style={iconStyle} />
+          <AlertTriangle style={iconStyle} />
           <span style={{ flex: 1 }}>{statusError}</span>
           <Button onClick={loadStatus} style={{ padding: '5px 10px', fontSize: '10.5px' }}>
             <RefreshCw style={iconStyle} />
@@ -317,6 +343,24 @@ export default function DomainEnrichmentSection() {
           </Button>
         </div>
       )}
+
+      {/* Header with navigation button */}
+      <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <h2 style={{ fontSize: '15.5px', fontWeight: 600, color: colors.textPrimary, margin: 0 }}>
+            Enrichissement automatique
+          </h2>
+          <p style={{ fontSize: '10.5px', color: colors.textMuted, margin: '4px 0 0' }}>
+            Enrichir domain_to_site_name depuis Wikidata
+          </p>
+        </div>
+        <Link to="/domains/management">
+          <Button variant="neutral">
+            <Settings style={iconStyle} />
+            Gestion des domaines
+          </Button>
+        </Link>
+      </div>
 
       {/* Controls */}
       <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -370,6 +414,26 @@ export default function DomainEnrichmentSection() {
             opacity: isIdle ? 1 : 0.5,
           }}
         >
+          <input
+            type="checkbox"
+            checked={sequentialWrite}
+            onChange={(e) => setSequentialWrite(e.target.checked)}
+            disabled={!isIdle || isBusy}
+            style={{ cursor: !isIdle || isBusy ? 'not-allowed' : 'pointer' }}
+          />
+          Écriture séquentielle (robuste aux crashs)
+        </label>
+
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '11px',
+            color: colors.textSecondary,
+            opacity: isIdle ? 1 : 0.5,
+          }}
+        >
           <span>Max pages:</span>
           <input
             type="number"
@@ -395,44 +459,89 @@ export default function DomainEnrichmentSection() {
         )}
 
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', opacity: isIdle ? 1 : 0.5 }}>
-          <select
-            value={customWiki}
-            onChange={(e) => setCustomWiki(e.target.value)}
-            disabled={!isIdle || isBusy}
+          <label
             style={{
-              padding: '6px 10px',
-              backgroundColor: colors.bgInput,
-              border: `1px solid ${colors.border}`,
-              borderRadius: '6px',
-              color: colors.textPrimary,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
               fontSize: '11px',
-              cursor: !isIdle || isBusy ? 'not-allowed' : 'pointer',
+              color: colors.textSecondary,
             }}
           >
-            <option value="fr">fr</option>
-            <option value="en">en</option>
-            <option value="de">de</option>
-            <option value="es">es</option>
-            <option value="it">it</option>
-          </select>
-          <input
-            type="text"
-            value={customCategory}
-            onChange={(e) => setCustomCategory(e.target.value)}
-            disabled={!isIdle || isBusy}
-            placeholder="Catégorie personnalisée"
-            style={{
-              width: '200px',
-              padding: '6px 10px',
-              backgroundColor: colors.bgInput,
-              border: `1px solid ${colors.border}`,
-              borderRadius: '6px',
-              color: colors.textPrimary,
-              fontSize: '11px',
-              cursor: !isIdle || isBusy ? 'not-allowed' : 'text',
-            }}
-          />
+            <input
+              type="checkbox"
+              checked={useCategoryList}
+              onChange={(e) => setUseCategoryList(e.target.checked)}
+              disabled={!isIdle || isBusy}
+              style={{ cursor: !isIdle || isBusy ? 'not-allowed' : 'pointer' }}
+            />
+            Liste de catégories
+          </label>
         </div>
+
+        {useCategoryList ? (
+          <div style={{ opacity: isIdle ? 1 : 0.5, width: '100%' }}>
+            <textarea
+              value={categoryList}
+              onChange={(e) => setCategoryList(e.target.value)}
+              disabled={!isIdle || isBusy}
+              placeholder="Une catégorie par ligne&#10;Format: wiki:catégorie ou juste catégorie&#10;Exemples:&#10;fr:Média français&#10;Agence de presse&#10;en:News websites"
+              style={{
+                width: '100%',
+                minHeight: '80px',
+                padding: '8px 10px',
+                backgroundColor: colors.bgInput,
+                border: `1px solid ${colors.border}`,
+                borderRadius: '6px',
+                color: colors.textPrimary,
+                fontSize: '11px',
+                cursor: !isIdle || isBusy ? 'not-allowed' : 'text',
+                resize: 'vertical',
+                fontFamily: 'monospace',
+              }}
+            />
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', opacity: isIdle ? 1 : 0.5 }}>
+            <select
+              value={customWiki}
+              onChange={(e) => setCustomWiki(e.target.value)}
+              disabled={!isIdle || isBusy}
+              style={{
+                padding: '6px 10px',
+                backgroundColor: colors.bgInput,
+                border: `1px solid ${colors.border}`,
+                borderRadius: '6px',
+                color: colors.textPrimary,
+                fontSize: '11px',
+                cursor: !isIdle || isBusy ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <option value="fr">fr</option>
+              <option value="en">en</option>
+              <option value="de">de</option>
+              <option value="es">es</option>
+              <option value="it">it</option>
+            </select>
+            <input
+              type="text"
+              value={customCategory}
+              onChange={(e) => setCustomCategory(e.target.value)}
+              disabled={!isIdle || isBusy}
+              placeholder="Catégorie personnalisée"
+              style={{
+                width: '200px',
+                padding: '6px 10px',
+                backgroundColor: colors.bgInput,
+                border: `1px solid ${colors.border}`,
+                borderRadius: '6px',
+                color: colors.textPrimary,
+                fontSize: '11px',
+                cursor: !isIdle || isBusy ? 'not-allowed' : 'text',
+              }}
+            />
+          </div>
+        )}
 
         {isIdle && (
           <>

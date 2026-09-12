@@ -15,6 +15,7 @@ export interface StartEnrichmentRequest {
   dry_run: boolean
   max_pages?: number
   keep_www?: boolean
+  sequential_write?: boolean
 }
 
 export interface EnrichmentStatus {

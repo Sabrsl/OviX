@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 from datetime import datetime, timezone
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "backend" / "src"))
 
 import pytest
 from wikipedia_maintenance.analyzers.reference_enricher_analyzer import ReferenceEnricherAnalyzer

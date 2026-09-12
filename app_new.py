@@ -23,6 +23,9 @@ project_root = Path(__file__).parent
 os.environ['PYWIKIBOT_DIR'] = str(project_root)
 sys.path.insert(0, str(project_root))
 
+# Add src to path FIRST (before importing wikipedia_maintenance)
+sys.path.insert(0, str(Path(__file__).parent / 'backend' / 'src'))
+
 # Phase 2: Database and tracking imports
 from wikipedia_maintenance.utils.database import DatabaseManager
 from wikipedia_maintenance.utils.tracking_service import TrackingService
@@ -39,9 +42,6 @@ from utils.logging_config import setup_logging, get_log_capture
 setup_logging()
 
 logger = logging.getLogger(__name__)
-
-# Add src to path FIRST (before importing wikipedia_maintenance)
-sys.path.insert(0, str(Path(__file__).parent / 'src'))
 
 # Import categories config and published tracker
 sys.path.insert(0, str(Path(__file__).parent))

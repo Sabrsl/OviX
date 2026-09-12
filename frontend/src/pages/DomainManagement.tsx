@@ -9,7 +9,8 @@
  */
 
 import { useEffect, useState, useCallback } from 'react'
-import { Search, Plus, Edit, Trash2, CheckCircle, AlertTriangle, X, RefreshCw } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Search, Plus, Edit, Trash2, CheckCircle, AlertTriangle, X, RefreshCw, Zap } from 'lucide-react'
 import {
   listDomains,
   validateDomain,
@@ -179,7 +180,7 @@ export default function DomainManagement() {
   }
 
   return (
-    <div style={{ padding: '0 16px', maxWidth: '860px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '860px', margin: '0 auto' }}>
       <style>{`
         @keyframes ovix-fade-in {
           from { opacity: 0; transform: translateY(4px); }

@@ -63,7 +63,15 @@ const navigation = [
     children: [
       { name: 'Wikipedia', href: '/settings/wikipedia' },
       { name: 'Général', href: '/settings' },
-      { name: 'Gestion des domaines', href: '/settings/domains' },
+    ],
+  },
+  {
+    name: 'Domaines',
+    icon: Globe,
+    href: '/domains',
+    children: [
+      { name: 'Enrichissement', href: '/domains' },
+      { name: 'Gestion', href: '/domains/management' },
     ],
   },
 ]

@@ -1,0 +1,2735 @@
+acronyms:
+- ONU
+- USA
+- UK
+- UE
+- OTAN
+- UNESCO
+- UNICEF
+- WHO
+- WTO
+- NGO
+- NATO
+- OMS
+- OMC
+- FMI
+- UNHCR
+- UNRWA
+- OIT
+- AIEA
+- ONG
+- UA
+- CEDEAO
+- COMESA
+- BAD
+- PNUD
+- UNODC
+- HCR
+- CICR
+- OIM
+- OPEP
+- OCDE
+- G7
+- G20
+- BRICS
+- CIJ
+- OIF
+- NASA
+- FBI
+- CIA
+- KGB
+- SNCF
+- RATP
+- EDF
+- GDF
+- AFP
+- INA
+- CNRS
+- INSERM
+- CEA
+- INRA
+- IRD
+- CNAM
+- ENS
+- IEP
+- EPHE
+- EPFL
+- DGSE
+- CNIL
+- INSEE
+- MMC
+- APS
+- ENTV
+- RTA
+- ANP
+- DGSN
+- ONS
+- CNRC
+- ANDI
+- ONDA
+- MDN
+- APN
+- FLN
+- RND
+- MAP
+- SNRT
+- RTM
+- 2M
+- ONCF
+- OCP
+- ONEE
+- BAM
+- TAP
+- ERTT
+- INS
+- UMA
+- CEN-SAD
+- UM5
+- USTHB
+- UCAD
+- UCA
+- USMS
+- EST
+- OFPPT
+- ANSEJ
+- CNAC
+- CASNOS
+- CNSSM
+- CNOPS
+- AGD
+- DGAD
+- DST
+- DGSI
+- GIGN
+- RAID
+- ANSSI
+- CGT
+- MEDEF
+- INED
+- IFOP
+- BVA
+- IPSOS
+- ADEME
+- ANRT
+- ARCOM
+- CSA
+- MIT
+- BBC
+- CNN
+- NBC
+- ABC
+- CBS
+- ITV
+- TF1
+- M6
+- FR3
+- ARTE
+- ZDF
+- RAI
+- TVE
+- RTVE
+- SRF
+- RTBF
+- RTS
+- AP
+- DPA
+- EFE
+- ANSA
+- TASS
+- RT
+- CBC
+- PBS
+- RTL
+- RMC
+- LCI
+- CBBC
+- NRK
+- SVT
+- DR
+- NBA
+- NFL
+- MLB
+- NHL
+- FIFA
+- UEFA
+- IOC
+- FIA
+- CIO
+- CAF
+- CAN
+- JO
+- ATP
+- WTA
+- UCI
+- GDP
+- GNP
+- CPI
+- HDI
+- Gini
+- R&D
+- PIB
+- BCE
+- FED
+- PNB
+- TVA
+- RGPD
+- ISO
+- NASDAQ
+- NYSE
+- LBO
+- OPA
+- OPCVM
+- API
+- URL
+- HTTP
+- HTTPS
+- HTML
+- CSS
+- JS
+- XML
+- JSON
+- SQL
+- AI
+- ML
+- NLP
+- CV
+- IA
+- PDF
+- USB
+- GPS
+- CPU
+- GPU
+- SEO
+- CMS
+- IDE
+- SDK
+- CDN
+- VPN
+- IoT
+- LLM
+- GPT
+- RAM
+- ROM
+- SSD
+- HDD
+- RSS
+- IP
+- DNS
+- FTP
+- SSH
+- TLS
+- SSL
+- CNU
+- CAPES
+- CNAF
+- HCERES
+- CROUS
+- IUT
+- BTS
+- DUT
+- HEC
+- ESSEC
+- ESCP
+- INALCO
+- EHESS
+official_names:
+- Le Monde
+- Le Figaro
+- RTL
+- Reddit
+- Dailymotion
+- Département d'État des États-Unis
+- The Independent
+- Europeana
+- Libération
+- France Info
+- France Bleu
+- France Musique
+- France Culture
+- Radio France
+- RFI
+- TV5 Monde
+- Arte
+- BFM TV
+- CNews
+- L'Humanité
+- La Croix
+- Ouest-France
+- Le Parisien
+- 20 Minutes
+- Métro
+- Direct Matin
+- France 24
+- Le Point
+- L'Express
+- L'Obs
+- Marianne
+- Challenges
+- Les Échos
+- El Watan
+- El Khabar
+- Echorouk
+- Le Matin
+- L'Opinion
+- Aujourd'hui le Maroc
+- Le Soir Échos
+- Al Massae
+- Assabah
+- Akhbar Al Youm
+- Jeune Afrique
+- Jeune Afrique Economie
+- The Africa Report
+- Maghreb Arab Press
+- Middle East Online
+- The New York Times
+- The Washington Post
+- The Guardian
+- The Times
+- Financial Times
+- The Economist
+- Wall Street Journal
+- Bloomberg
+- Reuters
+- Associated Press
+- Agence France-Presse
+- Getty Images
+- Google
+- Apple
+- Microsoft
+- Amazon
+- Facebook
+- Meta
+- Twitter
+- LinkedIn
+- Instagram
+- TikTok
+- Snapchat
+- WhatsApp
+- YouTube
+- Netflix
+- Spotify
+- Deezer
+- Adobe
+- IBM
+- Oracle
+- Salesforce
+- SAP
+- Intel
+- AMD
+- NVIDIA
+- Wikipedia
+- Wikipédia
+- Wikimedia Foundation
+- Wikimedia Commons
+- Wikidata
+- Wikisource
+- Wikibooks
+- Wikiversity
+- Wikinews
+- Wikiquote
+- Wiktionary
+- Wikivoyage
+- Wikispecies
+- AlloCiné
+- IMDb
+- SensCritique
+- RateYourMusic
+- Discogs
+- MusicBrainz
+- Last.fm
+- Bandcamp
+- SoundCloud
+- Nature
+- Science
+- The Lancet
+- Cell
+- PubMed
+- arXiv
+- JSTOR
+- ORCID
+- Scopus
+- Web of Science
+- Harvard
+- Yale
+- Stanford
+- Oxford
+- Cambridge
+- Caltech
+- UCLA
+- NYU
+- Fox News
+- Sciences Po
+- Sky News
+- Université Mohammed V
+- Université Hassan II
+- Université Ibn Tofail
+- Université Cadi Ayyad
+- Université Sidi Mohamed Ben Abdellah
+- Université des Sciences et de la Technologie Houari Boumediene
+- Université Mouloud Mammeri
+- Université M'hamed Bougara
+- Université Abou Bekr Belkaïd
+- Université Cheikh Anta Diop
+- Université Felix Houphouet-Boigny
+- Université de Lagos
+- University of Cape Town
+- University of the Witwatersrand
+- Stellenbosch University
+- X (Twitter)
+- X (réseau social)
+particles:
+- de
+- du
+- des
+- la
+- le
+- les
+- van
+- von
+- der
+- den
+- ten
+- ter
+- da
+- di
+- del
+- della
+- dei
+- van de
+- van den
+- van der
+- von de
+- von den
+- von der
+preserved_expressions:
+- États-Unis
+- Royaume-Uni
+- Pays-Bas
+- Nouvelle-Zélande
+- Costa Rica
+- Sierra Leone
+- Côte d'Ivoire
+- République tchèque
+- Afrique du Sud
+- Amérique latine
+- Moyen-Orient
+- Proche-Orient
+- Asie centrale
+- Europe de l'Est
+- Amérique du Nord
+- Amérique du Sud
+- Corée du Sud
+- Corée du Nord
+- Émirats arabes unis
+- Arabie saoudite
+domain_to_site_name:
+  music.apple.com:
+  - - iTunes Store
+  apps.apple.com:
+  - - App Store
+  podcasts.apple.com:
+  - - Apple Podcasts
+  apple.com:
+  - - Apple
+  youtube.com:
+  - - YouTube
+  youtu.be:
+  - - YouTube
+  m.youtube.com:
+  - - YouTube
+  lemonde.fr:
+  - - Le Monde
+  lefigaro.fr:
+  - - Le Figaro
+  lefigaro.com:
+  - - Le Figaro
+  liberation.fr:
+  - - Libération (journal)
+  franceinfo.fr:
+  - - Franceinfo
+  francetvinfo.fr:
+  - - Franceinfo
+  francebleu.fr:
+  - - France Bleu
+  francemusique.fr:
+  - - France Musique
+  franceculture.fr:
+  - - France Culture
+  la-croix.com:
+  - - La Croix
+  lesechos.fr:
+  - - Les Échos
+  manutd.com:
+  - - Manchester United Football Club
+  transfermarkt.fr:
+  - - Transfermarkt
+  entreprendre.fr:
+  - - Entreprendre
+  radiotimes.com:
+  - - Radio Times
+  filmmakermagazine.com:
+  - - Filmmaker (magazine)
+  leparisien.fr:
+  - - Le Parisien
+  humanite.fr:
+  - - L'Humanité
+  lexpress.fr:
+  - - L'Express
+  lepoint.fr:
+  - - Le Point
+  marianne.net:
+  - - Marianne (magazine)
+  nouvelobs.com:
+  - - L'Obs
+  20minutes.fr:
+  - - 20 Minutes
+  naxos.com:
+  - - Naxos (label)
+  cnews.fr:
+  - - CNews
+  bfmtv.com:
+  - - BFM TV
+  lci.fr:
+  - - LCI
+  tf1info.fr:
+  - - TF1
+  france.tv:
+  - - France Télévisions
+  ouest-france.fr:
+  - - Ouest-France
+  sudouest.fr:
+  - - Sud Ouest
+  ladepeche.fr:
+  - - La Dépêche du Midi
+  leprogres.fr:
+  - - Le Progrès
+  ledauphine.com:
+  - - Le Dauphiné libéré
+  bbc.com:
+  - - BBC
+  bbc.co.uk:
+  - - BBC
+  theguardian.com:
+  - - The Guardian
+  nytimes.com:
+  - - The New York Times
+  en.wikipedia.org:
+  - - Wikipedia
+  fr.wikipedia.org:
+  - - Wikipédia
+  wikipedia.org:
+  - - Wikipédia
+  wikidata.org:
+  - - Wikidata
+  wikisource.org:
+  - - Wikisource
+  bnf.fr:
+  - - Bibliothèque nationale de France
+  cairn.info:
+  - - Cairn.info
+  scholar.google.com:
+  - - Google Scholar
+  ceeol.com:
+  - - CEEOL
+  gallimard.fr:
+  - - Éditions Gallimard
+  spotify.com:
+  - - Spotify
+  open.spotify.com:
+  - - Spotify
+  deezer.com:
+  - - Deezer
+  imdb.com:
+  - - IMDb
+  allocine.fr:
+  - - AlloCiné
+  instagram.com:
+  - - Instagram
+  twitter.com:
+  - - X (réseau social)
+  x.com:
+  - - X (réseau social)
+  facebook.com:
+  - - Facebook
+  lefilmfrancais.com:
+  - - Le Film français
+  rfi.fr:
+  - - Radio France Internationale
+  france24.com:
+  - - France 24
+  tv5monde.com:
+  - - TV5Monde
+  arte.tv:
+  - - Arte
+  webtv.un.org:
+  - - Organisation des Nations unies
+  web.archive.org:
+  - - Internet Archive
+  wikiwix.com:
+  - - Wikiwix
+  arquivo.pt:
+  - - Arquivo.pt
+  abi.bo:
+  - - Agence bolivienne d'information
+  kcna.kp:
+  - - Agence centrale de presse coréenne
+  sana.sy:
+  - - Agence de presse arabe syrienne
+  mena.org.eg:
+  - - Agence de presse du Moyen-Orient
+  farsnews.ir:
+  - - Agence de presse Fars
+  kipa-apic.ch:
+  - - Agence de presse internationale catholique
+  dha.com.tr:
+  - - Agence Demirören
+  fides.org:
+  - - Agence Fides
+  iha.com.tr:
+  - - Agence İhlas
+  elwatan.com:
+  - - El Watan
+  elkhabar.com:
+  - - El Khabar
+  echouroukonline.com:
+  - - Echorouk
+  lemonde.dz:
+  - - Le Monde d'Algérie
+  aps.dz:
+  - - Algérie Presse Service
+  tsa-algerie.com:
+  - - TSA (site web)
+  liberte-algerie.com:
+  - - Liberté (journal algérien)
+  aa.com.tr:
+  - - Agence Anadolu
+  algerie360.com:
+  - - Algérie 360
+  algeriepatriotique.com:
+  - - Algérie patriotique
+  elmoudjahid.dz:
+  - - El Moudjahid
+  lexpression.dz:
+  - - L'Expression (Algérie)
+  lematin.ma:
+  - - Le Matin
+  lopinion.ma:
+  - - L'Opinion
+  aujourdhui.ma:
+  - - Aujourd'hui le Maroc
+  lesoir-echos.ma:
+  - - Le Soir Échos
+  almassae.press:
+  - - Al Massae
+  assabah.ma:
+  - - Assabah
+  akhbaralyoum.com:
+  - - Akhbar Al Youm
+  mapnews.ma:
+  - - Maghreb Arab Press
+  medias24.com:
+  - - Médias 24
+  le360.ma:
+  - - Le360
+  hespress.com:
+  - - Hespress
+  telquel.ma:
+  - - TelQuel
+  leconomiste.com:
+  - - L'Économiste
+  challenge.ma:
+  - - Challenge (Maroc)
+  maroc-hebdo.press.ma:
+  - - Maroc Hebdo
+  yabiladi.com:
+  - - Yabiladi
+  ledesk.ma:
+  - - Le Desk
+  tap.info.tn:
+  - - Tunis Afrique Presse
+  jeuneafrique.com:
+  - - Jeune Afrique
+  theafricareport.com:
+  - - The Africa Report
+  maghress.com:
+  - - Maghreb Press
+  middle-east-online.com:
+  - - Middle East Online
+  sabc.co.za:
+  - - South African Broadcasting Corporation
+  entv.dz:
+  - - Établissement public de télévision
+  tpa.ao:
+  - - Televisão Pública de Angola
+  rtnb.bi:
+  - - Radio-Télévision nationale du Burundi
+  crtv.cm:
+  - - Cameroon Radio Television
+  ebc.et:
+  - - Ethiopian Broadcasting Corporation
+  gtvghana.com:
+  - - Ghana Broadcasting Corporation
+  kbc.co.ke:
+  - - Kenya Broadcasting Corporation
+  snrt.ma:
+  - - Société nationale de radiodiffusion et de télévision
+  mbc.intnet.mu:
+  - - Mauritius Broadcasting Corporation
+  tvm.co.mz:
+  - - Televisão de Moçambique
+  nbc.na:
+  - - Namibian Broadcasting Corporation
+  nta.ng:
+  - - Nigerian Television Authority
+  ubc.go.ug:
+  - - Uganda Broadcasting Corporation
+  rba.co.rw:
+  - - Rwandan Broadcasting Agency
+  sntv.gov.so:
+  - - Somali National Television
+  tzbc.go.tz:
+  - - Tanzania Broadcasting Corporation
+  tele-tchad.com:
+  - - Télé Tchad
+  tvt.tg:
+  - - Télévision togolaise
+  znbc.co.zm:
+  - - Zambia National Broadcasting Corporation
+  zbc.co.zw:
+  - - Zimbabwe Broadcasting Corporation
+  ard.de:
+  - - ARD
+  zdf.de:
+  - - ZDF
+  rtsh.al:
+  - - Radio Televizioni Shqiptar
+  rtva.ad:
+  - - Ràdio i Televisió d'Andorra
+  orf.at:
+  - - Österreichischer Rundfunk
+  vrt.be:
+  - - VRT
+  rtbf.be:
+  - - RTBF
+  bhrt.ba:
+  - - Radiotelevizija Bosne i Hercegovine
+  hrt.hr:
+  - - Hrvatska radiotelevizija
+  rtve.es:
+  - - Radiotelevisión Española
+  err.ee:
+  - - Eesti Rahvusringhääling
+  yle.fi:
+  - - Yle
+  ert.gr:
+  - - Ellinikí Radiofonía Tileórasi
+  rte.ie:
+  - - Raidió Teilifís Éireann
+  ruv.is:
+  - - Ríkisútvarpið
+  rai.it:
+  - - Rai
+  rtklive.com:
+  - - Radio-télévision du Kosovo
+  lsm.lv:
+  - - Radiodiffusion publique de Lettonie
+  lrt.lt:
+  - - Lietuvos nacionalinis radijas ir televizija
+  tvmnews.mt:
+  - - Public Broadcasting Services
+  trm.md:
+  - - Teleradio-Moldova
+  rtcg.me:
+  - - Radio i Televizija Crne Gore
+  nrk.no:
+  - - NRK
+  tvp.pl:
+  - - Telewizja Polska
+  rtp.pt:
+  - - Radio-télévision du Portugal
+  tvr.ro:
+  - - Société roumaine de télévision
+  rts.rs:
+  - - Radio-télévision de Serbie
+  rtvslo.si:
+  - - Radiotelevizija Slovenija
+  svt.se:
+  - - Sveriges Television
+  srgssr.ch:
+  - - Société suisse de radiodiffusion et télévision
+  ceskatelevize.cz:
+  - - Česká televize
+  suspilne.media:
+  - - Suspilne
+  rta.af:
+  - - Radio Television Afghanistan
+  mbc.net:
+  - - MBC Group
+  aztv.az:
+  - - Azərbaycan Televiziya
+  itv.az:
+  - - İctimai Televiziya
+  bahrain.bh:
+  - - Bahrain TV
+  btv.gov.bd:
+  - - Télé Bangladesh
+  bbs.bt:
+  - - Bhutan Broadcasting Service
+  rtb.gov.bn:
+  - - Radio Television Brunei
+  cmg.cn:
+  - - China Media Group
+  rthk.hk:
+  - - RTHK
+  riknews.com:
+  - - Société de radiodiffusion de Chypre
+  ebs.co.kr:
+  - - Educational Broadcasting System
+  kbs.co.kr:
+  - - Korean Broadcasting System
+  imbc.com:
+  - - Munhwa Broadcasting Corporation
+  dmi.gov.ae:
+  - - Dubai Media Incorporated
+  1tv.ge:
+  - - Radio télévision publique géorgienne
+  prasarbharati.gov.in:
+  - - Prasar Bharati
+  tvri.go.id:
+  - - TVRI
+  aliraqia.tv:
+  - - Al Iraqiya
+  irib.ir:
+  - - Islamic Republic of Iran Broadcasting
+  kan.org.il:
+  - - Société de radiodiffusion publique israélienne
+  pbc.ps:
+  - - Palestinian Broadcasting Corporation
+  nhk.or.jp:
+  - - NHK
+  jrtv.gov.jo:
+  - - Société radiodiffusion-télévision jordanienne
+  rtm.gov.my:
+  - - Radio Televisyen Malaysia
+  ntv.org.np:
+  - - Nepal Television Corporation
+  abs-cbn.com:
+  - - ABS-CBN
+  pbs.gov.ph:
+  - - People's Television Network
+  rpnradio.com:
+  - - Radio Philippines Network
+  qmc.qa:
+  - - Qatar Media Corporation
+  temasek.com.sg:
+  - - Temasek Holdings
+  teleliban.com:
+  - - Tele-Liban
+  vtv.vn:
+  - - Tele-Viêt Nam
+  tvpublica.com.ar:
+  - - Televisión Pública Argentina
+  radio-canada.ca:
+  - - Radio-Canada
+  tvn.cl:
+  - - Televisión Nacional de Chile
+  paraguaytv.gov.py:
+  - - Paraguay TV
+  irtp.gob.pe:
+  - - Instituto Nacional de Radio y Televisión del Perú
+  tvnz.co.nz:
+  - - Television New Zealand
+  abc.net.au:
+  - - Australian Broadcasting Corporation
+  mir24.tv:
+  - - MIR
+  acxiom.com:
+  - - Acxiom
+  dentsu.com:
+  - - Dentsu
+  fcb.com:
+  - - FCB (agence de publicité)
+  hakuhodo.co.jp:
+  - - Hakuhodo
+  interpublic.com:
+  - - Interpublic Group
+  leoburnett.com:
+  - - Leo Burnett Worldwide
+  mdcpartners.com:
+  - - MDC Partners
+  omnicomgroup.com:
+  - - Omnicom Group
+  saatchi.com:
+  - - Saatchi and Saatchi
+  wpp.com:
+  - - WPP
+  rtl.fr:
+  - - RTL
+  reddit.com:
+  - - Reddit
+  state.gov:
+  - - Département d'État des États-Unis
+  independent.co.uk:
+  - - The Independent
+  europeana.eu:
+  - - Europeana
+  exxonmobil.com:
+  - - ExxonMobil
+  walmart.com:
+  - - Walmart
+  shell.com:
+  - - Shell
+  bp.com:
+  - - BP
+  gm.com:
+  - - General Motors
+  chevron.com:
+  - - Chevron
+  mercedes-benz.com:
+  - - Mercedes-Benz
+  toyota.com:
+  - - Toyota
+  ford.com:
+  - - Ford
+  conocophillips.com:
+  - - ConocoPhillips
+  ge.com:
+  - - General Electric
+  totalenergies.com:
+  - - Total
+  ing.com:
+  - - Groupe ING
+  citi.com:
+  - - Citigroup
+  axa.com:
+  - - Axa
+  allianz.com:
+  - - Allianz
+  volkswagen.com:
+  - - Volkswagen
+  fortis.com:
+  - - Fortis
+  credit-agricole.fr:
+  - - Crédit agricole
+  aig.com:
+  - - AIG
+  generali.com:
+  - - Generali
+  sinopec.com:
+  - - Sinopec
+  ntt.co.jp:
+  - - NTT
+  carrefour.com:
+  - - Carrefour
+  dauphine.com:
+  - - Le Dauphiné libéré
+  dna.fr:
+  - - Dernières Nouvelles d'Alsace
+  estrepublicain.fr:
+  - - L'Est républicain
+  lamontagne.fr:
+  - - La Montagne
+  letelegramme.fr:
+  - - Le Télégramme
+  lavoixdunord.fr:
+  - - La Voix du Nord
+  maine-libre.com:
+  - - Le Maine Libre
+  lanouvellerepublique.fr:
+  - - La Nouvelle République du Centre-Ouest
+  laprovence.com:
+  - - La Provence
+  midilibre.fr:
+  - - Midi libre
+  journaldelareunion.fr:
+  - - Le Quotidien de La Réunion
+  lequipe.fr:
+  - - L'Équipe
+  latribune.fr:
+  - - La Tribune
+  courrierinternational.com:
+  - - Courrier international
+  le1.com:
+  - - Le 1
+  politis.fr:
+  - - Politis
+  valeursactuelles.com:
+  - - Valeurs actuelles
+  lecanardenchaine.fr:
+  - - Le Canard enchaîné
+  lesinrocks.com:
+  - - Les Inrockuptibles
+  monde-diplomatique.fr:
+  - - Le Monde diplomatique
+  altereco.fr:
+  - - Alternatives économiques
+  terraeco.net:
+  - - Terra eco
+  fakir-presse.fr:
+  - - Fakir
+  lapresse.ca:
+  - - La Presse (journal)
+  ledevoir.com:
+  - - Le Devoir
+  journaldequebec.com:
+  - - Le Journal de Québec
+  journaldemontreal.com:
+  - - Le Journal de Montréal
+  thegazette.com:
+  - - The Gazette
+  24h.com:
+  - - 24H Montréal
+  latribune.ca:
+  - - La Tribune
+  lavoixdelest.com:
+  - - La Voix de l'Est
+  ledroit.com:
+  - - Le Droit
+  lenouvelliste.com:
+  - - Le Nouvelliste
+  lequotidien.com:
+  - - Le Quotidien
+  lesoleil.com:
+  - - Le Soleil
+  journalmetro.com:
+  - - Métro
+  therecord.com:
+  - - The Record
+  alternativesjournal.ca:
+  - - Alternatives
+  hour.ca:
+  - - Hour
+  lactionnationale.qc.ca:
+  - - L'Action nationale
+  lactualite.com:
+  - - L'Actualité
+  lautjournal.ca:
+  - - L'Aut'Journal
+  lesaffaires.com:
+  - - Les Affaires
+  protegez-vous.ca:
+  - - Protégez-Vous
+  qctonline.com:
+  - - The Quebec Chronicle-Telegraph
+  voir.ca:
+  - - Voir
+  lequotidien.sn:
+  - - Le Quotidien (Sénégal)
+  seneweb.com:
+  - - Seneweb.com
+  dakaractu.com:
+  - - Dakaractu
+  sudonline.sn:
+  - - Sud Quotidien
+  aps.sn:
+  - - Agence de presse sénégalaise
+  fratmat.info:
+  - - Fraternité Matin
+  aip.ci:
+  - - Agence ivoirienne de presse
+  7info.ci:
+  - - 7info
+  cameroon-tribune.cm:
+  - - Cameroon Tribune
+  aib.media:
+  - - Agence d'information du Burkina
+  essor.ml:
+  - - L'Essor
+  radiookapi.net:
+  - - Radio Okapi
+  actualite.cd:
+  - - Actualite.cd
+  reuters.com:
+  - - Reuters
+  apnews.com:
+  - - Associated Press
+  afp.com:
+  - - Agence France-Presse
+  dpa.com:
+  - - Deutsche Presse-Agentur
+  efe.com:
+  - - Agence EFE
+  ansa.it:
+  - - ANSA
+  tass.com:
+  - - TASS (agence de presse)
+  gazeta.ru:
+  - - Gazeta.ru
+  gazetadopovo.com.br:
+  - - Gazeta do Povo
+  wyborcza.pl:
+  - - Gazeta Wyborcza
+  gazeta.ua:
+  - - Gazeta.ua
+  xinhuanet.com:
+  - - Xinhua
+  kyodonews.net:
+  - - Kyodo News
+  japantimes.co.jp:
+  - - The Japan Times
+  prensa-latina.cu:
+  - - Prensa Latina
+  cnn.com:
+  - - CNN
+  edition.cnn.com:
+  - - CNN
+  foxnews.com:
+  - - Fox News
+  nbcnews.com:
+  - - NBC News
+  cbsnews.com:
+  - - CBS News
+  abcnews.go.com:
+  - - ABC News
+  washingtonpost.com:
+  - - The Washington Post
+  wsj.com:
+  - - The Wall Street Journal
+  bloomberg.com:
+  - - Bloomberg L.P.
+  economist.com:
+  - - The Economist
+  ft.com:
+  - - Financial Times
+  billboard.com:
+  - - Billboard
+  mtv.com:
+  - - MTV
+  oricon.co.jp:
+  - - Oricon
+  ifpi.org:
+  - - Fédération internationale de l'industrie phonographique
+  wipo.int:
+  - - Organisation mondiale de la propriété intellectuelle
+  universalis.fr:
+  - - Encyclopædia Universalis
+  abebooks.com:
+  - - AbeBooks
+  epresse.fr:
+  - - ePresse
+  nintendo.com:
+  - - Nintendo
+  worldbank.org:
+  - - Banque mondiale
+  banquemondiale.org:
+  - - Banque mondiale
+  bsac.com:
+  - - British Sub-Aqua Club
+  aljazeera.com:
+  - - Al Jazeera
+  dw.com:
+  - - Deutsche Welle
+  euronews.com:
+  - - Euronews
+  politico.com:
+  - - Politico
+  politico.eu:
+  - - Politico Europe
+  thetimes.co.uk:
+  - - The Times
+  telegraph.co.uk:
+  - - The Daily Telegraph
+  usatoday.com:
+  - - USA Today
+  latimes.com:
+  - - Los Angeles Times
+  npr.org:
+  - - National Public Radio
+  rts.ch:
+  - - Radio télévision suisse
+  lesoir.be:
+  - - Le Soir (Belgique)
+  lalibre.be:
+  - - La Libre Belgique
+  24heures.ch:
+  - - 24 heures (journal)
+  letemps.ch:
+  - - Le Temps (Suisse)
+  ici.radio-canada.ca:
+  - - Radio-Canada
+  theatlantic.com:
+  - - The Atlantic
+  theintercept.com:
+  - - The Intercept
+  vox.com:
+  - - Vox (site web)
+  thehill.com:
+  - - The Hill
+  cnbc.com:
+  - - CNBC
+  pbs.org:
+  - - Public Broadcasting Service
+  tiktok.com:
+  - - TikTok
+  vm.tiktok.com:
+  - - TikTok
+  linkedin.com:
+  - - LinkedIn
+  snapchat.com:
+  - - Snapchat
+  pinterest.com:
+  - - Pinterest
+  threads.net:
+  - - Threads (réseau social)
+  twitch.tv:
+  - - Twitch
+  vimeo.com:
+  - - Vimeo
+  dailymotion.com:
+  - - Dailymotion
+  whatsapp.com:
+  - - WhatsApp
+  mail.google.com:
+  - - Gmail
+  waze.com:
+  - - Waze
+  maps.google.com:
+  - - Google Maps
+  play.google.com:
+  - - Google Play
+  android.com:
+  - - Android
+  discord.com:
+  - - Discord
+  qq.com:
+  - - Tencent QQ
+  messenger.com:
+  - - Facebook Messenger
+  skype.com:
+  - - Skype
+  uber.com:
+  - - Uber
+  blueskyweb.xyz:
+  - - Bluesky Social
+  bsky.app:
+  - - Bluesky Social
+  truthsocial.com:
+  - - Truth Social
+  viber.com:
+  - - Viber
+  vk.com:
+  - - VK
+  wechat.com:
+  - - WeChat
+  zoom.us:
+  - - Zoom
+  facetime.apple.com:
+  - - FaceTime
+  meet.google.com:
+  - - Google Meet
+  google.com:
+  - - Google
+  meta.com:
+  - - Meta Platforms
+  sony.com:
+  - - Sony
+  nokia.com:
+  - - Nokia
+  motorola.com:
+  - - Motorola
+  siemens.com:
+  - - Siemens
+  blackberry.com:
+  - - BlackBerry
+  samsung.com:
+  - - Samsung Electronics
+  xiaomi.com:
+  - - Xiaomi
+  huawei.com:
+  - - Huawei
+  oppo.com:
+  - - Oppo
+  lg.com:
+  - - LG Electronics
+  tcl.com:
+  - - TCL Technology
+  oneplus.com:
+  - - OnePlus
+  panasonic.com:
+  - - Panasonic
+  qualcomm.com:
+  - - Qualcomm
+  cisco.com:
+  - - Cisco Systems
+  broadcom.com:
+  - - Broadcom
+  ericsson.com:
+  - - Ericsson
+  nec.com:
+  - - NEC
+  tp-link.com:
+  - - TP-Link
+  realme.com:
+  - - Realme
+  asus.com:
+  - - Asus
+  htc.com:
+  - - HTC
+  withings.com:
+  - - Withings
+  fairphone.com:
+  - - Fairphone
+  hmd.com:
+  - - HMD
+  mi.com:
+  - - Xiaomi
+  redmi.com:
+  - - Redmi
+  orange.com:
+  - - Orange
+  orange.fr:
+  - - Orange
+  sfr.fr:
+  - - SFR
+  free.fr:
+  - - Free (entreprise)
+  free-mobile.fr:
+  - - Free Mobile
+  bouyguestelecom.fr:
+  - - Bouygues Telecom
+  proximus.be:
+  - - Proximus
+  vodafone.com:
+  - - Vodafone
+  att.com:
+  - - AT&T
+  t-mobile.com:
+  - - T-Mobile
+  telecomitalia.com:
+  - - Telecom Italia
+  telefonica.com:
+  - - Telefónica
+  movistar.com:
+  - - Movistar
+  maroc-telecom.ma:
+  - - Maroc Telecom
+  iam.ma:
+  - - Maroc Telecom
+  inwi.ma:
+  - - Inwi
+  ooredoo.com:
+  - - Ooredoo
+  mtn.com:
+  - - MTN Group
+  lycamobile.com:
+  - - Lycamobile
+  lebara.com:
+  - - Lebara
+  salt.ch:
+  - - Salt Mobile
+  sosh.fr:
+  - - Sosh
+  crosscall.com:
+  - - Crosscall
+  americamovil.com:
+  - - América Móvil
+  chinatelecom.com.cn:
+  - - China Telecom
+  monaco-telecom.mc:
+  - - Monaco Telecom
+  intelsat.com:
+  - - Intelsat
+  videotron.com:
+  - - Vidéotron
+  juniper.net:
+  - - Juniper Networks
+  ovhcloud.com:
+  - - OVHcloud
+  scaleway.com:
+  - - Scaleway
+  cloudflare.com:
+  - - Cloudflare
+  ionos.com:
+  - - IONOS
+  starlink.com:
+  - - Starlink
+  spacex.com:
+  - - SpaceX
+  eutelsat.com:
+  - - Eutelsat
+  oneweb.net:
+  - - Eutelsat OneWeb
+  molotov.tv:
+  - - Molotov TV
+  tdf.fr:
+  - - TDF
+  thalesaleniaspace.com:
+  - - Thales Alenia Space
+  westernunion.com:
+  - - Western Union
+  orangemoney.com:
+  - - Orange Money
+  un.org:
+  - - Organisation des Nations unies
+  news.un.org:
+  - - Organisation des Nations unies
+  who.int:
+  - - Organisation mondiale de la santé
+  imf.org:
+  - - Fonds monétaire international
+  ec.europa.eu:
+  - - Commission européenne
+  europarl.europa.eu:
+  - - Parlement européen
+  nato.int:
+  - - Organisation du traité de l'Atlantique nord
+  gouvernement.fr:
+  - - Gouvernement français
+  elysee.fr:
+  - - Élysée (présidence)
+  legifrance.gouv.fr:
+  - - Légifrance
+  insee.fr:
+  - - Institut national de la statistique et des études économiques
+  service-public.fr:
+  - - Service-public.fr
+  service-public.gouv.fr:
+  - - Service-public.fr
+  vie-publique.fr:
+  - - Vie publique
+  assemblee-nationale.fr:
+  - - Assemblée nationale
+  senat.fr:
+  - - Sénat (France)
+  conseil-constitutionnel.fr:
+  - - Conseil constitutionnel
+  courdecassation.fr:
+  - - Cour de cassation (France)
+  education.gouv.fr:
+  - - Ministère de l'Éducation nationale
+  culture.gouv.fr:
+  - - Ministère de la Culture (France)
+  vatican.va:
+  - - Saint-Siège
+  vaticannews.va:
+  - - Vatican News
+  itu.int:
+  - - Union internationale des télécommunications
+  ebu.ch:
+  - - Union européenne de radio-télévision
+  icann.org:
+  - - Internet Corporation for Assigned Names and Numbers
+  swift.com:
+  - - Society for Worldwide Interbank Financial Telecommunication
+  nsa.gov:
+  - - National Security Agency
+  ieee.org:
+  - - Institute of Electrical and Electronics Engineers
+  arcep.fr:
+  - - Autorité de régulation des communications électroniques
+    - des postes et de la distribution de la presse
+  cept.org:
+  - - Conférence européenne des administrations des postes et télécommunications
+  3gpp.org:
+  - - 3rd Generation Partnership Project
+  telecom-paris.fr:
+  - - Télécom Paris
+  imt.fr:
+  - - Institut Mines-Télécom
+  pagesjaunes.fr:
+  - - Pages jaunes
+  pagesblanches.fr:
+  - - Pages blanches
+  hedylamarr.com:
+  - - Hedy Lamarr
+  toureiffel.paris:
+  - - Tour Eiffel
+  parcduventoux.fr:
+  - - Mont Ventoux
+  empirestatebuilding.com:
+  - - Empire State Building
+  cntower.ca:
+  - - Tour CN
+  tokyoskytree.jp:
+  - - Tokyo Skytree
+  britannica.com:
+  - - Encyclopædia Britannica
+  larousse.fr:
+  - - Larousse
+  netflix.com:
+  - - Netflix
+  primevideo.com:
+  - - Amazon Prime Video
+  disneyplus.com:
+  - - Disney+
+  music.youtube.com:
+  - - YouTube Music
+  soundcloud.com:
+  - - SoundCloud
+  booska-p.com:
+  - - Booska-P
+  vevo.com:
+  - - Vevo
+  fifa.com:
+  - - FIFA
+  uefa.com:
+  - - UEFA
+  olympics.com:
+  - - Comité international olympique
+  eurosport.fr:
+  - - Eurosport
+  worldathletics.org:
+  - - World Athletics
+  fiba.basketball:
+  - - Fédération internationale de basket-ball
+  formula1.com:
+  - - Formule 1
+  letour.fr:
+  - - Tour de France
+  ccm.ma:
+  - - Le Quotidien (Luxembourg)
+  lequotidien.lu:
+  - - Le Quotidien (Luxembourg)
+  aina.org:
+  - - Assyrian International News Agency
+  aap.com.au:
+  - - Australian Associated Press
+  apa.at:
+  - - Austria Presse Agentur
+  awp.ch:
+  - - Awp Informations Financières
+  bssnews.net:
+  - - Bangladesh Sangbad Sangstha
+  basilica.ro:
+  - - Agence de presse Basilica
+  belga.be:
+  - - Belga
+  bg-turk.com:
+  - - BG-TURK
+  zh.bitterwinter.org:
+  - - Bitter Winter
+  bolpress.com:
+  - - Bolpress
+  cna.com.tw:
+  - - Central News Agency
+  ctk.cz:
+  - - Česká tisková kancelář
+  chinanews.com.cn:
+  - - China News Service
+  cna.org.cy:
+  - - Cyprus News Agency
+  dpa.de:
+  - - Deutsche Presse-Agentur
+  dapd.de:
+  - - Deutscher Auslands-Depeschendienst
+  djnewswires.com:
+  - - Dow Jones Newswires
+  eglasie.mepasie.org:
+  - - Églises d'Asie
+  esna.tv:
+  - - ESNA European Higher Education News
+  europapress.es:
+  - - Europa Press
+  anfenglish.com:
+  - - Firat news agency
+  ghananewsagency.org:
+  - - Agence de presse du Ghana
+  hina.hr:
+  - - HINA
+  ians.in:
+  - - Indo-Asian News Service
+  ips.org:
+  - - Inter Press Service
+  en.interfax.com.ua:
+  - - Interfax-Ukraine
+  lana.gov.ly:
+  - - Jamahiriya News Agency
+  jiji.co.jp:
+  - - Jiji Press
+  kabar.kg:
+  - - Kabar
+  gamma-rapho-expos.com:
+  - - Keystone Paris
+  kpl.gov.la:
+  - - Khaosane Pathet Lao
+  lusa.pt:
+  - - Lusa
+  largeur.com:
+  - - Largeur.com
+  leta.lv:
+  - - LETA
+  maannews.net:
+  - - Ma'an News
+  amna.gr:
+  - - Macedonian Press Agency
+  mti.hu:
+  - - Magyar Távirati Iroda
+  en.mercopress.com:
+  - - MercoPress
+  mia.mk:
+  - - MIA
+  ntb.no:
+  - - Norsk Telegrambyrå
+  omannews.gov.om:
+  - - Oman News Agency
+  books.google.fr:
+  - - Google Livres
+  frac-centre.fr:
+  - - Fonds régional d'art contemporain du Centre-Val de Loire
+  cnap.fr:
+  - - Centre national des arts plastiques
+  pajhwok.com:
+  - - Agence Pajhwok
+  ata.gov.al:
+  - - Agence télégraphique albanaise
+  sda.ch:
+  - - Agence télégraphique suisse
+  agenciabrasil.gov.br:
+  - - Agência Brasil
+  alakhbar.info:
+  - - Al Akhbar
+  newsalliance.org:
+  - - Alliance européenne des agences de presse
+  antaranews.com:
+  - - ANTARA
+  asianews.network:
+  - - Asia News Network
+  aninews.in:
+  - - Asian News International
+  safa.ps:
+  - - Agence de presse palestinienne
+  gazaalan.net:
+  - - Gaza Now News Network
+  pap.pl:
+  - - Polish Press Agency
+  stc.com.sa:
+  - - Saudi Telecom Company
+  dib.ie:
+  - - Dictionary of Irish Biography
+  dbase.com:
+  - - DBF
+  puntu.eus:
+  - - eus
+  kath-akademie-bayern.de:
+  - - Académie catholique de Bavière
+  chntheatre.edu.cn:
+  - - Académie centrale d'art dramatique de Pékin
+  ac-aix-marseille.fr:
+  - - académie d'Aix-Marseille
+  ac-besancon.fr:
+  - - académie de Besançon
+  ac-clermont.fr:
+  - - académie de Clermont-Ferrand
+  ac-dijon.fr:
+  - - académie de Dijon
+  ac-guyane.fr:
+  - - académie de Guyane
+  navy.ac.kr:
+  - - Académie de la marine coréenne
+  ac-reunion.fr:
+  - - académie de La Réunion
+  ac-montpellier.fr:
+  - - académie de Montpellier
+  ac-nice.fr:
+  - - académie de Nice
+  ac-normandie.fr:
+  - - académie de Normandie
+  ac-poitiers.fr:
+  - - académie de Poitiers
+  ac-reims.fr:
+  - - académie de Reims
+  afna.ac.kr:
+  - - Académie de santé des armées coréennes
+  ac-toulouse.fr:
+  - - académie de Toulouse
+  ac-versailles.fr:
+  - - académie de Versailles
+  caa.edu.cn:
+  - - Académie des arts de Chine
+  pohchang.rmutr.ac.th:
+  - - Académie des arts de Poh Chang
+  hkapa.edu:
+  - - Académie des arts du spectacle de Hong Kong
+  vsvu.sk:
+  - - Académie des beaux-arts de Bratislava
+  adbk.de:
+  - - Académie des beaux-arts de Munich
+  artacademie.com:
+  - - Académie internationale des beaux-arts du Québec
+  donnaba.edu.ua:
+  - - Académie nationale de génie civil et d'architecture du Donbas
+  bundeswehr.de:
+  - - Académie navale de Mürwik
+  dnva.no:
+  - - Académie norvégienne des sciences et des lettres
+  arstm.org:
+  - - Académie Régionale des Sciences et Techniques de la Mer
+  ksla.se:
+  - - Académie royale de l'agriculture et de la sylviculture de Suède
+  beauxartsdeliege.be:
+  - - Académie royale des beaux-arts de Liège
+  kva.se:
+  - - Académie royale des sciences de Suède
+  philipjohnston.com:
+  - - Académie royale militaire de Woolwich
+  konstakademien.se:
+  - - Académie royale suédoise des Beaux-Arts
+  ranepa.ru:
+  - - Académie russe de l'économie nationale
+  saa.schoolqc.ca:
+  - - Académie Sainte Agathe
+  tea.texas.gov:
+  - - Agence d'éducation pour le Texas
+  adetic.td:
+  - - Agence de Développement des Technologies de l’Information et de la Communication
+  anlci.gouv.fr:
+  - - Agence nationale de lutte contre l'illettrisme
+  elfmuseum.com:
+  - - École des elfes
+  apo.org:
+  - - Alpha Phi Omega
+  ac-amiens.fr:
+  - - académie d'Amiens
+  annabac.com:
+  - - Annabac
+  archmereacademy.com:
+  - - Archmere Academy
+  artek.byg.dtu.dk:
+  - - Arctic Technology Centre
+  noorintv.net:
+  - - Noorin TV
+  azadiradio.org:
+  - - Radio Azadi
+  zantimes.com:
+  - - Zan Times
+  media24.com:
+  - - Media24
+  naspers.com:
+  - - Naspers
+  lebuteur.com:
+  - - Le Buteur
+  djv.de:
+  - - DJV
+  axelspringer.com:
+  - - Axel Springer Award
+  mediapark.de:
+  - - MediaPark
+  deutscher-medienpreis.de:
+  - - prix allemand des médias
+  elblogdecabildo.blogspot.com.ar:
+  - - Cabildo
+  revistacriterio.com.ar:
+  - - Criterio
+  perfil.com:
+  - - Perfil
+  vanguardiaps.blogspot.com:
+  - - La Vanguardia
+  papelprensa.com:
+  - - Papel Prensa
+  telam.com.ar:
+  - - Télam
+  amnic.net:
+  - - .am
+  armenianow.com:
+  - - ArmeniaNow
+  lecourrieraustralien.com:
+  - - Le Courrier australien
+  empireonline.com:
+  - - Empire
+  insideindonesia.org:
+  - - Inside Indonesia
+  neoskosmos.com:
+  - - Néos Kósmos
+  newscorpaustralia.com:
+  - - News Limited
+  dieaula.at:
+  - - Die Aula
+  buehnenverein.at:
+  - - Die Bühne
+  falstaff.at:
+  - - Falstaff
+  furche.at:
+  - - Die Furche
+  heute.at:
+  - - Heute
+  kleinezeitung.at:
+  - - Kleine Zeitung
+  krone.at:
+  - - Kronen Zeitung
+  kurier.at:
+  - - 信使報
+  medianet.at:
+  - - medianet
+  megaphon.at:
+  - - Megaphon
+  nachrichten.at:
+  - - Oberösterreichische Nachrichten
+  oe24.at:
+  - - Österreich
+  diepresse.com:
+  - - Die Presse
+  profil.at:
+  - - Profil
+  salzburg.com:
+  - - Salzburger Nachrichten
+  derstandard.at:
+  - - Der Standard
+  tt.com:
+  - - Tiroler Tageszeitung
+  trend.at:
+  - - Trend
+  wienerzeitung.at:
+  - - Wiener Zeitung
+  wirtschaftsblatt.at:
+  - - WirtschaftsBlatt
+  uibk.ac.at:
+  - - Zeitschrift für katholische Theologie
+  azadliq.info:
+  - - Azadliq
+  kaspi.az:
+  - - Kaspiy
+  respublika-news.az:
+  - - Respublika
+  turan.az:
+  - - Turan Information Agency
+  zerkalo.az:
+  - - Zerkalo
+  brusselsjournal.com:
+  - - The Brussels Journal
+  cathobel.be:
+  - - CathoBel
+  cim.be:
+  - - centre d'information sur les médias
+  demeures-historiques.be:
+  - - Demeures historiques et Jardins
+  focusvif.be:
+  - - Focus Vif
+  grenz-echo.be:
+  - - Grenz Echo
+  knack.be:
+  - - Knack
+  metrotime.be:
+  - - Metro
+  neurope.eu:
+  - - New Europe
+  pul.uclouvain.be:
+  - - Revue générale
+  scumgrrrls.org:
+  - - Scumgrrrls
+  ffsb.be:
+  - - Sournal
+  sportmagazine.levif.be:
+  - - Sport/Foot Magazine
+  lesuricate.org:
+  - - Le Suricate magazine
+  telepro.be:
+  - - Télépro
+  test-aankoop.be:
+  - - Testachats
+  daardaar.be:
+  - - Daardaar
+  info.catho.be:
+  - - Dimanche
+  fashionline.org:
+  - - Fashionline
+  nordpresse.be:
+  - - Nordpresse
+  brf.be:
+  - - Belgischer Rundfunk
+  champagnefm.com:
+  - - Champagne FM
+  csa.be:
+  - - Conseil supérieur de l'audiovisuel
+  cappfm.com:
+  - - Capp FM
+  cnc.gov.cm:
+  - - Conseil national de la communication
+  cnpa-benin.org:
+  - - Conseil national du patronat de la presse et de l’audiovisuel
+  haac.bj:
+  - - Haute Autorité de l’audiovisuel et de la communication
+  radiotokpa.info:
+  - - Radio Tokpa
+  radiotonasse.com:
+  - - Radio Tonassé
+  soleilfmbenin.com:
+  - - soleil FM Bénin
+  bhutantimes.bt:
+  - - The Bhutan Times
+  thebhutanese.bt:
+  - - The Bhutanese
+  kuenselonline.com:
+  - - Kuensel
+  frontiermyanmar.net:
+  - - Frontier Myanmar
+  mizzima.com:
+  - - Mizzima News
+  mmtimes.com:
+  - - The Myanmar Times
+  myanmaritv.com:
+  - - Myanmar International
+  mrtv.gov.mm:
+  - - Myanmar Radio and Television
+  nouvellecite.fr:
+  - - Connaissance des Pères de l’Église
+  editionsjalou.com:
+  - - Éditions Jalou
+  francais-du-monde.org:
+  - - Français du monde
+  france-armenie.fr:
+  - - France Arménie
+  fusac.fr:
+  - - Fusac magazine
+  medecinsdumonde.org:
+  - - réseau international de Médecins du Monde
+  gallica.bnf.fr:
+  - - L'Intransigeant
+  litinerant.fr:
+  - - L'Itinérant
+  societebotaniquedefrance.fr:
+  - - Journal de botanique
+  lettre-amazonie.org:
+  - - Lettre d'Amazonie
+  lundi.am:
+  - - Lundi matin
+  revuelemondedesplantes.blogspot.com:
+  - - Le Monde des Plantes
+  armenews.com:
+  - - Nouvelles d'Arménie Magazine
+  omertamedia.fr:
+  - - Omerta
+  revue-projet.com:
+  - - Revue Projet
+  rayon-boissons.com:
+  - - Rayon boissons
+  enssibal.enssib.fr:
+  - - Réseaux
+  retronews.fr:
+  - - Retronews
+  memorialdelashoah.org:
+  - - Revue d'histoire de la Shoah
+  elsevier.com:
+  - - Revue neurologique
+  cei-spiritistcouncil.com:
+  - - La Revue Spirite
+  revuethomiste.fr:
+  - - Revue thomiste
+  ruptures-presse.fr:
+  - - Ruptures
+  pseudo-sciences.org:
+  - - Science et pseudo-sciences
+  sopress.net:
+  - - So Press
+  ufe.org:
+  - - La Voix de France
+  alliancepresse.fr:
+  - - Alliance de la presse d’information générale
+  acpm.fr:
+  - - Alliance pour les chiffres de la presse et des médias
+  ardpresse.fr:
+  - - Autorité de régulation de la distribution de la presse
+  aacc.fr:
+  - - Association des agences conseils en communication
+  ajspi.com:
+  - - Association des journalistes scientifiques de la presse d’information
+  afpapresse.free.fr:
+  - - Association française de la presse automobile
+  arpp.org:
+  - - Autorité de régulation professionnelle de la publicité
+  club-averroes.com:
+  - - Club Averroes
+  commission-des-sondages.fr:
+  - - Commission des sondages
+  cppap.fr:
+  - - Commission paritaire des publications et des agences de presse
+  ddm.gouv.fr:
+  - - direction générale des médias et des industries culturelles
+  francemessagerie.fr:
+  - - France Messagerie
+  mediametrie.fr:
+  - - Médiamétrie
+  mlp.fr:
+  - - Messageries lyonnaises de presse
+  pressclub.fr:
+  - - Press club de France
+  presstalis.fr:
+  - - Presstalis
+  pigiste.org:
+  - - 'Profession : Pigiste'
+  reportersdespoirs.org:
+  - - Reporters d'espoirs
+  histoiredesmedias.com:
+  - - Société pour l'histoire des médias
+  spiil.org:
+  - - Syndicat de la presse indépendante d'information en ligne
+  spqr.fr:
+  - - Syndicat de la presse quotidienne régionale
+  lapressemagazine.fr:
+  - - Syndicat des éditeurs de la presse magazine
+  presseagricole.com:
+  - - Syndicat national de la presse agricole et rurale
+  6ter.fr:
+  - - 6ter
+  m6.fr:
+  - - M6
+  tv8montblanc.fr:
+  - - 8 Mont-Blanc
+  idf1.fr:
+  - - 20 Minutes TV Île-de-France
+  alizes.com:
+  - - Alizés Télévision
+  angers-tele.fr:
+  - - Angers Télé
+  antennereunion.fr:
+  - - Antenne Réunion
+  bdmtv.net:
+  - - BDM TV
+  biptv.tv:
+  - - Berry Issoudun Première
+  bfmbusiness.com:
+  - - BFM Business
+  d8.tv:
+  - - C8
+  nctv.nc:
+  - - NCTV
+  canal10-tv.com:
+  - - canal 10
+  canal15-tv.com:
+  - - Canal 15
+  canal32.fr:
+  - - Canal 32
+  canalplus.com:
+  - - Canal+
+  canalplus.fr:
+  - - Canal+ Cinéma(s)
+  cap24.com:
+  - - Cap 24
+  caribintv.com:
+  - - Carib’inTV
+  cela.tv:
+  - - Célà TV
+  cfoot.fr:
+  - - CFoot
+  cinaps.tv:
+  - - Cinaps TV
+  d17.tv:
+  - - CStar
+  culturebox.francetvinfo.fr:
+  - - Culturebox
+  efm-etv.com:
+  - - Éclair Télévision
+  alpes.france3.fr:
+  - - France 3 Alpes
+  alsace.france3.fr:
+  - - France 3 Alsace
+  france3-regions.franceinfo.fr:
+  - - France 3 Nouvelle-Aquitaine
+  france3-regions.francetvinfo.fr:
+  - - France 3 Auvergne
+  bourgogne.france3.fr:
+  - - France 3 Bourgogne
+  centre.france3.fr:
+  - - France 3 Centre-Val de Loire
+  cote-d-azur.france3.fr:
+  - - France 3 Côte d'Azur
+  sud.france3.fr:
+  - - France 3 Midi-Pyrénées
+  nord-pas-de-calais.france3.fr:
+  - - France 3 Nord-Pas-de-Calais
+  pays-de-la-loire.france3.fr:
+  - - France 3 Pays de la Loire
+  picardie.france3.fr:
+  - - France 3 Picardie
+  provence-alpes.france3.fr:
+  - - France 3 Provence-Alpes
+  rhone-alpes.france3.fr:
+  - - France 3 Rhône-Alpes
+  la1ere.francetvinfo.fr:
+  - - Guadeloupe La Première
+  guadeloupe-television.com:
+  - - Guadeloupe Télévision
+  gulli.fr:
+  - - Gulli
+  kmttelevision.com:
+  - - KMT Télévision
+  moselle.tv:
+  - - Moselle TV
+  novo19.ouest-france.fr:
+  - - Novo 19
+  nrjparis.tv:
+  - - NRJ Paris
+  tf1.fr:
+  - - TFX
+  opaltv.fr:
+  - - Opal'TV
+  parispremiere.fr:
+  - - Paris Première
+  planete.tm.fr:
+  - - Planète+
+  rmcdecouverte.bfmtv.com:
+  - - RMC Découverte
+  rmcstory.bfmtv.com:
+  - - RMC Story
+  viaoccitanie.tv:
+  - - Vià
+  vootv.fr:
+  - - Voo TV
+  13emerueuniversal.fr:
+  - - 13e rue
+  ab1tv.fr:
+  - - AB1
+  actiontv.fr:
+  - - Action
+  animauxtv.com:
+  - - Animaux
+  automoto-lachaine.fr:
+  - - Automoto La chaîne
+  beinsports.com:
+  - - BeIN Sports
+  boomerangtv.fr:
+  - - Boomerang France
+  campagnestv.com:
+  - - Campagnes TV
+  canalj.fr:
+  - - Canal J
+  cartoonnetwork.fr:
+  - - Cartoon Network
+  chasseetpechetv.fr:
+  - - Chasse et Pêche
+  cinefx.net:
+  - - Ciné FX
+  clubbingtv.com:
+  - - Clubbing TV
+  comedieplus.fr:
+  - - Comédie+
+  discoverychannel.fr:
+  - - Discovery Channel France
+  disney.fr:
+  - - Disney Channel France
+  disneycinema.fr:
+  - - Disney Cinema
+  tv.disney.fr:
+  - - Disney Junior France
+  disneyxd.disney.fr:
+  - - Disney XD France
+  dorceltv.com:
+  - - Dorcel TV
+  encyclopedia.fr:
+  - - Encyclo
+  equidia.fr:
+  - - Equidia
+  escalestv.fr:
+  - - Escales
+  eurochannel.com:
+  - - Eurochannel
+  europe2.fr:
+  - - Europe 2 Pop TV
+  eurosport.com:
+  - - Eurosport
+  fashiontv.com:
+  - - Fashion TV
+  gameone.net:
+  - - Game One
+  golfchannel.fr:
+  - - Golf Channel France
+  gongnetworks.com:
+  - - GONG
+  j-one.com:
+  - - J-One
+  jpptv.fr:
+  - - Jean-Pierre Pernaut TV
+  jimmy.fr:
+  - - Jimmy
+  june.fr:
+  - - June
+  kztv.fr:
+  - - KZTV
+  luckyjack.tv:
+  - - Lucky Jack.tv
+  luxe.tv:
+  - - Luxe.TV
+  m6music.fr:
+  - - M6 Music
+  mangas.fr:
+  - - Mangas
+  mtv.fr:
+  - - MTV France
+  museumtv.art:
+  - - Museum TV
+  myzen.tv:
+  - - MyZen.tv
+  natgeotv.com:
+  - - National Geographic Channel France
+  nickelodeon.fr:
+  - - Nickelodeon
+  nickelodeonjunior.fr:
+  - - Nickelodeon Junior
+  non-stop-people.com:
+  - - Non Stop People
+  ocs.fr:
+  - - OCS
+  paramountchannel.fr:
+  - - Paramount Channel
+  penthousehdtv.com:
+  - - Penthouse HD
+  piwiplus.fr:
+  - - Piwi+
+  planeteplus.com:
+  - - Planète+ Aventure
+  le13dumois.fr:
+  - - Le 13 du mois
+  54etats.com:
+  - - 54 États
+  60millions-mag.com:
+  - - 60 Millions de consommateurs
+  100idees.fr:
+  - - 100 idées
+  cg66.fr:
+  - - L'Accent Catalan
+  acteurspublics.com:
+  - - Acteurs Publics
+  lalpe.com:
+  - - L'Alpe
+  angle-mort.fr:
+  - - Angle mort
+  animeland.fr:
+  - - AnimeLand
+  antilla-martinique.com:
+  - - Antilla
+  archimag.com:
+  - - Archimag
+  archistorm.com:
+  - - Archistorm
+  largus.fr:
+  - - L'Argus
+  artactuel.com:
+  - - Art actuel
+  art-enluminure.com:
+  - - Art de l'enluminure
+  artnord.fr:
+  - - ARTnord
+  assaut.fr:
+  - - Assaut
+  autohebdo.fr:
+  - - Auto Hebdo
+  auto-moto.com:
+  - - Auto Moto
+  autoplus.fr:
+  - - Auto Plus
+  autojournal.fr:
+  - - L'Auto-Journal
+  automobile-magazine.fr:
+  - - L'Automobile Magazine
+  automobilia.histoireetcollections.com:
+  - - Automobilia
+  be.com:
+  - - Be magazine
+  brefcinema.com:
+  - - Bref
+  haiastan.org:
+  - - Haïastan
+  norharatch.com:
+  - - Nor Haratch
+  bleucom.net:
+  - - Bleucom éditions
+  combat.fr:
+  - - Combat Media
+  pap.fr:
+  - - De Particulier à Particulier
+  ebra.fr:
+  - - Groupe EBRA
+  editionsduboisbaudry.fr:
+  - - Éditions du Boisbaudry
+  faton.fr:
+  - - Éditions Faton
+  laviedurail.com:
+  - - La Vie du Rail
+  editions-lariviere.fr:
+  - - Éditions Larivière
+  publihebdos.com:
+  - - Groupe actu
+  amaury.com:
+  - - Groupe Amaury
+  areion24.news:
+  - - Groupe Areion
+  bayard-editions.com:
+  - - Bayard Presse
+  centrefrance.com:
+  - - Centre France
+  groupehcr.fr:
+  - - groupe HCR
+  groupehersantmedia.com:
+  - - Groupe Hersant Média
+  groupe.ladepeche.fr:
+  - - Groupe La Dépêche du Midi
+  larep.com:
+  - - Groupe La République du Centre
+  marieclairegroup.com:
+  - - Groupe Marie Claire
+  nicematin.com:
+  - - Groupe Nice-Matin
+  groupeprofessionsante.fr:
+  - - Groupe Profession Santé
+  grouperf.com:
+  - - Groupe Revue Fiduciaire
+  groupesudouest.com:
+  - - Groupe Sud Ouest
+  groupe-telegramme.com:
+  - - Groupe Télégramme
+  valmonderegie.fr:
+  - - Valmonde
+  geste.fr:
+  - - Groupement des éditeurs de services en ligne
+  hachette.com:
+  - - Hachette Filipacchi Médias
+  humanoid.fr:
+  - - Humanoid
+  indigo.fr:
+  - - Indigo Publications
+  lafontpresse.fr:
+  - - Lafont presse
+  lrpresse.com:
+  - - LR Presse
+  media-participations.com:
+  - - Média participations
+  mondadori.fr:
+  - - Mondadori France
+  lepetitjournal.net:
+  - - Le Petit Journal
+  playbac.fr:
+  - - Play Bac
+  prismamedia.com:
+  - - Prisma Media
+  reussir.fr:
+  - - Réussir
+  reworldmedia.com:
+  - - Reworld Media
+  rossel.be:
+  - - Groupe Rossel La Voix
+  magazine-presse.sfr.fr:
+  - - SFR Presse
+  paris-turf.com:
+  - - Turf Éditions
+  dhpregie.com:
+  - - Disney Hachette Presse
+  sonomag.com:
+  - - Publications Georges Ventillard
+  catalog.hathitrust.org:
+  - - L'Année littéraire
+  gallicaintramuros.bnf.fr:
+  - - Arcadie
+  bibliotheque.idbe-bzh.org:
+  - - Breiz Atao
+  les-cahiers-bleus.com:
+  - - Les Cahiers bleus
+  arcom.fr:
+  - - Regulatory Authority for Audiovisual and Digital Communication
+  csa.fr:
+  - - Conseil supérieur de l'audiovisuel
+  epra.net:
+  - - ÉPRA
+  inatheque.fr:
+  - - Inathèque
+  institut-national-audiovisuel.fr:
+  - - Institut national de l'audiovisuel
+  maritima.info:
+  - - Maritima Médias
+  radioparleur.net:
+  - - Radio Parleur
+  archive.wikiwix.com:
+  - - Wikiwix
+  le1hebdo.fr:
+  - - Le 1
+  l-actu.fr:
+  - - L'Actu
+  actuj.com:
+  - - Actualité juive
+  larchemag.fr:
+  - - L'Arche
+  bulletinquotidien.fr:
+  - - Bulletin quotidien
+  causecommune-larevue.fr:
+  - - Cause commune
+  cnewsmatin.fr:
+  - - CNews
+  directsoir.net:
+  - - Direct Soir
+  kiosque.dordognelibre.fr:
+  - - Dordogne libre
+  limpossible.fr:
+  - - L'Impossible
+  journaldesaintbarth.com:
+  - - Le Journal de Saint-Barth
+  lejdd.fr:
+  - - Le Journal du dimanche
+  lopinion.fr:
+  - - L'Opinion
+  parismatch.com:
+  - - Paris Match
+  lepaysbriard.fr:
+  - - Le Pays briard
+  lepelican-journal.com:
+  - - Le Pélican
+  lecourrier-lecho.fr:
+  - - Le Petit Courrier l'Echo de la Vallée du Loir
+  pointdevue.fr:
+  - - Point de vue
+  renaissancelochoise.com:
+  - - La Renaissance lochoise
+  larepublique77.fr:
+  - - La République de Seine-et-Marne
+  socialter.fr:
+  - - Socialter
+  stmartinweek.fr:
+  - - Saint-Martin's Week
+  tribunejuive.info:
+  - - Tribune juive
+  vsd.fr:
+  - - VSD
+  abc.es:
+  - - ABC
+  dailymail.co.uk:
+  - - Daily Mail
+  dolcacatalunya.com:
+  - - Dolça Catalunya
+  dorchesterreview.ca:
+  - - The Dorchester Review
+  europeanconservative.com:
+  - - The European Conservative
+  larazon.es:
+  - - La Razón
+  schweizerzeit.ch:
+  - - Schweizerzeit
+  visegrad24.com:
+  - - Visegrád 24
+  weltwoche.ch:
+  - - Die Weltwoche
+  westernstandard.news:
+  - - Western Standard
+  diarioya.es:
+  - - Ya
+  culture.data.gouv.fr:
+  - - Ministère de la Culture (France)
+  kulturstaatsminister.de:
+  - - Délégué du gouvernement fédéral pour la Culture et les Médias
+  culture.gov.az:
+  - - Ministère de la Culture (Azerbaïdjan)
+  boeing.com:
+  - - Boeing
+  livescience.com:
+  - - Live Science
+  grammy.com:
+  - - Grammy Awards
+  guinnessworldrecords.com:
+  - - Livre Guinness des records
+  editions400coups.ca:
+  - - Les 400 coups
+  abc-clio.com:
+  - - ABC-CLIO
+  abramsbooks.com:
+  - - Abrams Books
+  editions-adsolem.fr:
+  - - Ad Solem
+  informit.com:
+  - - Addison-Wesley
+  afinsa.com:
+  - - Afinsa
+  akcomics.com:
+  - - AK Comics
+  akileos.com:
+  - - Akileos
+  akitashoten.co.jp:
+  - - Akita Shoten
+  alainbeaulet.com:
+  - - Alain Beaulet
+  aletheia.spb.ru:
+  - - Aletheia
+  kroener-verlag.de:
+  - - Alfred Kröner Verlag
+  allenandunwin.com:
+  - - Allen & Unwin
+  lesallusifs.com:
+  - - Les Allusifs
+  am-oved.co.il:
+  - - Am Oved
+  editionsamsterdam.fr:
+  - - Amsterdam
+  anagrama-ed.es:
+  - - Editorial Anagrama
+  antipodes.ch:
+  - - Éditions Antipodes
+  lapo.fr:
+  - - L'Apocalypse
+  archaeopress.com:
+  - - Archaeopress
+  archivescontemporaines.com:
+  - - Éditions des archives contemporaines
+  arlea.fr:
+  - - Arléa
+  arovell.at:
+  - - Arovell Verlag
+  arstc.re:
+  - - ARS terres créoles
+  arsvivens.net:
+  - - Ars vivens
+  artfiction.ch:
+  - - Art&fiction
+  publications.asahi.com:
+  - - Asahi Sonorama
+  aschehoug.no:
+  - - Aschehoug
+  ascii.co.jp:
+  - - ASCII Corporation
+  u-paris2.fr:
+  - - Assas Éditions
+  asukashinsha.co.jp:
+  - - Asukashinsha
+  athena-editions.fr:
+  - - Athéna Éditions
+  atlastales.com:
+  - - Atlas Comics
+  atlasarchives.com:
+  - - Atlas/Seaboard Comics
+  aufbau-verlag.de:
+  - - Aufbau
+  avant-verlag.de:
+  - - avant-verlag
+  b92.net:
+  - - B92
+  penguinrandomhouse.com:
+  - - Ballantine Books
+  baopublishing.it:
+  - - BAO Publishing
+  baerenreiter.com:
+  - - Bärenreiter
+  la-bartavelle-editeur.com:
+  - - La Bartavelle Éditeur
+  editions-barzakh.com:
+  - - Éditions Barzakh
+  basicbooks.com:
+  - - Basic Books
+  bdmust.be:
+  - - BD Must
+  beacon.org:
+  - - Beacon Press
+  bellabooks.com:
+  - - Bella Books
+  berkleyjoveauthors.com:
+  - - Berkley Books
+  bverte.net:
+  - - La Bibliothèque verte
+  birkhauser.com:
+  - - Birkhäuser Verlag
+  blackstaffpress.com:
+  - - Blackstaff Press
+  bompiani.eu:
+  - - Éditions Bompiani
+  sergiobonelli.it:
+  - - Sergio Bonelli Editore
+  bonnier.com:
+  - - Bonnier
+  bookenmanga.com:
+  - - Booken Manga
+  boosey.com:
+  - - Boosey & Hawkes
+  broccoli.co.jp:
+  - - Broccoli
+  broquet.qc.ca:
+  - - Broquet
+  bunkasha.co.jp:
+  - - Bunkasha
+  caetla.fr:
+  - - Çà et là
+  cabedita.ch:
+  - - Éditions Cabédita
+  lacafetiere.org:
+  - - La Cafetière
+  carabas4news.wordpress.com:
+  - - Carabas
+  editions-carpentier.fr:
+  - - Éditions Didier Carpentier
+  edizionicasagrande.com:
+  - - Edizioni Casagrande
+  casbah-editions.com:
+  - - Casbah Éditions
+  castagnieee.com:
+  - - Éditions Castagniééé
+  castalia.es:
+  - - Castalia (éditeur)
+  lecridumargouillat.re:
+  - - Centre du Monde
+  corlet-editions.com:
+  - - Éditions Charles Corlet
+  cicgcorp.com:
+  - - China International Publishing Group
+  cinebook.co.uk:
+  - - Cinebook
+  5c.be:
+  - - La Cinquième Couche
+  editionsclairdelune.fr:
+  - - Clair de Lune
+  cleispress.com:
+  - - Cleis Press
+  coamix.co.jp:
+  - - Coamix
+  coconinopress.it:
+  - - Coconino Press
+  emmanuelle-collas-editions.com:
+  - - Éditions Emmanuelle Collas
+  collectioncolosse.com:
+  - - Colosse
+  cornellpress.cornell.edu:
+  - - Cornell University Press
+  corraini.com:
+  - - Corraini edizioni
+  corvinakiado.hu:
+  - - Corvina Kiadó
+  coupsdetete.com:
+  - - Coups de tête
+  thecreativecompany.us:
+  - - The Creative Company
+  lacupula.com:
+  - - Ediciones La Cúpula
+  dacapopress.com:
+  - - Da Capo Press
+  al-ilmiyah.com:
+  - - Dar Al-Kotob Al-Ilmiyah
+  dcthomson.co.uk:
+  - - D. C. Thomson & Co.
+  giunti.it:
+  - - Éditions De Vecchi
+  sf-fantasy.suvudu.com:
+  - - Del Rey Books
+  bantam-dell.atrandom.com:
+  - - Dell Publishing
+  des-bulles-dans-l-ocean.com:
+  - - Des bulles dans l'océan
+  editions-descartes.fr:
+  - - Descartes & Cie
+  detlit.ru:
+  - - Detskaya Literatura
+  devilsdue.net:
+  - - Devil's Due Publishing
+  domfil.com:
+  - - Domfil
+  dk.com:
+  - - DK
+  editionsdouro.fr:
+  - - Éditions Douro
+  soniadraga.pl:
+  - - Éditions Sonia Draga
+  dragonmoonpress.com:
+  - - Dragon Moon Press
+  dukeupress.edu:
+  - - Duke University Press
+  dynamite.com:
+  - - Dynamite Entertainment
+  m-culture.gov.dz:
+  - - Ministère de la Culture et des Arts
+  cultura.gov.br:
+  - - Ministère de la Culture (Brésil)
+  communication.gov.bf:
+  - - Ministère de la Communication, de la Culture, des Arts et du Tourisme (Burkina
+      Faso)
+  tfmusicawards.com:
+  - - The Fact Music Awards
+  mpmotorsport.com:
+  - - MP Motorsport
+  f1academy.com:
+  - - ' F1 Academy'
+  dymo.com:
+  - - DYMO Corporation
+  fontforge.github.io:
+  - - ഫോണ്ട് ഫോർജ്
+  github.com:
+  - - Fontmatrix
+  mrmondialisation.org:
+  - - Mr Mondialisation
+  akadem.org:
+  - - Akadem
+  asiatimes.com:
+  - - Asia Times Online
+  askmen.com:
+  - - AskMen
+  correctiv.org:
+  - - Correctiv
+  cybergeo.revues.org:
+  - - Cybergeo
+  develop-online.net:
+  - - Develop
+  e24.no:
+  - - E24
+  esoteric.msu.edu:
+  - - Esoterica
+  etats-generaux-information.fr:
+  - - États généraux de l'information
+  euractiv.com:
+  - - Euractiv
+  europetodayonline.com:
+  - - Europe Today
+  europresse.com:
+  - - Europresse
+  eurotopics.net:
+  - - Eurotopics
+  faso7.com:
+  - - Faso7
+  frontpageafricaonline.com:
+  - - FrontPage Africa
+  news.google.com:
+  - - Google Actualités
+  kabarindonesia.com:
+  - - KabarIndonesia
+  liberafolio.org:
+  - - Libera Folio
+  mainichi.jp:
+  - - Mainichi shinbun
+  meduza.io:
+  - - Meduza
+  elmundotoday.com:
+  - - El Mundo Today
+  natemat.pl:
+  - - NaTemat.pl
+  newsguardtech.com:
+  - - NewsGuard
+  orthodoxie.com:
+  - - orthodoxie.com
+  ourworldindata.org:
+  - - Our World in Data
+  presseurop.eu:
+  - - Presseurop
+  priyo.com:
+  - - Priyo
+  propublica.org:
+  - - ProPublica
+  qz.com:
+  - - Quartz
+  rappler.com:
+  - - Rappler
+  raseef22.net:
+  - - Raseef22
+  refletguinee.com:
+  - - Reflet Guinée
+  resetobywatelski.pl:
+  - - Reset Obywatelski
+  rezo.net:
+  - - Rezo.net
+  risingbd.com:
+  - - Risingbd.com
+  saharareporters.com:
+  - - Sahara Reporters
+  sapiens.cat:
+  - - Sàpiens
+  softpedia.com:
+  - - Softpedia
+  signes-et-symboles.org:
+  - - Symbole
+  tchadinfos.com:
+  - - Tchadinfos
+  timesofisrael.com:
+  - - The Times of Israel
+  togobreakingnews.info:
+  - - Togo Breaking News
+  trouserpress.com:
+  - - Trouser Press
+  t24.com.tr:
+  - - T24
+  upday.com:
+  - - Upday
+  veintemundos.com:
+  - - Veintemundos
+  voxeurop.eu:
+  - - Voxeurop
+  mainichi.co.jp:
+  - - Weekly Economist
+  news.yahoo.com:
+  - - Yahoo! News

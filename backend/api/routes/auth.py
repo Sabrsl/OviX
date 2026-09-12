@@ -19,6 +19,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # ============================================================================
+# Utility Functions
+# ============================================================================
+
+def mask_username(username: Optional[str]) -> Optional[str]:
+    """Mask username for privacy in logs and API responses."""
+    if not username:
+        return None
+    if len(username) > 3:
+        return "*" * (len(username) - 3) + username[-3:]
+    return "***"
+
+# ============================================================================
 # Models
 # ============================================================================
 
@@ -107,7 +119,7 @@ async def wikipedia_login(request: WikipediaLoginRequest):
                         authenticated=True,
                         lang=request.lang,
                         family=request.family,
-                        username=_wikipedia_session["username"],
+                        username=mask_username(_wikipedia_session["username"]),
                         message="Already connected"
                     )
                 else:
@@ -121,7 +133,7 @@ async def wikipedia_login(request: WikipediaLoginRequest):
                     authenticated=True,
                     lang=request.lang,
                     family=request.family,
-                    username=_wikipedia_session["username"],
+                    username=mask_username(_wikipedia_session["username"]),
                     message="Already connected"
                 )
 
@@ -203,7 +215,7 @@ async def wikipedia_login(request: WikipediaLoginRequest):
             authenticated=authenticated,
             lang=request.lang,
             family=request.family,
-            username=username,
+            username=mask_username(username),
             message="Connected successfully"
         )
 
@@ -222,7 +234,7 @@ async def get_current_user():
     try:
         return {
             "authenticated": _wikipedia_session.get("authenticated", False),
-            "username": _wikipedia_session.get("username"),
+            "username": mask_username(_wikipedia_session.get("username")),
             "lang": _wikipedia_session.get("lang"),
             "family": _wikipedia_session.get("family")
         }
@@ -268,7 +280,7 @@ async def get_auth_status():
                 authenticated=_wikipedia_session["authenticated"],
                 lang=_wikipedia_session["lang"],
                 family=_wikipedia_session["family"],
-                username=_wikipedia_session["username"]
+                username=mask_username(_wikipedia_session["username"])
             )
         
     except Exception as e:

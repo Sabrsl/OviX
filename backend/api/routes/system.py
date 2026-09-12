@@ -18,6 +18,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # ============================================================================
+# Utility Functions
+# ============================================================================
+
+def mask_username(username: Optional[str]) -> Optional[str]:
+    """Mask username for privacy in logs and API responses."""
+    if not username:
+        return None
+    if len(username) > 3:
+        return "*" * (len(username) - 3) + username[-3:]
+    return "***"
+
+# ============================================================================
 # Models
 # ============================================================================
 
@@ -365,9 +377,18 @@ async def get_system_status(
             sched_state = type('obj', (object,), {'is_active': False, 'daily_published_count': 0, 'queue': [], 'next_publish_time': None})()
 
         # Get Wikipedia status - safe fallback
+        username = wikipedia_session.get("username") if wikipedia_session else None
+        # Mask username for privacy in logs and API responses
+        masked_username = None
+        if username:
+            if len(username) > 3:
+                masked_username = "*" * (len(username) - 3) + username[-3:]
+            else:
+                masked_username = "***"
+        
         wiki_status = {
             "connected": wikipedia_session.get("authenticated", False) if wikipedia_session else False,
-            "username": wikipedia_session.get("username") if wikipedia_session else None,
+            "username": masked_username,  # Masked username
             "language": wikipedia_session.get("lang") if wikipedia_session else None,
             "family": wikipedia_session.get("family") if wikipedia_session else None,
             "site": str(wikipedia_session.get("site")) if wikipedia_session and wikipedia_session.get("site") else None
@@ -404,7 +425,7 @@ async def get_system_status(
                 "enabled": ks_state.enabled if ks_state else False,
                 "reason": ks_state.reason if ks_state else "Unavailable",
                 "trigger_source": ks_state.trigger_source if ks_state else "error",
-                "requested_by": ks_state.requested_by if ks_state else "system",
+                "requested_by": mask_username(ks_state.requested_by) if ks_state else "system",
                 "requested_at": ks_state.requested_at if ks_state else None
             },
             database_stats={
@@ -425,7 +446,7 @@ async def get_system_status(
         return SystemStatusResponse(
             wikipedia={"connected": False, "username": None, "language": None, "family": None, "site": None},
             scheduler={"is_active": False, "daily_published_count": 0, "queue_size": 0, "next_publish_time": None, "total_articles": 0, "published_articles": 0, "articles_with_changes": 0},
-            kill_switch={"enabled": False, "reason": "Error", "trigger_source": "error", "requested_by": "system", "requested_at": None},
+            kill_switch={"enabled": False, "reason": "Error", "trigger_source": "error", "requested_by": mask_username("system"), "requested_at": None},
             database_stats={"total_articles": 0, "published_articles": 0, "articles_with_changes": 0, "pending_articles": 0}
         )
 
@@ -448,7 +469,7 @@ async def get_kill_switch_status(kill_switch = Depends(get_kill_switch)):
                 enabled=False,
                 reason="Kill switch manager not initialized",
                 trigger_source="system",
-                requested_by="system",
+                requested_by=mask_username("system"),
                 requested_at=None,
                 last_checked=None
             )
@@ -459,7 +480,7 @@ async def get_kill_switch_status(kill_switch = Depends(get_kill_switch)):
             enabled=state.enabled,
             reason=state.reason,
             trigger_source=state.trigger_source,
-            requested_by=state.requested_by,
+            requested_by=mask_username(state.requested_by),
             requested_at=state.requested_at,
             last_checked=state.last_checked
         )
@@ -505,13 +526,14 @@ async def activate_kill_switch(
             requested_by=username
         )
 
-        logger.warning(f"🛑 Kill Switch activated by authenticated user {username}: {request.reason}")
+        masked_username = mask_username(username)
+        logger.warning(f"🛑 Kill Switch activated by authenticated user {masked_username}: {request.reason}")
 
         return {
             "success": True,
             "message": "Kill Switch activated",
             "reason": request.reason,
-            "requested_by": username
+            "requested_by": masked_username
         }
 
     except Exception as e:
@@ -547,7 +569,8 @@ async def deactivate_kill_switch(
 
         # SECURITY: Require explicit confirmation
         if request.confirmation != "CONFIRM_RESUME":
-            logger.warning(f"Kill switch deactivation attempted by authorized operator {username} with invalid confirmation: '{request.confirmation}'")
+            masked_username = mask_username(username)
+            logger.warning(f"Kill switch deactivation attempted by authorized operator {masked_username} with invalid confirmation: '{request.confirmation}'")
             return {
                 "success": False,
                 "message": "Invalid confirmation. Must use 'CONFIRM_RESUME' to prevent accidental resume."
@@ -558,13 +581,14 @@ async def deactivate_kill_switch(
             requested_by=username
         )
 
-        logger.warning(f"✅ Kill Switch DEACTIVATED by authorized operator {username} with confirmation: {request.reason}")
+        masked_username = mask_username(username)
+        logger.warning(f"✅ Kill Switch DEACTIVATED by authorized operator {masked_username} with confirmation: {request.reason}")
 
         return {
             "success": True,
             "message": "Kill Switch deactivated",
             "reason": request.reason,
-            "requested_by": username
+            "requested_by": masked_username
         }
 
     except Exception as e:
@@ -654,12 +678,13 @@ async def talk_page_kill_switch_activate(
         from wikipedia_maintenance.utils.kill_switch_manager import KillSwitchTrigger
         
         if request.action == "stop":
+            masked_requested_by = mask_username(token_info.requested_by)
             kill_switch.enable(
                 reason=request.reason,
                 trigger_source=KillSwitchTrigger.TALK_PAGE,
                 requested_by=token_info.requested_by
             )
-            logger.warning(f"🛑 Kill Switch activated via talk page token by {token_info.requested_by}")
+            logger.warning(f"🛑 Kill Switch activated via talk page token by {masked_requested_by}")
         else:
             return {
                 "success": False,
@@ -676,7 +701,7 @@ async def talk_page_kill_switch_activate(
             "success": True,
             "message": "Kill Switch STOPPED successfully via talk page",
             "action": request.action,
-            "requested_by": token_info.requested_by
+            "requested_by": mask_username(token_info.requested_by)
         }
         
     except Exception as e:

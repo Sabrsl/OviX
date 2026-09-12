@@ -10,10 +10,10 @@ import os
 from pathlib import Path
 
 # Add project root to path
-project_root = Path(__file__).parent
+project_root = Path(__file__).parent.parent
 os.environ['PYWIKIBOT_DIR'] = str(project_root)
 sys.path.insert(0, str(project_root))
-sys.path.insert(0, str(project_root / 'src'))
+sys.path.insert(0, str(project_root / 'backend' / 'src'))
 
 import uvicorn
 

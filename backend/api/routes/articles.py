@@ -288,7 +288,7 @@ async def search_category(
         from wikipedia_maintenance.retrievers import CategoryRetriever
 
         # Create retriever with published tracker
-        retriever = CategoryRetriever(site=site, tracker_file="published_articles.json")
+        retriever = CategoryRetriever(site=site, tracker_file="data/published_articles.json")
 
         # Normalize category name
         category_name = request.category
@@ -412,7 +412,7 @@ async def search_manual(
         from wikipedia_maintenance.retrievers import ManualRetriever
         
         # Create retriever (use database instead of published tracker if not available)
-        tracker_file = None if not published_tracker else "published_articles.json"
+        tracker_file = None if not published_tracker else "data/published_articles.json"
         retriever = ManualRetriever(tracker_file=tracker_file)
         retriever.set_site(site)
         

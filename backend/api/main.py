@@ -47,7 +47,7 @@ else:
 # Configure paths
 os.environ['PYWIKIBOT_DIR'] = str(PROJECT_ROOT)
 sys.path.insert(0, str(PROJECT_ROOT))
-sys.path.insert(0, str(PROJECT_ROOT / 'backend' / 'tests' / 'src'))
+sys.path.insert(0, str(PROJECT_ROOT / 'backend' / 'src'))
 
 # Configure logging
 log_dir = PROJECT_ROOT / "logs"

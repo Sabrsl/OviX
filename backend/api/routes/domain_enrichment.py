@@ -74,6 +74,7 @@ class StartEnrichmentRequest(BaseModel):
     dry_run: bool = True
     max_pages: Optional[int] = None
     keep_www: bool = False
+    sequential_write: bool = False
 
 
 class EnrichmentStatusResponse(BaseModel):
@@ -181,7 +182,13 @@ async def start_enrichment(
     # Start enrichment in background
     def run_enrichment():
         try:
-            service.start_enrichment(categories=categories, dry_run=request.dry_run, max_pages=request.max_pages, keep_www=request.keep_www)
+            service.start_enrichment(
+                categories=categories,
+                dry_run=request.dry_run,
+                max_pages=request.max_pages,
+                keep_www=request.keep_www,
+                sequential_write=request.sequential_write
+            )
         except Exception as e:
             logger.error(f"Enrichment background task failed: {e}", exc_info=True)
     

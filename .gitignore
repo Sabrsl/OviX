@@ -114,6 +114,7 @@ desktop.ini
 # -----------------------------------------------------
 *.bak
 *.backup
+*_backup
 backups/
 *.old
 *.orig
@@ -132,6 +133,7 @@ tmp/
 data/api_cache/
 data/*.json
 data/*.ctrl
+throttle.ctrl
 apicache/
 apicache-py3/
 data/automation_reports/

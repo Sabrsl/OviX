@@ -11,7 +11,7 @@ def test_compare_summary():
     """Test le endpoint de comparaison summary."""
     try:
         response = requests.get(f"{BASE_URL}/api/stats/compare/summary")
-        response raise_for_status()
+        response.raise_for_status()
         data = response.json()
         print("=== COMPARISON SUMMARY ===")
         print(json.dumps(data, indent=2))

@@ -20,69 +20,46 @@ logger = logging.getLogger(__name__)
 class BotIdentity:
     """
     Bot identity information for Wikipedia compliance.
-    
-    IMPORTANT: Without bot approval, User-Agent must appear human.
-    Set use_bot_user_agent=False to use human-like User-Agent.
-    
-    Wikipedia requires bots to:
-    - Have a unique identifying name (only after approval)
-    - Include contact information in User-Agent
-    - Maintain a discussion page for community feedback
-    - Follow bot approval process
+
+    Wikimedia's User-Agent policy (meta.wikimedia.org/wiki/User-Agent_policy)
+    requires a descriptive User-Agent with contact information on every
+    request, and explicitly treats a browser-copied User-Agent as evidence
+    of malicious bot behavior — so the string below is always descriptive,
+    regardless of bot-flag approval status. `use_bot_user_agent` only
+    controls whether "bot" appears in the string, which the policy
+    recommends once the account has bot-flag approval.
     """
-    
+
     bot_name: str = "SynsOperatorBot"
     bot_version: str = "1.0"
     operator_name: str = "Sysoperator"
     operator_contact: str = "https://fr.wikipedia.org/wiki/Discussion_utilisateur:Sysoperator"
     bot_discussion: str = "https://fr.wikipedia.org/wiki/Discussion_utilisateur:SynsOperatorBot"
     repository: str = "https://github.com/Sabrsl/OviX"
-    use_bot_user_agent: bool = False  # IMPORTANT: Default to human User-Agent without bot approval
-    
+    use_bot_user_agent: bool = False
+
     def get_user_agent(self, purpose: str = "") -> str:
         """
-        Generate a Wikipedia-compliant User-Agent string.
-        
-        IMPORTANT: Without bot approval, returns human-like User-Agent.
-        Set use_bot_user_agent=True only after Wikipedia bot approval.
-        
+        Generate a Wikimedia API-compliant User-Agent string:
+        `<name>/<version> (<contact>[; <purpose>])`.
+
         Args:
             purpose: Optional purpose description (e.g., "Archive Research", "Content Verification")
-            
+
         Returns:
-            Wikipedia-compliant User-Agent string (human-like by default)
+            Wikimedia API-compliant User-Agent string.
         """
-        if not self.use_bot_user_agent:
-            # Human-like User-Agent for non-approved usage
-            # This appears as a regular browser/tool rather than a bot
-            return f"Mozilla/5.0 (compatible; WikipediaMaintenanceTool/{self.bot_version}; +{self.operator_contact})"
-        
-        # Bot User-Agent (only use after Wikipedia bot approval)
-        base = f"{self.bot_name}/{self.bot_version}"
-        
+        agent = f"{self.bot_name}/{self.bot_version}"
+
         if purpose:
-            base += f" ({purpose})"
-        
-        base += f" - {self.operator_contact}"
-        
-        return base
-    
-    def get_full_user_agent(self) -> str:
-        """
-        Get the full User-Agent with all information.
-        
-        Returns:
-            Complete User-Agent string
-        """
-        if not self.use_bot_user_agent:
-            return f"Mozilla/5.0 (compatible; WikipediaMaintenanceTool/{self.bot_version}; +{self.operator_contact})"
-        
-        return (
-            f"{self.bot_name}/{self.bot_version} "
-            f"(https://fr.wikipedia.org/wiki/Discussion_utilisateur:SynsOperatorBot) "
-            f"- {self.operator_contact} "
-            f"- {self.repository}"
-        )
+            agent += f" ({self.operator_contact}; {purpose})"
+        else:
+            agent += f" ({self.operator_contact})"
+
+        if self.use_bot_user_agent and "bot" not in agent.lower():
+            agent += " bot"
+
+        return agent
 
 
 class BotIdentityManager:

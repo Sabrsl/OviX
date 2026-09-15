@@ -88,7 +88,7 @@ class WikipediaAPIClient:
                 from .bot_identity import get_user_agent
                 self.user_agent = get_user_agent(purpose="Wikipedia API")
             except ImportError:
-                self.user_agent = 'WikipediaMaintenanceTool/1.0'
+                self.user_agent = 'OviX/1.0 (+https://github.com/Sabrsl/OviX)'
         else:
             self.user_agent = user_agent
             

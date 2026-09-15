@@ -492,7 +492,7 @@ class Publisher:
             user_agent = get_user_agent(purpose="Wikipedia Maintenance")
         except ImportError:
             # Fallback to default if bot_identity not available
-            user_agent = "WikipediaMaintenanceTool/1.0"
+            user_agent = "OviX/1.0 (+https://github.com/Sabrsl/OviX)"
             logger.warning("Bot identity system not available, using default User-Agent")
         
         api_url_template = "https://{lang}.wikipedia.org/w/api.php"

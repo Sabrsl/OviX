@@ -15,8 +15,13 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - PYWIKIBOT_DIR=/app
+      # Pass through from the host/CI shell if set (no file needed in production)
+      - WIKIPEDIA_USERNAME
+      - WIKIPEDIA_PASSWORD
     env_file:
-      - .env
+      # Optional: local development convenience only, never required in production
+      - path: .env
+        required: false
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]

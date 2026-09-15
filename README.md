@@ -37,11 +37,18 @@ cd frontend && npm install && cd ..
 
 3. **Configurer l'environnement**
 ```bash
-cp .env.example .env
-cp config/user-config.py.example config/user-config.py
-cp config/passwords.py.example config/passwords.py
-# Éditer les fichiers avec vos identifiants
+# Linux / macOS
+cp config/user-config.py.example user-config.py
+export WIKIPEDIA_USERNAME="VotreIdentifiant"
+export WIKIPEDIA_PASSWORD="VotreMotDePasse"
 ```
+```powershell
+# Windows (PowerShell)
+copy config\user-config.py.example user-config.py
+$env:WIKIPEDIA_USERNAME = "VotreIdentifiant"
+$env:WIKIPEDIA_PASSWORD = "VotreMotDePasse"
+```
+Voir [docs/WIKIPEDIA_BOT_SETUP.md](docs/WIKIPEDIA_BOT_SETUP.md) pour rendre ces variables persistantes, ou pour l'alternative `.env` (moins recommandée, en clair sur disque).
 
 ## Démarrage
 

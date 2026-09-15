@@ -45,24 +45,58 @@ class SecureCredentialManager:
     def get_wikipedia_credentials(self) -> tuple[Optional[str], Optional[str]]:
         """
         Get Wikipedia credentials securely.
-        
+
+        Resolution order: environment variables (set by the deployment, or
+        via a local .env for development) first, then the legacy
+        config/passwords.py file (deprecated, kept for backward compatibility).
+
         Returns:
             Tuple of (username, password) or (None, None) if not found.
         """
         username = os.environ.get(self.ENV_WIKIPEDIA_USERNAME)
         password = os.environ.get(self.ENV_WIKIPEDIA_PASSWORD)
-        
+
         if username and password:
             logger.info("Wikipedia credentials loaded from environment variables")
             return username, password
-        
+
+        username, password = self._load_from_legacy_passwords_file()
+        if username and password:
+            logger.warning(
+                "Wikipedia credentials loaded from legacy passwords.py — "
+                "this method is deprecated, prefer environment variables"
+            )
+            return username, password
+
         if self.allow_env_only:
             logger.warning("Wikipedia credentials not found in environment variables")
             return None, None
-        
+
         # Fallback to encrypted storage (development only)
         logger.warning("Using fallback credential storage - NOT RECOMMENDED FOR PRODUCTION")
         return self._load_from_fallback("wikipedia")
+
+    def _load_from_legacy_passwords_file(self) -> tuple[Optional[str], Optional[str]]:
+        """
+        Legacy fallback: load Wikipedia credentials from passwords.py at the
+        project root (deprecated — prefer environment variables).
+        """
+        try:
+            project_root = Path(__file__).resolve().parents[4]
+            passwords_file = project_root / "passwords.py"
+
+            if not passwords_file.exists():
+                return None, None
+
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("_legacy_passwords", passwords_file)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+
+            return getattr(module, "WIKIPEDIA_USERNAME", None), getattr(module, "WIKIPEDIA_PASSWORD", None)
+        except Exception as e:
+            logger.error(f"Error loading legacy passwords.py: {e}")
+            return None, None
     
     def get_gemini_credentials(self) -> tuple[Optional[str], Optional[str]]:
         """

@@ -45,8 +45,16 @@ python -c "import pywikibot; print(pywikibot.__version__)"
 Copy the example file and customize it:
 
 ```bash
-cp user-config.py.example user-config.py
+# Linux / macOS
+cp config/user-config.py.example user-config.py
 ```
+
+```powershell
+# Windows (PowerShell or cmd)
+copy config\user-config.py.example user-config.py
+```
+
+`user-config.py` must live at the project root — pywikibot reads it from `PYWIKIBOT_DIR`, which the app points at the project root.
 
 Edit `user-config.py` with your bot account details:
 
@@ -59,22 +67,88 @@ mylang = 'fr'
 family = 'wikipedia'
 ```
 
-### 2.3 Create `passwords.py`
+### 2.3 Set your credentials
 
-Copy the example file and customize it:
+Credentials are resolved in this order: real environment variables first,
+then the legacy `passwords.py` file as a last-resort fallback. Nothing
+needs to be written to disk at all — that's the point of this method.
+
+#### Recommended: set a real environment variable (no file on disk)
+
+**Windows — PowerShell** (current session only):
+```powershell
+$env:WIKIPEDIA_USERNAME = "YourBotUsername"
+$env:WIKIPEDIA_PASSWORD = "YourBotPassword"
+```
+Persist across sessions for your user account:
+```powershell
+[Environment]::SetEnvironmentVariable("WIKIPEDIA_USERNAME", "YourBotUsername", "User")
+[Environment]::SetEnvironmentVariable("WIKIPEDIA_PASSWORD", "YourBotPassword", "User")
+```
+(Open a new terminal for a persisted value to take effect.)
+
+**Windows — cmd.exe** (current session only):
+```bat
+set WIKIPEDIA_USERNAME=YourBotUsername
+set WIKIPEDIA_PASSWORD=YourBotPassword
+```
+Persist across sessions (avoids `setx`'s ~1024-character truncation):
+```bat
+powershell -Command "[Environment]::SetEnvironmentVariable('WIKIPEDIA_USERNAME', 'YourBotUsername', 'User')"
+powershell -Command "[Environment]::SetEnvironmentVariable('WIKIPEDIA_PASSWORD', 'YourBotPassword', 'User')"
+```
+(Does not affect the current window, only new ones.)
+
+**Linux / macOS — bash/zsh** (current session only):
+```bash
+export WIKIPEDIA_USERNAME="YourBotUsername"
+export WIKIPEDIA_PASSWORD="YourBotPassword"
+```
+Persist across sessions: add the two `export` lines to `~/.bashrc` / `~/.zshrc` (or `~/.profile`).
+
+**Production / servers**: set these the same way through your deployment
+environment — Docker secrets or `docker run -e`, `systemd`'s
+`Environment=`/`EnvironmentFile=`, your CI/CD secrets store — never as a
+file inside the project directory.
+
+Whichever shell you used, launch the app from that same session so it
+inherits the variables.
+
+#### Convenience alternative for local dev (still plain text on disk): `.env`
+
+If retyping `export`/`$env:` every session is impractical, `.env` is loaded
+automatically (via `python-dotenv`) and never overrides a variable already
+set in your real environment above — but it is a plain-text file on disk,
+offering no security advantage over the legacy `passwords.py` below.
 
 ```bash
-cp passwords.py.example passwords.py
+cp .env.example .env    # Linux / macOS
+```
+```powershell
+copy .env.example .env  # Windows
+```
+Edit `.env` and set `WIKIPEDIA_USERNAME=YourBotUsername` / `WIKIPEDIA_PASSWORD=YourBotPassword`.
+
+**⚠️ SECURITY WARNING**: Never commit `.env` to version control — nor `passwords.py` (see below). Both are already in `.gitignore`.
+
+#### Legacy fallback (not recommended): `passwords.py`
+
+Only used if no environment variable is set. Kept for backward
+compatibility with older setups — plain-text on disk, no better than
+`.env` in terms of security, and with none of the "no file at all"
+benefit above.
+
+```bash
+# Linux / macOS
+cp config/passwords.py.example passwords.py
 ```
 
-Edit `passwords.py` with your credentials:
-
-```python
-WIKIPEDIA_USERNAME = "YourBotUsername"
-WIKIPEDIA_PASSWORD = "YourBotPassword"
+```powershell
+# Windows (PowerShell or cmd)
+copy config\passwords.py.example passwords.py
 ```
 
-**⚠️ SECURITY WARNING**: Never commit `passwords.py` to version control. It is already in `.gitignore`.
+`passwords.py` must live at the project root (same level as `user-config.py`), not inside `config/`.
 
 ## Step 3: Test Your Configuration
 
@@ -140,23 +214,7 @@ Once approved, your bot will receive:
 
 ## Step 5: Configure the Tool
 
-### 5.1 Alternative: Environment Variables
-
-Instead of using `passwords.py`, you can use environment variables:
-
-```bash
-export WIKIPEDIA_USERNAME="YourBotUsername"
-export WIKIPEDIA_PASSWORD="YourBotPassword"
-```
-
-Or create a `.env` file (copy from `.env.example`):
-
-```bash
-cp .env.example .env
-# Edit .env with your credentials
-```
-
-### 5.2 Verify Tool Configuration
+### 5.1 Verify Tool Configuration
 
 Start the application:
 
@@ -178,7 +236,7 @@ In the sidebar:
 - **Solution**: Ensure `user-config.py` is properly configured
 
 **Error**: `Login failed`
-- **Solution**: Verify username and password in `passwords.py`
+- **Solution**: Verify `WIKIPEDIA_USERNAME` and `WIKIPEDIA_PASSWORD` in your `.env` file
 
 **Error**: `CAPTCHA required`
 - **Solution**: Log in manually via web browser once to clear CAPTCHA

@@ -102,6 +102,26 @@ Run with Docker Compose:
 docker-compose up -d
 ```
 
+#### Injecting Credentials Without a File
+
+For production, avoid writing `.env` or `passwords.py` on the target
+machine — inject `WIKIPEDIA_USERNAME` / `WIKIPEDIA_PASSWORD` directly
+through your deployment environment instead:
+
+- **Docker / Docker Compose**: export the variables in the shell or CI job
+  that runs `docker-compose up` — the actual `docker-compose.yml` in this
+  repo passes them through automatically (`environment: - WIKIPEDIA_USERNAME`).
+  Equivalently with plain `docker run`: `docker run -e WIKIPEDIA_USERNAME -e WIKIPEDIA_PASSWORD ...`
+  For Docker Swarm, use `docker secret` instead.
+- **systemd**: set `Environment=WIKIPEDIA_USERNAME=...` in the unit file, or
+  point `EnvironmentFile=` at a root-only file outside the repository (e.g.
+  `/etc/ovix/credentials.env`, mode `600`) — never inside the project checkout.
+- **Windows Server**: set the variables as system environment variables
+  (`setx WIKIPEDIA_USERNAME "..." /M`) or configure them on the Windows
+  Service / Scheduled Task that runs the app.
+- **CI/CD**: store them as encrypted secrets in your pipeline (GitHub
+  Actions secrets, etc.) and pass them to the deploy step's environment.
+
 ### 3. Cloud Deployment
 
 #### Streamlit Cloud

@@ -53,26 +53,46 @@ Pywikibot requires configuration to connect to Wikipedia. See [WIKIPEDIA_CONNECT
 
 The tool requires several secrets and API keys to function properly. You can configure them in multiple ways:
 
-#### Method 1: Using Configuration Files (Recommended)
+#### Method 1: Using Environment Variables (Recommended)
 
-1. **Wikipedia Credentials**:
-   ```bash
-   cp passwords.py.example passwords.py
-   cp user-config.py.example user-config.py
-   ```
-   Edit these files with your Wikipedia bot credentials. See [WIKIPEDIA_BOT_SETUP.md](WIKIPEDIA_BOT_SETUP.md) for detailed instructions.
+1. **Wikipedia Credentials**: set `WIKIPEDIA_USERNAME` / `WIKIPEDIA_PASSWORD`
+   as real environment variables (no file on disk) — see
+   [WIKIPEDIA_BOT_SETUP.md](WIKIPEDIA_BOT_SETUP.md#23-set-your-credentials)
+   for the exact commands on PowerShell, cmd.exe, and bash/zsh, and how to
+   persist them across sessions.
 
-2. **Environment Variables**:
+2. **Other API Keys** (Gemini, Telegram — optional):
    ```bash
+   # Linux/macOS
    cp .env.example .env
    ```
-   Edit `.env` with your API keys and configuration:
+   ```powershell
+   # Windows
+   copy .env.example .env
+   ```
+   Edit `.env`:
    - `GEMINI_API_KEY`: Google Gemini API key (for AI mode)
    - `GEMINI_PROJECT_ID`: Google Cloud project ID
    - `TELEGRAM_BOT_TOKEN`: Telegram bot token (optional)
    - `TELEGRAM_ADMIN_IDS`: Telegram admin IDs (optional)
 
+   `.env` can also hold `WIKIPEDIA_USERNAME`/`WIKIPEDIA_PASSWORD` as a
+   less-recommended convenience, but it's a plain-text file on disk —
+   prefer the real environment variables from step 1.
+
    See [GEMINI_SETUP.md](GEMINI_SETUP.md) for instructions on obtaining Gemini API keys.
+
+2. **Pywikibot language/family** (not credentials):
+   ```bash
+   # Linux/macOS
+   cp config/user-config.py.example user-config.py
+   ```
+   ```powershell
+   # Windows
+   copy config\user-config.py.example user-config.py
+   ```
+   `user-config.py` must live at the project root (pywikibot reads it from `PYWIKIBOT_DIR`, which is set to the project root) — not inside `config/`.
+   Edit `user-config.py` to set your bot's default language and family. See [WIKIPEDIA_BOT_SETUP.md](WIKIPEDIA_BOT_SETUP.md) for detailed instructions.
 
 #### Method 2: Using UI Configuration
 

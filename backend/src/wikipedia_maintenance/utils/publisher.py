@@ -449,7 +449,7 @@ class Publisher:
         """
         Args:
             username: Wikipedia username (default: LearnLynx).
-            password: Wikipedia password (if None, will load from passwords.py).
+            password: Wikipedia password (if None, will load from environment variables).
             dry_run: If True, don't actually publish (default for safety).
             lang: Wikipedia language code (default: fr).
         """
